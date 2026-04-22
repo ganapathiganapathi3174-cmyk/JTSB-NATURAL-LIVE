@@ -32,7 +32,7 @@ import { getDb, getStorageRef, getAuthRef } from '../firebase/config.js';
 const COL_USERS = 'users_new';
 const COL_REFERRALS = 'referrals_new';
 const STORAGE_FOLDER = 'new_payments';
-const MAX_REFERRALS = 2;
+const MAX_REFERRALS = 3;
 
 function generateReferralCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -162,7 +162,7 @@ export const FirebaseUser = {
     console.log('User ID:', newId);
     console.log('User data being saved:', JSON.stringify(userDoc));
     
-    // Handle referral - find referrer and update both users
+    // Handle referral - when someone uses referral code, increment referrer's count
     if (userData.referredBy) {
       try {
         const referralCode = userData.referredBy.toUpperCase();
@@ -170,18 +170,21 @@ export const FirebaseUser = {
         if (referrer) {
           // Prevent self-referral
           if (referrer.id !== newId) {
-            // Update new user's referred_by to store referrer's referral code
-            await updateDoc(ref, { referred_by: referralCode });
-            
-            // Add new user to referrer's referrals array and increment count
-            const currentReferrals = referrer.referrals || [];
-            if (!currentReferrals.includes(newId)) {
+            // Check if referrer has reached limit
+            if ((referrer.referrals_count || 0) >= 2) {
+              console.log('Referrer limit reached:', referralCode);
+              // Still allow registration but don't increment
+              await updateDoc(ref, { referred_by: referralCode });
+            } else {
+              // Update new user's referred_by
+              await updateDoc(ref, { referred_by: referralCode });
+              // Increment referrer's count
+              const newCount = (referrer.referrals_count || 0) + 1;
               await updateDoc(doc(db, COL_USERS, referrer.id), {
-                referrals: [...currentReferrals, newId],
-                referrals_count: (referrer.referrals_count || 0) + 1,
-                referral_limit_reached: (referrer.referrals_count || 0) + 1 >= MAX_REFERRALS,
+                referrals_count: newCount,
+                referral_limit_reached: newCount >= 2,
               });
-              console.log('Referral linkage complete:', referrer.id, '->', newId);
+              console.log('Referral linked:', referralCode, '->', newId, ', referrer count:', newCount);
             }
           } else {
             console.log('Self-referral prevented');
@@ -249,11 +252,24 @@ async findByUtr(utr) {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  async getReferredUsers(referralCode) {
+    return this.getReferralsByReferrerCode(referralCode);
+  },
+
   async getReferrerInfo(referralCode) {
     if (!referralCode) return null;
     const referrer = await this.findByReferralCode(referralCode);
     if (!referrer) return null;
     return { id: referrer.id, name: referrer.name, email: referrer.email };
+  },
+
+  async countReferralsUsed(referralCode) {
+    if (!referralCode) return 0;
+    const db = getDb();
+    const colRef = collection(db, COL_USERS);
+    const q = query(colRef, where('referred_by', '==', referralCode.toUpperCase()));
+    const snap = await getDocs(q);
+    return snap.size;
   },
 
   async updateStatus(id, status) {
@@ -301,17 +317,24 @@ async findByUtr(utr) {
     const db = getDb();
     const ref = doc(db, COL_USERS, id);
     try {
+      const user = await this.findById(id);
+      if (user?.referred_by) {
+        console.log('User already has referral, skipping');
+        return;
+      }
+      
       await updateDoc(ref, { referred_by: refCode });
       
-      // Link to referrer
+      // Increment referrer's count if not at limit
       const referrer = await this.findByReferralCode(refCode);
       if (referrer && referrer.id !== id) {
-        const currentReferrals = referrer.referrals || [];
-        if (!currentReferrals.includes(id)) {
+        if ((referrer.referrals_count || 0) >= 2) {
+          console.log('Referrer limit reached:', refCode);
+        } else {
+          const newCount = (referrer.referrals_count || 0) + 1;
           await updateDoc(doc(db, COL_USERS, referrer.id), {
-            referrals: [...currentReferrals, id],
-            referrals_count: (referrer.referrals_count || 0) + 1,
-            referral_limit_reached: (referrer.referrals_count || 0) + 1 >= MAX_REFERRALS,
+            referrals_count: newCount,
+            referral_limit_reached: newCount >= 2,
           });
         }
       }

@@ -304,10 +304,12 @@ export default function FirebaseAdminUsersPage() {
                   <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.utr_number || '—'}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.referred_by || '—'}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.referral_code || '—'}</td>
-                  <td>{(u.referrals?.length || u.referrals_count || 0)}</td>
+                  <td>{u.referrals_count || 0}</td>
                   <td>
-                    {((u.referrals?.length || u.referrals_count || 0) >= 2) && (
+                    {(u.referrals_count >= 2) ? (
                       <span style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '0.8rem' }}>Qualified</span>
+                    ) : (
+                      <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>
                     )}
                   </td>
                   <td>

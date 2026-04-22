@@ -95,6 +95,10 @@ export default function PaymentPage() {
       setError('Enter a valid UPI Reference Number (10-20 digits)');
       return false;
     }
+    if (!screenshot) {
+      setError('Please upload payment screenshot before submitting');
+      return false;
+    }
     return true;
   }
 
@@ -144,6 +148,7 @@ export default function PaymentPage() {
           await FirebaseUser.updateReferralCode(user.id, refCode);
         }
       } else {
+        // Save referred_by for new user registration
         console.log('Creating new user with password...');
         user = await FirebaseUser.createWithPassword({
           name: fullName.trim(),
@@ -342,7 +347,7 @@ export default function PaymentPage() {
           </div>
 
           <div className="field">
-            <label>Payment Screenshot (optional, max 500KB)</label>
+            <label>Payment Screenshot *</label>
             <input
               type="file"
               accept="image/png,image/jpeg"
