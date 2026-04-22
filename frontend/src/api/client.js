@@ -7,6 +7,12 @@ const routes = {
   'POST /auth/register': authController.register,
   'POST /auth/login': authController.login,
   'GET /auth/me': authController.me,
+  // ===== NEW: Referral Contacts =====
+  'GET /auth/referral-contacts': authController.listReferralContacts,
+  'POST /auth/referral-contacts': authController.addReferralContact,
+  'DELETE /auth/referral-contacts/:contactId': authController.deleteReferralContact,
+  // ===== NEW: UPI QR Upload =====
+  'POST /auth/upi-qr': authController.uploadUpiQr,
   'GET /payments/config': paymentController.getPaymentConfig,
   'POST /payments/submit': paymentController.submitPayment,
   'GET /payments/status': paymentController.checkPaymentStatus,
@@ -14,11 +20,16 @@ const routes = {
   'GET /admin/stats': adminController.dashboardStats,
   'GET /admin/users': adminController.listUsers,
   'DELETE /admin/users/:id': adminController.deleteUser,
+  'DELETE /admin/users/:id/permanent': adminController.permanentDeleteUser,
   'GET /admin/payments': adminController.listPayments,
   'PATCH /admin/payments/:id/verify': adminController.verifyPayment,
   'GET /admin/referrals': adminController.referralTree,
   'GET /admin/referrals/:id': adminController.getUserReferrals,
   'GET /admin/users/filter': adminController.filterUsersByReferral,
+  // ===== NEW: Admin UPI QR & Contacts =====
+  'PATCH /admin/users/:id/upi-qr': adminController.updateUserUpiQr,
+  'PATCH /admin/users/:id/upi-qr/verify': adminController.verifyUpiQr,
+  'GET /admin/users/:userId/referral-contacts': adminController.getUserReferralContacts,
 };
 
 // ===== Create client =====

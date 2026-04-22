@@ -1,48 +1,44 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
+import TestPage from './pages/TestPage.jsx';
 import PaymentPage from './pages/PaymentPage.jsx';
-import PaymentPendingPage from './pages/PaymentPendingPage.jsx';
-import RegisterPage from './pages/RegisterPage.jsx';
-import LoginPage from './pages/LoginPage.jsx';
-import UserDashboardPage from './pages/UserDashboardPage.jsx';
-import MyProfilePage from './pages/MyProfilePage.jsx';
-import AdminLoginPage from './pages/AdminLoginPage.jsx';
-import AdminDashboardPage from './pages/AdminDashboardPage.jsx';
-import AdminPaymentsPage from './pages/AdminPaymentsPage.jsx';
-import AdminUsersPage from './pages/AdminUsersPage.jsx';
-import AdminReferralsPage from './pages/AdminReferralsPage.jsx';
+import FirebaseRegisterPage from './pages/FirebaseRegisterPage.jsx';
+import FirebaseLoginPage from './pages/FirebaseLoginPage.jsx';
+import FirebaseUserDashboard from './pages/FirebaseUserDashboard.jsx';
+import FirebaseAdminLoginPage from './pages/FirebaseAdminLoginPage.jsx';
+import FirebaseAdminDashboardPage from './pages/FirebaseAdminDashboardPage.jsx';
+import FirebaseAdminPaymentsPage from './pages/FirebaseAdminPaymentsPage.jsx';
+import FirebaseAdminUsersPage from './pages/FirebaseAdminUsersPage.jsx';
 
-function Protected({ children }) {
-  const { token, user } = useAuth();
-  if (!token || !user) return <Navigate to="/login" replace />;
+function ProtectedFirebase({ children }) {
+  const userId = localStorage.getItem('fb_user_id');
+  if (!userId) return <Navigate to="/fb/login" replace />;
   return children;
 }
 
-function ProtectedAdmin({ children }) {
-  const adminToken = localStorage.getItem('pc_admin_token');
-  if (!adminToken) return <Navigate to="/admin" replace />;
+function ProtectedFirebaseAdmin({ children }) {
+  const adminToken = localStorage.getItem('fb_admin_token');
+  if (!adminToken) return <Navigate to="/fb-admin" replace />;
   return children;
 }
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/payment" replace />} />
-      <Route path="/payment" element={<PaymentPage />} />
-      <Route path="/payment/pending" element={<PaymentPendingPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/test" element={<TestPage />} />
+      <Route path="/" element={<Navigate to="/fb/register" replace />} />
+      <Route path="/payment" element={<Navigate to="/fb/register" replace />} />
+      
+      {/* Firebase User routes */}
+      <Route path="/fb/register" element={<PaymentPage />} />
+      <Route path="/fb/login" element={<FirebaseLoginPage />} />
+      <Route path="/fb/dashboard" element={<ProtectedFirebase><FirebaseUserDashboard /></ProtectedFirebase>} />
 
-      {/* User routes */}
-      <Route path="/dashboard" element={<Protected><UserDashboardPage /></Protected>} />
-      <Route path="/user" element={<Protected><MyProfilePage /></Protected>} />
-
-      {/* Admin routes */}
-      <Route path="/admin" element={<AdminLoginPage />} />
-      <Route path="/admin/dashboard" element={<ProtectedAdmin><AdminDashboardPage /></ProtectedAdmin>} />
-      <Route path="/admin/payments" element={<ProtectedAdmin><AdminPaymentsPage /></ProtectedAdmin>} />
-      <Route path="/admin/users" element={<ProtectedAdmin><AdminUsersPage /></ProtectedAdmin>} />
-      <Route path="/admin/referrals" element={<ProtectedAdmin><AdminReferralsPage /></ProtectedAdmin>} />
+      {/* Firebase Admin routes */}
+      <Route path="/fb-admin" element={<FirebaseAdminLoginPage />} />
+      <Route path="/fb-admin/dashboard" element={<ProtectedFirebaseAdmin><FirebaseAdminDashboardPage /></ProtectedFirebaseAdmin>} />
+      <Route path="/fb-admin/payments" element={<ProtectedFirebaseAdmin><FirebaseAdminPaymentsPage /></ProtectedFirebaseAdmin>} />
+      <Route path="/fb-admin/users" element={<ProtectedFirebaseAdmin><FirebaseAdminUsersPage /></ProtectedFirebaseAdmin>} />
 
       <Route path="*" element={<Navigate to="/payment" replace />} />
     </Routes>

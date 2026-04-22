@@ -1,6 +1,9 @@
 // Firebase configuration — eager init (background, never blocks rendering)
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, getApps } from 'firebase/app';
+import { getAnalytics, isSupported } from 'firebase/analytics';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyA-4cTJN8zpfefmmgulE_XavMZ9jsd0b_w",
@@ -11,16 +14,68 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:103883989218:web:5bad1f05fe48e686337ebb"
 };
 
-// Initialize Firebase app immediately (does not block rendering)
-const app = initializeApp(firebaseConfig);
+console.log('Firebase config loaded:', {
+  apiKey: firebaseConfig.apiKey?.slice(0, 10) + '...',
+  projectId: firebaseConfig.projectId,
+  authDomain: firebaseConfig.authDomain
+});
 
-// Initialize Firestore immediately
+const EMULATE = import.meta.env.VITE_FIREBASE_EMULATE === 'true';
+const FIREBASE_EMULATOR_HOST = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || 'localhost';
+
+// Initialize Firebase app only if not already initialized
+let app;
+if (getApps().length === 0) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApps()[0];
+}
+
+// Initialize Analytics (async)
+let analytics;
+isSupported().then((supported) => {
+  if (supported) {
+    analytics = getAnalytics(app);
+    console.log('Firebase Analytics initialized');
+  }
+}).catch((e) => {
+  console.error('Analytics init failed:', e);
+});
+
+// Initialize Firestore
 let db;
 try {
   db = getFirestore(app);
+  if (EMULATE) {
+    connectFirestoreEmulator(db, FIREBASE_EMULATOR_HOST, 8080);
+  }
 } catch (e) {
   console.error('Firestore init failed:', e);
   db = null;
+}
+
+// Initialize Storage
+let storage;
+try {
+  storage = getStorage(app);
+  if (EMULATE) {
+    connectStorageEmulator(storage, FIREBASE_EMULATOR_HOST, 9199);
+  }
+} catch (e) {
+  console.error('Storage init failed:', e);
+  storage = null;
+}
+
+// Initialize Auth
+let auth;
+try {
+  auth = getAuth(app);
+  if (EMULATE) {
+    connectAuthEmulator(auth, `http://${FIREBASE_EMULATOR_HOST}:9099`);
+  }
+} catch (e) {
+  console.error('Auth init failed:', e);
+  auth = null;
 }
 
 function getDb() {
@@ -30,5 +85,19 @@ function getDb() {
   return db;
 }
 
-export { app, db, getDb };
+function getStorageRef() {
+  if (!storage) {
+    throw new Error('Storage not available. Check Firebase Console → Storage → Enable it.');
+  }
+  return storage;
+}
+
+function getAuthRef() {
+  if (!auth) {
+    throw new Error('Auth not available. Check Firebase Console → Authentication → Enable it.');
+  }
+  return auth;
+}
+
+export { app, analytics, db, storage, auth, getDb, getStorageRef, getAuthRef };
 export default app;
