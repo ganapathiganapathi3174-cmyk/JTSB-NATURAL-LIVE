@@ -340,6 +340,22 @@ export default function FirebaseAdminUsersPage() {
                     >
                       View
                     </button>
+                    <button
+                      className="btn btn-danger"
+                      onClick={async () => {
+                        if (window.confirm(`Permanently delete "${u.name}"? This cannot be undone.`)) {
+                          try {
+                            await handleDelete(u.id);
+                            alert('User deleted successfully');
+                          } catch (err) {
+                            alert('Error: ' + err.message);
+                          }
+                        }
+                      }}
+                      style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
