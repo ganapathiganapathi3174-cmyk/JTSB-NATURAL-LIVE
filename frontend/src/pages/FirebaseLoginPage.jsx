@@ -92,7 +92,7 @@ export default function FirebaseLoginPage() {
   return (
     <div className="app-shell">
       <div className="topbar">
-        <div className="brand">JTSB NATURAL LIVE</div>
+        <div className="brand">Starlight Ascent</div>
       </div>
       <div className="card" style={{ maxWidth: 440, margin: '2rem auto' }}>
         <h1>Login</h1>

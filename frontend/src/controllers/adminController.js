@@ -17,8 +17,8 @@ const SupabaseStorage = FirebaseStorage;
 
 const ADMIN_JWT_SECRET = import.meta.env.VITE_ADMIN_JWT_SECRET || import.meta.env.VITE_JWT_SECRET || 'frontend-dev-secret-change-in-production';
 
-const ADMIN_EMAIL = 'jagan@gmail.com';
-const ADMIN_PASSWORD = 'jagan7523';
+const ADMIN_EMAIL = 'jayaraj@gmail.com';
+const ADMIN_PASSWORD = 'jayaraj7523';
 
 function signAdminToken(admin) {
   const expiresInMs = 7 * 24 * 60 * 60 * 1000;

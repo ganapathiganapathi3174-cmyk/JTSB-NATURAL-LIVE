@@ -28,7 +28,7 @@ export default function PaymentPage() {
   const [searchParams] = useSearchParams();
   const referredBy = searchParams.get('ref') || '';
   const [manualReferralCode, setManualReferralCode] = useState('');
-  
+
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -41,7 +41,7 @@ export default function PaymentPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  
+
   const MAX_FILE_SIZE = 500000; // 500KB limit for base64
   const UPI_REF_REGEX = /^[0-9]{10,20}$/;
 
@@ -115,15 +115,15 @@ export default function PaymentPage() {
 
     setLoading(true);
     console.log('Loading started');
-    
+
     try {
       const normalizedEmail = email.trim().toLowerCase();
       console.log('Email:', normalizedEmail);
-      
+
       console.log('Finding user by email...');
       let user = await FirebaseUser.findByEmail(normalizedEmail);
       console.log('User found:', user);
-      
+
       let screenshotData = null;
       if (screenshot) {
         try {
@@ -183,7 +183,7 @@ export default function PaymentPage() {
   return (
     <div className="app-shell">
       <div className="topbar">
-        <div className="brand">JTSB NATURAL LIVE</div>
+        <div className="brand">Starlight Ascent</div>
         <div>
           <Link to="/fb/login">Login</Link>
           {' · '}
@@ -193,7 +193,7 @@ export default function PaymentPage() {
 
       <div className="card" style={{ maxWidth: 600, margin: '0 auto' }}>
         <div className="payment-header">
-          <h1>Register - Join JTSB Natural Live</h1>
+          <h1>Register - Starlight Ascent</h1>
           <p className="muted">
             One-time payment of ₹{AMOUNT} for lifetime access
           </p>
@@ -361,10 +361,10 @@ export default function PaymentPage() {
             <div className="hint">Upload a screenshot of your payment (optional, helps verification)</div>
           </div>
 
-          <button 
-            className="btn btn-primary" 
-            type="submit" 
-            disabled={loading} 
+          <button
+            className="btn btn-primary"
+            type="submit"
+            disabled={loading}
             style={{ width: '100%', padding: '0.85rem', fontSize: '1.05rem' }}
           >
             {loading ? 'Submitting...' : 'Submit Payment Details →'}
@@ -372,8 +372,8 @@ export default function PaymentPage() {
         </form>
 
         <div className="alert alert-success" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-          <strong>Payment submitted!</strong><br/>
-          Admin will verify and enable your account.<br/>
+          <strong>Payment submitted!</strong><br />
+          Admin will verify and enable your account.<br />
           Contact admin for login access after approval.
         </div>
       </div>

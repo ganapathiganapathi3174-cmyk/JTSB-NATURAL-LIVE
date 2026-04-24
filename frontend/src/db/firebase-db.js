@@ -662,14 +662,14 @@ export const FirebaseStorage = {
 export async function seedDefaultAdmin() {
   try {
     const db = getDb();
-    const adminEmail = 'jagan@gmail.com';
+    const adminEmail = 'jayaraj@gmail.com';
     const adminCollection = collection(db, 'admins');
     const snap = await getDocs(query(adminCollection, where('email', '==', adminEmail)));
     
     if (snap.empty) {
       await addDoc(adminCollection, {
         email: adminEmail,
-        password: 'hashed_jagan7523',
+        password: 'hashed_jayaraj7523',
         createdAt: new Date().toISOString(),
       });
       console.log('✅ Default admin record created in Firestore');
