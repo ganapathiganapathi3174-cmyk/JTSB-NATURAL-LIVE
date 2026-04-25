@@ -32,7 +32,7 @@ import { getDb, getStorageRef, getAuthRef } from '../firebase/config.js';
 const COL_USERS = 'users_new';
 const COL_REFERRALS = 'referrals_new';
 const STORAGE_FOLDER = 'new_payments';
-const MAX_REFERRALS = 3;
+const MAX_REFERRALS = 2;
 
 function generateReferralCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -113,6 +113,7 @@ export const FirebaseUser = {
       referred_by: userData.referredBy || null,
       referrals_count: 0,
       referral_limit_reached: false,
+      referral_active: true,
       created_at: now,
     };
 
@@ -152,6 +153,7 @@ export const FirebaseUser = {
       referred_by: userData.referredBy || null,
       referrals_count: 0,
       referral_limit_reached: false,
+      referral_active: true,
       created_at: now,
     };
 
@@ -170,19 +172,23 @@ export const FirebaseUser = {
         if (referrer) {
           // Prevent self-referral
           if (referrer.id !== newId) {
-            // Check if referrer has reached limit
-            if ((referrer.referrals_count || 0) >= 2) {
-              console.log('Referrer limit reached:', referralCode);
-              // Still allow registration but don't increment
-              await updateDoc(ref, { referred_by: referralCode });
+            // Check if referrer has reached limit OR is inactive
+            const referrerLimit = referrer.referrals_count || 0;
+            const isReferralActive = referrer.referral_active !== false;
+            
+            if (referrerLimit >= 2 || !isReferralActive) {
+              console.log('Referral code is no longer valid:', referralCode, 'limit:', referrerLimit, 'active:', isReferralActive);
+              // Don't link the referral - reject it
+              await updateDoc(ref, { referred_by: null });
             } else {
               // Update new user's referred_by
               await updateDoc(ref, { referred_by: referralCode });
               // Increment referrer's count
-              const newCount = (referrer.referrals_count || 0) + 1;
+              const newCount = referrerLimit + 1;
               await updateDoc(doc(db, COL_USERS, referrer.id), {
                 referrals_count: newCount,
                 referral_limit_reached: newCount >= 2,
+                referral_active: newCount < 2, // Disable when limit reached
               });
               console.log('Referral linked:', referralCode, '->', newId, ', referrer count:', newCount);
             }
@@ -323,23 +329,29 @@ async findByUtr(utr) {
         return;
       }
       
-      await updateDoc(ref, { referred_by: refCode });
-      
-      // Increment referrer's count if not at limit
       const referrer = await this.findByReferralCode(refCode);
       if (referrer && referrer.id !== id) {
-        if ((referrer.referrals_count || 0) >= 2) {
-          console.log('Referrer limit reached:', refCode);
-        } else {
-          const newCount = (referrer.referrals_count || 0) + 1;
-          await updateDoc(doc(db, COL_USERS, referrer.id), {
-            referrals_count: newCount,
-            referral_limit_reached: newCount >= 2,
-          });
+        const isActive = referrer.referral_active !== false;
+        const hasReachedLimit = (referrer.referrals_count || 0) >= 2;
+        
+        if (!isActive || hasReachedLimit) {
+          console.log('Referral code is no longer valid:', refCode);
+          throw new Error('Referral code is no longer valid');
         }
+        
+        await updateDoc(ref, { referred_by: refCode });
+        
+        // Increment referrer's count
+        const newCount = (referrer.referrals_count || 0) + 1;
+        await updateDoc(doc(db, COL_USERS, referrer.id), {
+          referrals_count: newCount,
+          referral_limit_reached: newCount >= 2,
+          referral_active: newCount < 2,
+        });
+        console.log('Referral code updated:', refCode);
+      } else {
+        console.log('Referrer not found for code:', refCode);
       }
-      
-      console.log('Referral code updated:', refCode);
     } catch (err) {
       console.log('Update referral code error:', err);
       throw err;
@@ -528,6 +540,7 @@ async findByUtr(utr) {
     await updateDoc(ref, {
       referrals_count: newCount,
       referral_limit_reached: false,
+      referral_active: true,
     });
   },
 
@@ -553,6 +566,7 @@ async findByUtr(utr) {
     await updateDoc(ref, {
       referrals_count: newCount,
       referral_limit_reached: newCount >= MAX_REFERRALS,
+      referral_active: newCount < MAX_REFERRALS,
     });
   },
 

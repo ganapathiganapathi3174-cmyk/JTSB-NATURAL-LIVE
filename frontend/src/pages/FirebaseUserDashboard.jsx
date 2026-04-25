@@ -21,6 +21,7 @@ export default function FirebaseUserDashboard() {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [referrerInfo, setReferrerInfo] = useState(null);
 
@@ -323,25 +324,48 @@ return (
                 <form onSubmit={handleUpdatePassword}>
                   <div className="field">
                     <label>New Password</label>
-                    <input 
-                      type="password" 
-                      value={newPassword} 
-                      onChange={e => setNewPassword(e.target.value)}
-                      minLength={6}
-                      required
-                      placeholder="At least 6 characters"
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <input 
+                        type={showPassword ? 'text' : 'password'} 
+                        value={newPassword} 
+                        onChange={e => setNewPassword(e.target.value)}
+                        minLength={6}
+                        required
+                        placeholder="At least 6 characters"
+                        style={{ width: '100%', paddingRight: '2.5rem' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '0.5rem',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '1.1rem',
+                          padding: '0.25rem'
+                        }}
+                      >
+                        {showPassword ? '👁' : '👁️'}
+                      </button>
+                    </div>
                   </div>
                   <div className="field">
                     <label>Confirm Password</label>
-                    <input 
-                      type="password" 
-                      value={confirmPassword} 
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      minLength={6}
-                      required
-                      placeholder="Re-enter password"
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <input 
+                        type={showPassword ? 'text' : 'password'} 
+                        value={confirmPassword} 
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        minLength={6}
+                        required
+                        placeholder="Re-enter password"
+                        style={{ width: '100%', paddingRight: '2.5rem' }}
+                      />
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <button type="submit" className="btn btn-primary" disabled={updatingPassword}>

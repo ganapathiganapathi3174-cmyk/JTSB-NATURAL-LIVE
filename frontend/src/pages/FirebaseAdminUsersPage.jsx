@@ -1,12 +1,19 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser, FirebaseNewReferral } from '../db/firebase-db.js';
-import { getAuthRef } from '../firebase/config.js';
+import { FirebaseUser } from '../db/firebase-db.js';
+import { getAuthRef, getDb } from '../firebase/config.js';
 import { sendPasswordResetEmail } from 'firebase/auth';
 
 const ADMIN_KEY = 'fb_admin_token';
 
-function UserDetailModal({ user, onClose, onDelete }) {
+const getImageUrl = (url) => {
+  if (!url) return null;
+  if (url.includes('alt=media')) return url;
+  if (url.startsWith('data:')) return url;
+  return url + (url.includes('?') ? '&' : '?') + 'alt=media';
+};
+
+function UserDetailModal({ user, onClose, onDelete, onDeleteReferral }) {
   const [deleting, setDeleting] = useState(false);
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +43,29 @@ function UserDetailModal({ user, onClose, onDelete }) {
     }
   }
 
+  async function handleDeleteReferral(referredUser) {
+    if (!window.confirm(`Remove referral "${referredUser.name}" from this user?`)) return;
+    try {
+      await onDeleteReferral(user.referral_code, referredUser.id);
+      const updated = await FirebaseUser.getReferralsByReferrerCode(user.referral_code);
+      setReferrals(updated);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function handleDeleteAllReferrals() {
+    if (!window.confirm(`Remove ALL referrals from this user? This cannot be undone.`)) return;
+    try {
+      for (const ref of referrals) {
+        await onDeleteReferral(user.referral_code, ref.id);
+      }
+      setReferrals([]);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   async function handleDelete() {
     if (!window.confirm(`Delete user "${user.name}"? This cannot be undone.`)) return;
     setDeleting(true);
@@ -50,13 +80,6 @@ function UserDetailModal({ user, onClose, onDelete }) {
   }
 
   if (!user) return null;
-
-  const getImageUrl = (url) => {
-    if (!url) return null;
-    if (url.includes('alt=media')) return url;
-    if (url.startsWith('data:')) return url;
-    return url + (url.includes('?') ? '&' : '?') + 'alt=media';
-  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -112,18 +135,46 @@ function UserDetailModal({ user, onClose, onDelete }) {
           </div>
           
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Referrals ({user.referrals_count || 0}/2)</div>
+            <div className="muted" style={{ fontSize: '0.85rem' }}>Referrals ({user.referrals_count || 0}/2)
+              {referrals.length > 0 && (
+                <button 
+                  className="btn btn-ghost" 
+                  style={{ marginLeft: '0.5rem', padding: '0.15rem 0.4rem', fontSize: '0.7rem' }}
+                  onClick={() => window.open(`/fb-admin/referral-graph?code=${user.referral_code}`, '_blank')}
+                >
+                  Graph
+                </button>
+              )}
+            </div>
             {loading ? (
               <div className="muted">Loading...</div>
             ) : referrals.length > 0 ? (
-              <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.5rem', background: '#f1f5f9', padding: '0.5rem', borderRadius: '4px' }}>
                 {referrals.map((ref) => (
-                  <div key={ref.id} style={{ padding: '0.5rem', background: 'var(--bg)', borderRadius: '4px' }}>
-                    <div style={{ fontWeight: 'bold' }}>{ref.name}</div>
-                    <div className="muted" style={{ fontSize: '0.85rem' }}>{ref.email}</div>
-                    <div className="muted" style={{ fontSize: '0.85rem' }}>{ref.phone || '—'}</div>
+                  <div key={ref.id} style={{ padding: '0.5rem', background: '#1e293b', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#e8eaef' }}>
+                    <div>
+                      <div style={{ fontWeight: 'bold', color: '#e8eaef' }}>{ref.name}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#8b93a7' }}>{ref.email}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#8b93a7' }}>{ref.phone || '—'}</div>
+                    </div>
+                    <button 
+                      className="btn btn-danger btn-sm"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                      onClick={() => handleDeleteReferral(ref)}
+                    >
+                      Remove
+                    </button>
                   </div>
                 ))}
+                {referrals.length > 0 && (
+                  <button 
+                    className="btn btn-danger"
+                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                    onClick={handleDeleteAllReferrals}
+                  >
+                    Remove All Referrals
+                  </button>
+                )}
               </div>
             ) : (
               <div className="muted">No referrals yet</div>
@@ -180,6 +231,49 @@ export default function FirebaseAdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dragState, setDragState] = useState({ startX: 0, isDragging: false });
+  const [expandedUserId, setExpandedUserId] = useState(null);
+  const [expandedReferrals, setExpandedReferrals] = useState([]);
+  const [loadingReferrals, setLoadingReferrals] = useState(false);
+
+  const handleDragStart = (e, user) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    setDragState({ startX: clientX, isDragging: true, userId: user.id });
+  };
+
+  const handleDragMove = (e) => {
+    if (!dragState.isDragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const diff = Math.abs(clientX - dragState.startX);
+    if (diff > 50) {
+      handleToggleUserExpand(dragState.userId);
+      setDragState({ startX: 0, isDragging: false, userId: null });
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDragState({ startX: 0, isDragging: false, userId: null });
+  };
+
+  const handleToggleUserExpand = async (userId) => {
+    if (expandedUserId === userId) {
+      setExpandedUserId(null);
+      setExpandedReferrals([]);
+      return;
+    }
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    setExpandedUserId(userId);
+    setLoadingReferrals(true);
+    try {
+      const referrals = await FirebaseUser.getReferralsByReferrerCode(user.referral_code);
+      setExpandedReferrals(referrals.slice(0, 2));
+    } catch (err) {
+      console.error('Load referrals error:', err);
+    } finally {
+      setLoadingReferrals(false);
+    }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
@@ -207,6 +301,32 @@ export default function FirebaseAdminUsersPage() {
     await FirebaseUser.deleteUser(userId);
     const allUsers = await FirebaseUser.getAllUsers();
     setUsers(allUsers);
+  };
+
+  const handleDeleteReferral = async (referralCode, referredUserId) => {
+    const db = getDb();
+    const { doc, updateDoc, getDoc } = await import('firebase/firestore');
+    try {
+      const userRef = doc(db, 'users_new', referredUserId);
+      const snap = await getDoc(userRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        const currentReferredBy = data.referred_by;
+        const referrer = await FirebaseUser.findByReferralCode(referralCode);
+        if (referrer) {
+          const newCount = Math.max(0, (referrer.referrals_count || 0) - 1);
+          await updateDoc(doc(db, 'users_new', referrer.id), {
+            referrals_count: newCount,
+            referral_limit_reached: newCount >= 2,
+          });
+        }
+        await updateDoc(userRef, { referred_by: null, referral_limit_reached: false });
+      }
+      console.log('Referral removed:', referredUserId);
+    } catch (err) {
+      console.error('Delete referral error:', err);
+      throw err;
+    }
   };
 
   const filteredUsers = useMemo(() => {
@@ -295,78 +415,84 @@ export default function FirebaseAdminUsersPage() {
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody onMouseMove={handleDragMove} onMouseUp={handleDragEnd} onTouchEnd={handleDragEnd}>
               {filteredUsers.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.name}</td>
-                  <td>{u.email}</td>
-                  <td>{u.phone || '—'}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.utr_number || '—'}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.referred_by || '—'}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.referral_code || '—'}</td>
-                  <td>{u.referrals_count || 0}</td>
-                  <td>
-                    {(u.referrals_count >= 2) ? (
-                      <span style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '0.8rem' }}>Qualified</span>
-                    ) : (
-                      <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>
-                    )}
-                  </td>
-                  <td>
-                    {u.upi_screenshot_url ? (
+                <React.Fragment key={u.id}>
+                  <tr 
+                    onMouseDown={(e) => handleDragStart(e, u)}
+                    onTouchStart={(e) => handleDragStart(e, u)}
+                    style={{ cursor: 'grab', userSelect: 'none' }}
+                  >
+                    <td>{u.name}</td>
+                    <td>{u.email}</td>
+                    <td>{u.phone || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.utr_number || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.referred_by || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.referral_code || '—'}</td>
+                    <td>
                       <button 
-                        type="button"
-                        className="btn btn-ghost"
+                        className="btn btn-ghost" 
+                        onClick={(e) => { e.stopPropagation(); handleToggleUserExpand(u.id); }}
                         style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                        onClick={() => {
-                          const url = getImageUrl(u.upi_screenshot_url);
-                          window.open(url, '_blank');
-                        }}
                       >
-                        view
+                        {expandedUserId === u.id ? 'Hide' : `View (${u.referrals_count || 0})`}
                       </button>
-                    ) : (
-                      <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>
-                    )}
-                  </td>
-                  <td>
-                    <span className={`badge ${u.payment_status === 'approved' ? 'badge-paid' : u.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-                      {u.payment_status || 'pending'}
-                    </span>
-                  </td>
-                  <td style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => setSelectedUser(u)}
-                      style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}
-                    >
-                      View
-                    </button>
-                    <button
-                      className="btn btn-danger"
-                      onClick={async () => {
-                        if (window.confirm(`Permanently delete "${u.name}"? This cannot be undone.`)) {
-                          try {
-                            await handleDelete(u.id);
-                            alert('User deleted successfully');
-                          } catch (err) {
-                            alert('Error: ' + err.message);
-                          }
-                        }
-                      }}
-                      style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                    </td>
+                    <td>
+                      {(u.referrals_count >= 2) ? (
+                        <span style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '0.8rem' }}>Qualified</span>
+                      ) : (
+                        <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {u.upi_screenshot_url ? (
+                        <button 
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                          onClick={(e) => { e.stopPropagation(); const url = getImageUrl(u.upi_screenshot_url); window.open(url, '_blank'); }}
+                        >
+                          view
+                        </button>
+                      ) : (
+                        <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge ${u.payment_status === 'approved' ? 'badge-paid' : u.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+                        {u.payment_status || 'pending'}
+                      </span>
+                    </td>
+                    <td>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <button className="btn btn-primary" onClick={() => setSelectedUser(u)} style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}>View</button>
+                        <button className="btn btn-danger" onClick={async () => { if (window.confirm(`Delete "${u.name}"?`)) { await handleDelete(u.id); } }} style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedUserId === u.id && (
+                    <tr>
+                      <td colSpan={11} style={{ padding: '0.75rem', background: 'var(--bg)', borderTop: '2px solid var(--primary)' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>Referred by {u.name}:</div>
+                        {loadingReferrals ? <div className="muted">Loading...</div> : 
+                         expandedReferrals.length > 0 ? (
+                           <div style={{ display: 'flex', gap: '0.75rem' }}>
+                             {expandedReferrals.map((ref) => (
+<div key={ref.id} style={{ padding: '0.5rem', background: '#1e293b', borderRadius: '4px', border: '1px solid var(--border)', color: '#e8eaef' }}>
+                                  <div style={{ fontWeight: 'bold', color: '#e8eaef' }}>{ref.name}</div>
+                                  <div style={{ fontSize: '0.8rem', color: '#8b93a7' }}>{ref.phone || '—'}</div>
+                                </div>
+                             ))}
+                           </div>
+                         ) : <div className="muted">No referrals yet</div>}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
               {filteredUsers.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="muted">
-                    No users found.
-                  </td>
-                </tr>
+                <tr><td colSpan={11} className="muted">No users found.</td></tr>
               )}
             </tbody>
           </table>
@@ -377,6 +503,8 @@ export default function FirebaseAdminUsersPage() {
         <UserDetailModal
           user={selectedUser}
           onClose={() => setSelectedUser(null)}
+          onDelete={handleDelete}
+          onDeleteReferral={handleDeleteReferral}
         />
       )}
     </div>

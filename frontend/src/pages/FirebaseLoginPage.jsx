@@ -8,9 +8,10 @@ export default function FirebaseLoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showSetPassword, setShowSetPassword] = useState(false);
+  const [showSetPasswordField, setShowSetPasswordField] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [setPasswordFor, setSetPasswordFor] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSetPassword(e) {
     e.preventDefault();
@@ -65,7 +66,7 @@ export default function FirebaseLoginPage() {
       // If no password, allow to set one
       if (!user.password) {
         setSetPasswordFor(user);
-        setShowSetPassword(true);
+        setShowSetPasswordField(true);
         setLoading(false);
         return;
       }
@@ -97,15 +98,34 @@ export default function FirebaseLoginPage() {
       <div className="card" style={{ maxWidth: 440, margin: '2rem auto' }}>
         <h1>Login</h1>
         
-        {showSetPassword && setPasswordFor ? (
+        {showSetPasswordField && setPasswordFor ? (
           <div className="alert alert-success">
             <strong>Your account is approved!</strong><br/>
             Set a password to login.
             <form onSubmit={handleSetPassword} style={{ marginTop: '1rem' }}>
               <div className="field">
                 <label>New Password</label>
-                <input type="password" value={newPassword} minLength={6} 
-                  onChange={e => setNewPassword(e.target.value)} required />
+                <div style={{ position: 'relative' }}>
+                  <input type={showPassword ? 'text' : 'password'} value={newPassword} minLength={6} 
+                    onChange={e => setNewPassword(e.target.value)} required style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '0.5rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '1.1rem',
+                      padding: '0.25rem'
+                    }}
+                  >
+                    {showPassword ? '👁' : '👁️'}
+                  </button>
+                </div>
               </div>
               <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
                 {loading ? 'Setting...' : 'Set Password & Login'}
@@ -125,7 +145,26 @@ export default function FirebaseLoginPage() {
           </div>
           <div className="field">
             <label>Password</label>
-            <input required type="password" value={password} onChange={e => setPassword(e.target.value)} />
+            <div style={{ position: 'relative' }}>
+              <input required type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{ width: '100%', paddingRight: '2.5rem' }} />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '0.5rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '1.1rem',
+                  padding: '0.25rem'
+                }}
+              >
+                {showPassword ? '👁' : '👁️'}
+              </button>
+            </div>
           </div>
           <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%' }}>
             {loading ? 'Logging in...' : 'Login'}

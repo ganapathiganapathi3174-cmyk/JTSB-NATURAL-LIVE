@@ -9,6 +9,7 @@ import FirebaseAdminLoginPage from './pages/FirebaseAdminLoginPage.jsx';
 import FirebaseAdminDashboardPage from './pages/FirebaseAdminDashboardPage.jsx';
 import FirebaseAdminPaymentsPage from './pages/FirebaseAdminPaymentsPage.jsx';
 import FirebaseAdminUsersPage from './pages/FirebaseAdminUsersPage.jsx';
+import ReferralGraphPage from './pages/ReferralGraphPage.jsx';
 
 function ProtectedFirebase({ children }) {
   const userId = localStorage.getItem('fb_user_id');
@@ -39,6 +40,7 @@ export default function App() {
       <Route path="/fb-admin/dashboard" element={<ProtectedFirebaseAdmin><FirebaseAdminDashboardPage /></ProtectedFirebaseAdmin>} />
       <Route path="/fb-admin/payments" element={<ProtectedFirebaseAdmin><FirebaseAdminPaymentsPage /></ProtectedFirebaseAdmin>} />
       <Route path="/fb-admin/users" element={<ProtectedFirebaseAdmin><FirebaseAdminUsersPage /></ProtectedFirebaseAdmin>} />
+      <Route path="/fb-admin/referral-graph" element={<ReferralGraphPage />} />
 
       <Route path="*" element={<Navigate to="/payment" replace />} />
     </Routes>
