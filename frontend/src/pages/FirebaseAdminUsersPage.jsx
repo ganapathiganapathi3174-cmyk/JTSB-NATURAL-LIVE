@@ -129,24 +129,16 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral }) {
             </button>
           </div>
           
-          <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Referred By</div>
-            <div>{user.referred_by || '—'}</div>
-          </div>
-          
-          <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Referrals ({user.referrals_count || 0}/2)
-              {referrals.length > 0 && (
-                <button 
-                  className="btn btn-ghost" 
-                  style={{ marginLeft: '0.5rem', padding: '0.15rem 0.4rem', fontSize: '0.7rem' }}
-                  onClick={() => window.open(`/fb-admin/referral-graph?code=${user.referral_code}`, '_blank')}
-                >
-                  Graph
-                </button>
-              )}
+          {user.referred_by && (
+            <div>
+              <div className="muted" style={{ fontSize: '0.85rem' }}>Referred By</div>
+              <div>{user.referred_by}</div>
             </div>
-            {loading ? (
+          )}
+        </div>
+        
+        <div>
+          {loading ? (
               <div className="muted">Loading...</div>
             ) : referrals.length > 0 ? (
               <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.5rem', background: '#f1f5f9', padding: '0.5rem', borderRadius: '4px' }}>
@@ -179,34 +171,33 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral }) {
             ) : (
               <div className="muted">No referrals yet</div>
             )}
-          </div>
-          
-          <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Payment Screenshot</div>
-            {user.upi_screenshot_url ? (
-              <div>
-                <button 
-                  className="btn btn-primary"
-                  style={{ marginBottom: '0.5rem' }}
-                  onClick={() => window.open(getImageUrl(user.upi_screenshot_url), '_blank')}
-                >
-                  Open Image
-                </button>
-                <img 
-                  src={getImageUrl(user.upi_screenshot_url)} 
-                  alt="Payment" 
-                  style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '0.5rem' }} 
-                />
-              </div>
-            ) : (
-              <div className="muted">No screenshot uploaded</div>
-            )}
-          </div>
-          
-          <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Created At</div>
-            <div>{user.created_at ? new Date(user.created_at).toLocaleString() : '—'}</div>
-          </div>
+        </div>
+        
+        <div>
+          <div className="muted" style={{ fontSize: '0.85rem' }}>Payment Screenshot</div>
+          {user.upi_screenshot_url ? (
+            <div>
+              <button 
+                className="btn btn-primary"
+                style={{ marginBottom: '0.5rem' }}
+                onClick={() => window.open(getImageUrl(user.upi_screenshot_url), '_blank')}
+              >
+                Open Image
+              </button>
+              <img 
+                src={getImageUrl(user.upi_screenshot_url)} 
+                alt="Payment" 
+                style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '0.5rem' }} 
+              />
+            </div>
+          ) : (
+            <div className="muted">No screenshot uploaded</div>
+          )}
+        </div>
+        
+        <div>
+          <div className="muted" style={{ fontSize: '0.85rem' }}>Created At</div>
+          <div>{user.created_at ? new Date(user.created_at).toLocaleString() : '—'}</div>
         </div>
         
         <div style={{ marginTop: '1.5rem', borderTop: '1px solid #ddd', paddingTop: '1rem' }}>
@@ -267,7 +258,7 @@ export default function FirebaseAdminUsersPage() {
     setLoadingReferrals(true);
     try {
       const referrals = await FirebaseUser.getReferralsByReferrerCode(user.referral_code);
-      setExpandedReferrals(referrals.slice(0, 2));
+      setExpandedReferrals(referrals);
     } catch (err) {
       console.error('Load referrals error:', err);
     } finally {
@@ -406,10 +397,11 @@ export default function FirebaseAdminUsersPage() {
                 <th>Email</th>
                 <th>Phone</th>
                 <th>UTR</th>
-                <th>Referred By</th>
                 <th>Referral Code</th>
                 <th>Referred Users</th>
+                <th>Total Refs</th>
                 <th>Qualified</th>
+                <th>Account Status</th>
                 <th>Screenshot</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -427,7 +419,6 @@ export default function FirebaseAdminUsersPage() {
                     <td>{u.email}</td>
                     <td>{u.phone || '—'}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.utr_number || '—'}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.referred_by || '—'}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.referral_code || '—'}</td>
                     <td>
                       <button 
@@ -435,14 +426,22 @@ export default function FirebaseAdminUsersPage() {
                         onClick={(e) => { e.stopPropagation(); handleToggleUserExpand(u.id); }}
                         style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
                       >
-                        {expandedUserId === u.id ? 'Hide' : `View (${u.referrals_count || 0})`}
+                        {expandedUserId === u.id ? 'Hide' : `View${u.payment_status === 'approved' ? ` (${u.referrals_count || 0})` : ''}`}
                       </button>
                     </td>
+                    <td>{u.total_referral_count || 0}</td>
                     <td>
-                      {(u.referrals_count >= 2) ? (
+                      {u.is_qualified ? (
                         <span style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '0.8rem' }}>Qualified</span>
                       ) : (
                         <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {u.account_status === 'inactive' ? (
+                        <span className="badge badge-rejected">Inactive</span>
+                      ) : (
+                        <span className="badge badge-paid">Active</span>
                       )}
                     </td>
                     <td>
@@ -473,26 +472,32 @@ export default function FirebaseAdminUsersPage() {
                   </tr>
                   {expandedUserId === u.id && (
                     <tr>
-                      <td colSpan={11} style={{ padding: '0.75rem', background: 'var(--bg)', borderTop: '2px solid var(--primary)' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>Referred by {u.name}:</div>
-                        {loadingReferrals ? <div className="muted">Loading...</div> : 
-                         expandedReferrals.length > 0 ? (
-                           <div style={{ display: 'flex', gap: '0.75rem' }}>
-                             {expandedReferrals.map((ref) => (
-<div key={ref.id} style={{ padding: '0.5rem', background: '#1e293b', borderRadius: '4px', border: '1px solid var(--border)', color: '#e8eaef' }}>
-                                  <div style={{ fontWeight: 'bold', color: '#e8eaef' }}>{ref.name}</div>
-                                  <div style={{ fontSize: '0.8rem', color: '#8b93a7' }}>{ref.phone || '—'}</div>
-                                </div>
-                             ))}
-                           </div>
-                         ) : <div className="muted">No referrals yet</div>}
+                      <td colSpan={12} style={{ padding: '0.75rem', background: 'var(--bg)', borderTop: '2px solid var(--primary)' }}>
+                        {u.payment_status === 'approved' ? (
+                          <>
+                            <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>Referred by {u.name}:</div>
+                            {loadingReferrals ? <div className="muted">Loading...</div> : 
+                             expandedReferrals.length > 0 ? (
+                               <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                 {expandedReferrals.map((ref) => (
+                                 <div key={ref.id} style={{ padding: '0.5rem', background: '#1e293b', borderRadius: '4px', border: '1px solid var(--border)', color: '#e8eaef' }}>
+                                   <div style={{ fontWeight: 'bold', color: '#e8eaef' }}>{ref.name}</div>
+                                   <div style={{ fontSize: '0.8rem', color: '#8b93a7' }}>{ref.phone || '—'}</div>
+                                 </div>
+                               ))}
+                               </div>
+                             ) : <div className="muted">No referrals yet</div>}
+                          </>
+                        ) : (
+                          <div className="muted">Referral data available after payment approval</div>
+                        )}
                       </td>
                     </tr>
                   )}
                 </React.Fragment>
               ))}
               {filteredUsers.length === 0 && (
-                <tr><td colSpan={11} className="muted">No users found.</td></tr>
+                <tr><td colSpan={12} className="muted">No users found.</td></tr>
               )}
             </tbody>
           </table>

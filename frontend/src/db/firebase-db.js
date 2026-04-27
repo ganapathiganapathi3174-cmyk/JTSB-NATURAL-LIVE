@@ -16,18 +16,12 @@ import {
   arrayRemove,
 } from 'firebase/firestore';
 import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from 'firebase/storage';
-import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { getDb, getStorageRef, getAuthRef } from '../firebase/config.js';
+import { getDb, getAuthRef } from '../firebase/config.js';
 
 const COL_USERS = 'users_new';
 const COL_REFERRALS = 'referrals_new';
@@ -91,6 +85,16 @@ export const FirebaseUser = {
     const db = getDb();
     const now = new Date().toISOString();
     
+    const existingEmail = await FirebaseUser.findByEmail(userData.email);
+    if (existingEmail) {
+      throw new Error('This email is already registered. Please use a different email.');
+    }
+    
+    const existingPhone = await FirebaseUser.findByPhone(userData.phone);
+    if (existingPhone) {
+      throw new Error('This phone number is already registered. Please use a different number.');
+    }
+    
     let referralCode;
     for (let i = 0; i < 10; i++) {
       referralCode = generateReferralCode();
@@ -109,11 +113,18 @@ export const FirebaseUser = {
       payment_status: 'pending',
       upi_screenshot_url: null,
       utr_number: null,
-      referral_code: referralCode,
+referral_code: referralCode,
       referred_by: userData.referredBy || null,
       referrals_count: 0,
+      total_referral_count: 0,
       referral_limit_reached: false,
       referral_active: true,
+      referral_cycle: 0,
+      cycle_payment_status: null,
+      cycle_payment_utr: null,
+      cycle_upi_screenshot_url: null,
+      account_status: 'inactive',
+      is_first_payment_done: false,
       created_at: now,
     };
 
@@ -122,7 +133,10 @@ export const FirebaseUser = {
     
     if (userData.referredBy) {
       try {
-        await FirebaseUser.incrementReferralCount(userData.referredBy);
+        const referrer = await this.findByReferralCode(userData.referredBy.toUpperCase());
+        if (referrer && referrer.payment_status === 'approved' && referrer.account_status === 'active' && (referrer.referrals_count || 0) < 2) {
+          await this.incrementReferralCountByCode(userData.referredBy);
+        }
       } catch (e) {
         console.warn('Failed to increment referrer count:', e);
       }
@@ -134,6 +148,16 @@ export const FirebaseUser = {
     const db = getDb();
     const now = new Date().toISOString();
     const pass = userData.password || '';
+    
+    const existingEmail = await FirebaseUser.findByEmail(userData.email);
+    if (existingEmail) {
+      throw new Error('This email is already registered. Please use a different email.');
+    }
+    
+    const existingPhone = await FirebaseUser.findByPhone(userData.phone);
+    if (existingPhone) {
+      throw new Error('This phone number is already registered. Please use a different number.');
+    }
     
     console.log('createWithPassword: creating user with password:', pass.substring(0, 2) + '***');
     console.log('Collection name:', COL_USERS);
@@ -152,8 +176,15 @@ export const FirebaseUser = {
       referral_code: referralCode,
       referred_by: userData.referredBy || null,
       referrals_count: 0,
+      total_referral_count: 0,
       referral_limit_reached: false,
       referral_active: true,
+      referral_cycle: 0,
+      cycle_payment_status: null,
+      cycle_payment_utr: null,
+      cycle_upi_screenshot_url: null,
+      account_status: 'inactive',
+      is_first_payment_done: false,
       created_at: now,
     };
 
@@ -172,23 +203,21 @@ export const FirebaseUser = {
         if (referrer) {
           // Prevent self-referral
           if (referrer.id !== newId) {
-            // Check if referrer has reached limit OR is inactive
             const referrerLimit = referrer.referrals_count || 0;
             const isReferralActive = referrer.referral_active !== false;
+            const isPaymentApproved = referrer.payment_status === 'approved';
+            const isAccountActive = referrer.account_status === 'active';
             
-            if (referrerLimit >= 2 || !isReferralActive) {
-              console.log('Referral code is no longer valid:', referralCode, 'limit:', referrerLimit, 'active:', isReferralActive);
-              // Don't link the referral - reject it
+            if (referrerLimit >= 2 || !isReferralActive || !isPaymentApproved || !isAccountActive) {
+              console.log('Referral code is no longer valid:', referralCode, 'limit:', referrerLimit, 'active:', isReferralActive, 'payment:', isPaymentApproved, 'account:', isAccountActive);
               await updateDoc(ref, { referred_by: null });
             } else {
-              // Update new user's referred_by
               await updateDoc(ref, { referred_by: referralCode });
-              // Increment referrer's count
               const newCount = referrerLimit + 1;
               await updateDoc(doc(db, COL_USERS, referrer.id), {
                 referrals_count: newCount,
                 referral_limit_reached: newCount >= 2,
-                referral_active: newCount < 2, // Disable when limit reached
+                referral_active: newCount < 2,
               });
               console.log('Referral linked:', referralCode, '->', newId, ', referrer count:', newCount);
             }
@@ -214,8 +243,35 @@ export const FirebaseUser = {
   async findByEmail(email) {
     const db = getDb();
     const colRef = collection(db, COL_USERS);
-    const q = query(colRef, where('email', '==', email.toLowerCase()));
+    const emailLower = email.toLowerCase();
+    console.log('findByEmail searching for:', emailLower);
+    const q = query(colRef, where('email', '==', emailLower));
     const snap = await getDocs(q);
+    console.log('findByEmail results:', snap.size, 'docs');
+    if (snap.empty) return null;
+    const d = snap.docs[0];
+    console.log('findByEmail found user:', d.id);
+    return { id: d.id, ...d.data() };
+  },
+
+  async findByPhone(phone) {
+    const db = getDb();
+    const colRef = collection(db, COL_USERS);
+    const phoneTrimmed = phone.trim();
+    const q = query(colRef, where('phone', '==', phoneTrimmed));
+    const snap = await getDocs(q);
+    console.log('findByPhone search for:', phoneTrimmed, 'found:', snap.size);
+    if (snap.empty) return null;
+    const d = snap.docs[0];
+    return { id: d.id, ...d.data() };
+  },
+
+  async findByEmailAndPassword(email, password) {
+    const db = getDb();
+    const colRef = collection(db, COL_USERS);
+    const q = query(colRef, where('email', '==', email.toLowerCase()), where('password', '==', password));
+    const snap = await getDocs(q);
+    console.log('findByEmailAndPassword found:', snap.size);
     if (snap.empty) return null;
     const d = snap.docs[0];
     return { id: d.id, ...d.data() };
@@ -288,10 +344,19 @@ async findByUtr(utr) {
     const db = getDb();
     const ref = doc(db, COL_USERS, id);
     console.log('Updating payment status for:', id, 'to:', payment_status);
-    await updateDoc(ref, { 
+    const updateData = {
       payment_status,
-      status: payment_status === 'approved' ? 'approved' : payment_status
-    });
+      status: payment_status === 'approved' ? 'approved' : payment_status,
+    };
+    if (payment_status === 'approved') {
+      updateData.account_status = 'active';
+      updateData.is_first_payment_done = true;
+      updateData.referrals_count = 0;
+      updateData.referral_limit_reached = false;
+      updateData.referral_active = true;
+      updateData.is_qualified = false;
+    }
+    await updateDoc(ref, updateData);
     console.log('Payment status updated successfully');
   },
 
@@ -550,6 +615,10 @@ async findByUtr(utr) {
       console.log('Referrer not found for code:', referralCode);
       return;
     }
+    if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || (referrer.referrals_count || 0) >= 2) {
+      console.log('Referrer not eligible:', referralCode);
+      return;
+    }
     await this.incrementReferralCount(referrer.id);
     console.log('Incremented referral count for:', referrer.id);
   },
@@ -560,13 +629,69 @@ async findByUtr(utr) {
     
     const currentCount = user.referrals_count || 0;
     const newCount = currentCount + 1;
+    const isQualified = newCount >= MAX_REFERRALS;
     
     const db = getDb();
     const ref = doc(db, COL_USERS, userId);
     await updateDoc(ref, {
       referrals_count: newCount,
-      referral_limit_reached: newCount >= MAX_REFERRALS,
-      referral_active: newCount < MAX_REFERRALS,
+      total_referral_count: (user.total_referral_count || 0) + 1,
+      referral_limit_reached: isQualified,
+      referral_active: !isQualified,
+      is_qualified: isQualified,
+      account_status: isQualified ? 'inactive' : (user.account_status || 'active'),
+    });
+  },
+
+  async updateCyclePaymentStatus(id, status) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    await updateDoc(ref, { cycle_payment_status: status });
+  },
+
+  async updateCyclePayment(id, screenshotUrl, utr) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    const currentUser = await this.findById(id);
+    await updateDoc(ref, {
+      cycle_payment_status: 'pending',
+      cycle_upi_screenshot_url: screenshotUrl || null,
+      cycle_payment_utr: utr || null,
+      referral_cycle: (currentUser.referral_cycle || 0) + 1,
+    });
+  },
+
+  async reactivate(id) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    await updateDoc(ref, {
+      account_status: 'active',
+      is_qualified: false,
+      referrals_count: 0,
+      referral_limit_reached: false,
+      referral_active: true,
+      cycle_payment_status: 'approved',
+    });
+  },
+
+  async approveCyclePayment(id) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    await updateDoc(ref, {
+      cycle_payment_status: 'approved',
+      referrals_count: 0,
+      referral_limit_reached: false,
+      referral_active: true,
+    });
+  },
+
+  async resetCyclePaymentAfterApproval(id) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    await updateDoc(ref, {
+      referrals_count: 0,
+      referral_limit_reached: false,
+      referral_active: true,
     });
   },
 
@@ -608,7 +733,7 @@ async findByUtr(utr) {
     return onSnapshot(q, (snap) => {
       const users = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(u => u.upi_screenshot_url || u.utr_number);
+        .filter(u => u.upi_screenshot_url || u.utr_number || u.cycle_upi_screenshot_url || u.cycle_payment_utr);
       console.log('subscribeToPayments received:', users.length, 'users');
       callback(users);
     });
@@ -621,6 +746,17 @@ async findByUtr(utr) {
     return onSnapshot(q, (snap) => {
       const referrals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       callback(referrals);
+    });
+  },
+
+  subscribeToCyclePayments(callback) {
+    const db = getDb();
+    const colRef = collection(db, COL_USERS);
+    return onSnapshot(colRef, (snap) => {
+      const users = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(u => u.cycle_upi_screenshot_url || u.cycle_payment_utr);
+      callback(users);
     });
   },
 
@@ -641,35 +777,63 @@ async findByUtr(utr) {
 
 export const FirebaseStorage = {
   async uploadPaymentScreenshot(userId, file) {
-    const storage = getStorageRef();
-    const fileName = `${STORAGE_FOLDER}/${userId}/${Date.now()}_${file.name}`;
-    const storageRef = ref(storage, fileName);
+    console.log('🔄 Converting to Base64:', file.name);
     
-    console.log('🔄 Uploading to Storage:', fileName);
-    
-    await uploadBytes(storageRef, file);
-    console.log('✅ Uploaded to Storage, getting URL...');
-    
-    let downloadUrl = await getDownloadURL(storageRef);
-    console.log('📎 Got download URL:', downloadUrl);
-    
-    // Add alt=media for permanent access
-    if (!downloadUrl.includes('alt=media')) {
-      downloadUrl = downloadUrl + (downloadUrl.includes('?') ? '&' : '?') + 'alt=media';
-      console.log('📎 Fixed URL with alt=media:', downloadUrl);
-    }
-    
-    return { url: downloadUrl, path: fileName };
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result.split(',')[1];
+        const fileId = `payment_${userId}_${Date.now()}`;
+        
+        const db = getDb();
+        const imagesRef = collection(db, 'payment_images');
+        await addDoc(imagesRef, {
+          fileId,
+          userId,
+          type: 'payment',
+          base64,
+          fileName: file.name,
+          createdAt: serverTimestamp(),
+        });
+        
+        console.log('✅ Base64 stored in Firestore');
+        resolve({ url: `data:image/jpeg;base64,${base64}`, path: fileId });
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
   },
 
   async deletePaymentScreenshot(url) {
-    const storage = getStorageRef();
-    try {
-      const fileRef = ref(storage, url);
-      await deleteObject(fileRef);
-    } catch (e) {
-      console.warn('Failed to delete file:', e);
-    }
+    console.log('Delete not needed for Base64:', url);
+  },
+
+  async uploadCyclePaymentScreenshot(userId, file) {
+    console.log('🔄 Converting cycle payment to Base64:', file.name);
+    
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result.split(',')[1];
+        const fileId = `cycle_${userId}_${Date.now()}`;
+        
+        const db = getDb();
+        const imagesRef = collection(db, 'payment_images');
+        await addDoc(imagesRef, {
+          fileId,
+          userId,
+          type: 'cycle',
+          base64,
+          fileName: file.name,
+          createdAt: serverTimestamp(),
+        });
+        
+        console.log('✅ Cycle payment Base64 stored in Firestore');
+        resolve(`data:image/jpeg;base64,${base64}`);
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
   },
 };
 
@@ -694,6 +858,33 @@ export async function seedDefaultAdmin() {
 }
 
 export { generateReferralCode, MAX_REFERRALS, STORAGE_FOLDER };
+
+export const FirebaseReferralAccess = {
+  async check(userId) {
+    const user = await FirebaseUser.findById(userId);
+    if (!user) throw new Error('User not found');
+    if (user.account_status === 'inactive') {
+      throw new Error('Account inactive. Complete payment to continue referrals.');
+    }
+    if (user.referrals_count >= MAX_REFERRALS) {
+      throw new Error(`Maximum ${MAX_REFERRALS} referrals allowed`);
+    }
+    return true;
+  },
+
+  async reactivate(id) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    await updateDoc(ref, {
+      account_status: 'active',
+      is_qualified: false,
+      referrals_count: 0,
+      referral_limit_reached: false,
+      referral_active: true,
+      cycle_payment_status: 'approved',
+    });
+  },
+};
 
 export const FirebaseNewReferral = {
   async create(referralData) {

@@ -41,12 +41,15 @@ export default function FirebaseLoginPage() {
     const passVal = password;
 
     try {
+      console.log('Login attempt:', inputVal);
       // Try to find user by email or UTR
       let user = await FirebaseUser.findByEmail(inputVal.toLowerCase());
+      console.log('User by email:', user);
       
       // If not found by email, try UTR
       if (!user) {
         user = await FirebaseUser.findByUtr(inputVal);
+        console.log('User by UTR:', user);
       }
       
       if (!user) {
@@ -55,10 +58,10 @@ export default function FirebaseLoginPage() {
         return;
       }
 
-      // Check approval status first
-      const isApproved = user.status === 'approved' || user.payment_status === 'approved';
-      if (!isApproved) {
-        setError('Your account is pending approval. Please wait for admin to approve.');
+      // Check account is active (first payment approved and account activated)
+      const isActive = user.account_status === 'active';
+      if (!isActive) {
+        setError('Your account is pending approval. Please wait for admin to approve your payment.');
         setLoading(false);
         return;
       }

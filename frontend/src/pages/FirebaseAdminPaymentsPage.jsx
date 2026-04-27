@@ -31,15 +31,24 @@ function PaymentModal({ user, onClose, onVerify }) {
 
   if (!user) return null;
 
+  const isCyclePayment = user.cycle_payment_status === 'pending';
+  const isQualified = user.is_qualified && user.account_status === 'inactive';
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h2>Verify Payment</h2>
+          <h2>{isCyclePayment ? 'Verify Cycle Payment' : 'Verify Payment'}</h2>
           <button onClick={onClose} className="btn btn-ghost">✕</button>
         </div>
         
         <div style={{ display: 'grid', gap: '1rem' }}>
+          {isQualified && (
+            <div className="alert alert-warning">
+              <strong>Cycle Payment Required</strong> — User has completed 2 referrals and needs reactivation.
+            </div>
+          )}
+          
           <div>
             <div className="muted" style={{ fontSize: '0.85rem' }}>User</div>
             <div style={{ fontWeight: 'bold' }}>{user.name}</div>
@@ -57,31 +66,36 @@ function PaymentModal({ user, onClose, onVerify }) {
           
           <div>
             <div className="muted" style={{ fontSize: '0.85rem' }}>UTR Number</div>
-            <div style={{ fontFamily: 'monospace', fontSize: '1.1rem', fontWeight: 'bold' }}>{user.utr_number || '—'}</div>
+            <div style={{ fontFamily: 'monospace', fontSize: '1.1rem', fontWeight: 'bold' }}>
+              {isCyclePayment ? (user.cycle_payment_utr || '—') : (user.utr_number || '—')}
+            </div>
           </div>
           
           <div>
             <div className="muted" style={{ fontSize: '0.85rem' }}>Current Status</div>
-            <span className={`badge ${user.payment_status === 'approved' ? 'badge-paid' : user.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-              {user.payment_status || 'pending'}
+            <span className={`badge ${(isCyclePayment ? user.cycle_payment_status : user.payment_status) === 'approved' ? 'badge-paid' : (isCyclePayment ? user.cycle_payment_status : user.payment_status) === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+              {isCyclePayment ? (user.cycle_payment_status || 'pending') : (user.payment_status || 'pending')}
             </span>
+            {isCyclePayment && user.cycle_payment_status === 'pending' && (
+              <span style={{ marginLeft: '0.5rem', color: 'var(--warning)', fontSize: '0.8rem' }}>(Cycle Payment)</span>
+            )}
           </div>
           
           <div>
             <div className="muted" style={{ fontSize: '0.85rem' }}>Payment Screenshot</div>
-            {user.upi_screenshot_url ? (
+            {(isCyclePayment ? user.cycle_upi_screenshot_url : user.upi_screenshot_url) ? (
               <div>
                 <button 
                   type="button"
                   className="btn btn-primary"
                   style={{ marginBottom: '0.5rem' }}
-                  onClick={() => window.open(getImageUrl(user.upi_screenshot_url), '_blank')}
+                  onClick={() => window.open(getImageUrl(isCyclePayment ? user.cycle_upi_screenshot_url : user.upi_screenshot_url), '_blank')}
                 >
                   Open Image
                 </button>
                 <br />
                 <img 
-                  src={getImageUrl(user.upi_screenshot_url)} 
+                  src={getImageUrl(isCyclePayment ? user.cycle_upi_screenshot_url : user.upi_screenshot_url)} 
                   alt="Payment Screenshot" 
                   style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '0.5rem', border: '1px solid #ccc' }} 
                   onError={(e) => {
@@ -105,6 +119,11 @@ function PaymentModal({ user, onClose, onVerify }) {
           <div>
             <div className="muted" style={{ fontSize: '0.85rem' }}>Referral Code</div>
             <div style={{ fontFamily: 'monospace' }}>{user.referral_code}</div>
+          </div>
+          
+          <div>
+            <div className="muted" style={{ fontSize: '0.85rem' }}>Total Referrals</div>
+            <div>{user.total_referral_count || 0} (Cycle: {user.referrals_count || 0})</div>
           </div>
         </div>
         
@@ -174,7 +193,22 @@ export default function FirebaseAdminPaymentsPage() {
   }, [searchParams]);
 
   const handleVerify = async (userId, status) => {
-    await FirebaseUser.updatePaymentStatus(userId, status);
+    const user = users.find(u => u.id === userId);
+    const isCycle = user?.cycle_payment_status === 'pending' || user?.cycle_payment_utr;
+    
+    if (isCycle) {
+      if (status === 'approved') {
+        await FirebaseUser.reactivate(userId);
+      } else {
+        await FirebaseUser.updateCyclePaymentStatus(userId, status);
+      }
+    } else {
+      if (status === 'approved') {
+        await FirebaseUser.updatePaymentStatus(userId, 'approved');
+      } else {
+        await FirebaseUser.updatePaymentStatus(userId, status);
+      }
+    }
   };
 
   const filteredUsers = useMemo(() => {
@@ -252,48 +286,46 @@ export default function FirebaseAdminPaymentsPage() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>UTR</th>
-                <th>Screenshot</th>
+                <th>Type</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.name}</td>
-                  <td>{u.email}</td>
-                  <td style={{ fontFamily: 'monospace' }}>{u.utr_number || '—'}</td>
-                  <td>
-                    {u.upi_screenshot_url && (
-                      <button 
-                        type="button"
-                        className="btn btn-ghost"
-                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
-                        onClick={() => {
-                          const url = u.upi_screenshot_url + (u.upi_screenshot_url.includes('?') ? '&' : '?') + 'alt=media';
-                          window.open(url, '_blank');
-                        }}
+              {filteredUsers.map((u) => {
+                const isCycle = u.cycle_payment_status === 'pending' || u.cycle_payment_utr;
+                const displayUtr = isCycle ? u.cycle_payment_utr : u.utr_number;
+                const displayStatus = isCycle ? u.cycle_payment_status : u.payment_status;
+                const displayUrl = isCycle ? u.cycle_upi_screenshot_url : u.upi_screenshot_url;
+                return (
+                  <tr key={u.id}>
+                    <td>{u.name}</td>
+                    <td>{u.email}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{displayUtr || '—'}</td>
+                    <td>
+                      {isCycle ? (
+                        <span className="badge badge-rejected" style={{ fontSize: '0.7rem' }}>Cycle</span>
+                      ) : (
+                        <span className="muted" style={{ fontSize: '0.7rem' }}>Initial</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge ${displayStatus === 'approved' ? 'badge-paid' : displayStatus === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+                        {displayStatus || 'pending'}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => setSelectedUser(u)}
+                        style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}
                       >
-                        view
+                        Verify
                       </button>
-                    )}
-                  </td>
-                  <td>
-                    <span className={`badge ${u.payment_status === 'approved' ? 'badge-paid' : u.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-                      {u.payment_status || 'pending'}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => setSelectedUser(u)}
-                      style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}
-                    >
-                      Verify
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
               {filteredUsers.length === 0 && (
                 <tr>
                   <td colSpan={6} className="muted">

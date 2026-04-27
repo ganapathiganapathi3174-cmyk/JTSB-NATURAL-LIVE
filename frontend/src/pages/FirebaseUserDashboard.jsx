@@ -1,6 +1,34 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral } from '../db/firebase-db.js';
+import QRCode from 'qrcode';
+import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess } from '../db/firebase-db.js';
+
+const UPI_VPA = import.meta.env.VITE_UPI_VPA || 'jayarajj126-3@okicici';
+const UPI_PAYEE_NAME = import.meta.env.VITE_UPI_PAYEE_NAME || 'Community';
+
+function buildUpiUri() {
+  const pa = encodeURIComponent(UPI_VPA);
+  const pn = encodeURIComponent(UPI_PAYEE_NAME);
+  return `upi://pay?pa=${pa}&pn=${pn}&am=&cu=INR`;
+}
+
+function UpiQrDisplay() {
+  const [qrDataUrl, setQrDataUrl] = useState('');
+
+  useEffect(() => {
+    QRCode.toDataURL(buildUpiUri(), { width: 200, margin: 2 }).then(setQrDataUrl);
+  }, []);
+
+  return (
+    <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+      {qrDataUrl && <img src={qrDataUrl} alt="UPI QR" style={{ borderRadius: '8px', border: '1px solid var(--border)' }} />}
+      <div className="upi-id-box" style={{ marginTop: '0.75rem' }}>
+        <div className="label">UPI ID / VPA</div>
+        <code style={{ fontSize: '1rem' }}>{UPI_VPA}</code>
+      </div>
+    </div>
+  );
+}
 
 export default function FirebaseUserDashboard() {
   const navigate = useNavigate();
@@ -29,6 +57,11 @@ export default function FirebaseUserDashboard() {
   const [showPaymentUpload, setShowPaymentUpload] = useState(false);
   const [paymentFile, setPaymentFile] = useState(null);
   const [paymentPreview, setPaymentPreview] = useState(null);
+  const [paymentUtr, setPaymentUtr] = useState('');
+  const [cyclePaymentFile, setCyclePaymentFile] = useState(null);
+  const [cyclePaymentPreview, setCyclePaymentPreview] = useState(null);
+  const [cycleUtr, setCycleUtr] = useState('');
+  const [showCyclePaymentForm, setShowCyclePaymentForm] = useState(false);
 
   const userId = localStorage.getItem('fb_user_id');
 
@@ -94,10 +127,17 @@ export default function FirebaseUserDashboard() {
 
   async function handleAddReferral(e) {
     e.preventDefault();
+    
+    if (referralCount >= 2) {
+      setError('Referral limit reached. Complete cycle payment to refer more.');
+      return;
+    }
+    
     setAddingReferral(true);
     setError('');
 
     try {
+      await FirebaseReferralAccess.check(userId);
       await FirebaseNewReferral.create({
         user_id: userId,
         name: refName.trim(),
@@ -137,18 +177,54 @@ export default function FirebaseUserDashboard() {
   }
 
   async function handleUploadPayment() {
-    if (!paymentFile) return;
+    if (!paymentFile || !paymentUtr.trim()) return;
     setUploading(true);
     setError('');
 
     try {
       const url = await FirebaseStorage.uploadPaymentScreenshot(userId, paymentFile);
-      await FirebaseUser.updateUpiScreenshot(userId, url, 'pending');
+      await FirebaseUser.updateUpiScreenshot(userId, url, paymentUtr.trim());
       
       setPaymentFile(null);
       setPaymentPreview(null);
+      setPaymentUtr('');
       setShowPaymentUpload(false);
     } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleCycleFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) {
+      setCyclePaymentFile(file);
+      const reader = new FileReader();
+      reader.onload = () => setCyclePaymentPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  }
+
+  async function handleUploadCyclePayment() {
+    if (!cyclePaymentFile || !cycleUtr.trim()) {
+      setError('Screenshot and UTR are required');
+      return;
+    }
+    setUploading(true);
+    setError('');
+    console.log('Cycle payment: userId=', userId, 'UTR=', cycleUtr, 'file=', cyclePaymentFile?.name);
+    try {
+      const url = await FirebaseStorage.uploadCyclePaymentScreenshot(userId, cyclePaymentFile);
+      console.log('Uploaded to:', url);
+      await FirebaseUser.updateCyclePayment(userId, url, cycleUtr.trim());
+      console.log('Cycle payment submitted');
+      setCyclePaymentFile(null);
+      setCyclePaymentPreview(null);
+      setCycleUtr('');
+      setShowCyclePaymentForm(false);
+    } catch (err) {
+      console.error('Cycle payment error:', err);
       setError(err.message);
     } finally {
       setUploading(false);
@@ -167,6 +243,12 @@ export default function FirebaseUserDashboard() {
   }
 
   const canAddMoreReferrals = referrals.length < MAX_REFERRALS;
+  const referralCount = user?.referrals_count || 0;
+  const isQualified = referralCount >= 2 || user?.is_qualified === true;
+  const isActive = user?.account_status === 'active' && user?.payment_status === 'approved';
+  const canRefer = isActive && referralCount < 2;
+  const cyclePending = user?.cycle_payment_status === 'pending';
+  const showCyclePayment = isQualified && !cyclePending;
 
   async function copyReferralCode() {
     const code = user?.referral_code;
@@ -259,6 +341,12 @@ return (
               <span className={`badge ${user?.status === 'approved' ? 'badge-paid' : user?.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`} style={{ marginLeft: '0.5rem' }}>
                 {user?.status || 'pending'}
               </span>
+              {user?.is_qualified && (
+                <span className="badge badge-paid" style={{ marginLeft: '0.5rem' }}>Qualified</span>
+              )}
+              {user?.account_status === 'inactive' && (
+                <span className="badge badge-rejected" style={{ marginLeft: '0.5rem' }}>Inactive</span>
+              )}
             </div>
             {user?.referred_by && (
               <div>
@@ -268,6 +356,9 @@ return (
                 </span>
               </div>
             )}
+            
+            {user?.referral_code && (
+            <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <strong>Referral Code:</strong> 
               <code style={{ background: 'var(--bg)', padding: '0.4rem 0.6rem', borderRadius: '4px', fontSize: '1.1rem', fontWeight: 'bold' }}>
@@ -296,12 +387,17 @@ return (
               <span style={{ marginLeft: '0.5rem', fontWeight: 'bold', color: referrals.length >= MAX_REFERRALS ? 'var(--error)' : 'var(--success)' }}>
                 {referrals.length} / {MAX_REFERRALS}
               </span>
+              {user?.total_referral_count > 0 && (
+                <span className="muted" style={{ marginLeft: '0.5rem' }}>(Total: {user.total_referral_count})</span>
+              )}
               {referrals.length >= 2 && (
                 <span style={{ marginLeft: '0.5rem', color: 'var(--success)', fontWeight: 'bold' }}>
                   ✓ Qualified!
                 </span>
               )}
             </div>
+            </>)}
+            
             <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
               <strong>Password:</strong> 
               <span style={{ marginLeft: '0.5rem', color: user?.password ? 'var(--success)' : 'var(--error)' }}>
@@ -381,13 +477,156 @@ return (
           </div>
         </div>
 
-        {/* Referrals Card */}
-        <div className="card">
-          <h2>My Referrals ({referrals.length}/{MAX_REFERRALS})</h2>
+        {/* First-time payment for inactive users */}
+        {!isActive && !user?.is_first_payment_done && !isQualified && (
+          <div className="card" style={{ marginBottom: '1.5rem', border: '2px solid var(--warning)' }}>
+            <h2>Complete Your Payment</h2>
+            <p>Please submit your payment to activate your account.</p>
+            <UpiQrDisplay />
+            
+            {!showPaymentUpload ? (
+              <button 
+                className="btn btn-primary" 
+                style={{ marginTop: '1rem' }}
+                onClick={() => setShowPaymentUpload(true)}
+              >
+                Submit Payment Details
+              </button>
+            ) : (
+              user?.payment_status === 'pending' ? (
+                <div className="alert alert-info" style={{ marginTop: '1rem' }}>
+                  <strong>Payment submitted.</strong> Waiting for admin approval.
+                </div>
+              ) : (
+                <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                  <div className="field">
+                    <label>UTR Number *</label>
+                    <input 
+                      type="text" 
+                      value={paymentUtr || ''} 
+                      onChange={e => setPaymentUtr(e.target.value)} 
+                      placeholder="Enter UTR from payment confirmation"
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Payment Screenshot *</label>
+                    <input type="file" accept="image/*" onChange={handleFileSelect} />
+                    {paymentPreview && (
+                      <img 
+                        src={paymentPreview} 
+                        alt="Preview" 
+                        style={{ maxWidth: '200px', marginTop: '0.5rem', borderRadius: '8px' }} 
+                      />
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <button 
+                      className="btn btn-primary" 
+                      onClick={handleUploadPayment}
+                      disabled={uploading || !paymentFile || !paymentUtr.trim()}
+                    >
+                      {uploading ? 'Submitting...' : 'Submit Payment'}
+                    </button>
+                    <button 
+                      className="btn btn-ghost" 
+                      onClick={() => setShowPaymentUpload(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        )}
+
+        {/* Qualified Banner */}
+        {isQualified && (
+          <div className="alert alert-warning" style={{ marginBottom: '1.5rem' }}>
+            <strong>Referral Limit Reached!</strong> Complete the cycle payment to continue referring members.
+          </div>
+        )}
+
+        {/* Cycle Payment Card */}
+        {isQualified && (
+          <div className="card" style={{ marginBottom: '1.5rem', border: '2px solid var(--warning)' }}>
+            <h2>Referral Limit Reached</h2>
+            <p>Complete payment to continue referring members.</p>
+            <UpiQrDisplay />
+            
+            {!showCyclePaymentForm ? (
+              <button 
+                className="btn btn-primary" 
+                style={{ marginTop: '1rem' }}
+                onClick={() => setShowCyclePaymentForm(true)}
+              >
+                Submit Payment Details
+              </button>
+            ) : (
+              <div style={{ marginTop: '1rem' }}>
+                {cyclePending ? (
+                  <div className="alert alert-info">
+                    <strong>Waiting for admin approval.</strong> Your payment is being reviewed.
+                  </div>
+                ) : (
+                  <div style={{ padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                    <div className="field">
+                      <label>UTR Number *</label>
+                      <input 
+                        type="text" 
+                        value={cycleUtr} 
+                        onChange={e => setCycleUtr(e.target.value)} 
+                        placeholder="Enter UTR from payment confirmation"
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Payment Screenshot *</label>
+                      <input type="file" accept="image/*" onChange={handleCycleFileSelect} />
+                      {cyclePaymentPreview && (
+                        <img 
+                          src={cyclePaymentPreview} 
+                          alt="Preview" 
+                          style={{ maxWidth: '200px', marginTop: '0.5rem', borderRadius: '8px' }} 
+                        />
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <button 
+                        type="button"
+                        className="btn btn-primary" 
+                        onClick={() => {
+                          console.log('Submit button clicked', { cyclePaymentFile, cycleUtr, uploading });
+                          handleUploadCyclePayment();
+                        }}
+                        disabled={uploading || !cyclePaymentFile || !cycleUtr.trim()}
+                      >
+                        {uploading ? 'Submitting...' : 'Submit Payment'}
+                      </button>
+                      <button 
+                        type="button"
+                        className="btn btn-ghost" 
+                        onClick={() => setShowCyclePaymentForm(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Referrals Card - only show after payment approval */}
+        {user?.payment_status === 'approved' && (
+        <div className={`card ${isQualified ? 'disabled-card' : ''}`}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0 }}>My Referrals ({referrals.length})</h2>
+          </div>
 
           {referrals.length === 0 ? (
             <p className="muted" style={{ marginTop: '1rem' }}>
-              No referrals yet. You can refer up to {MAX_REFERRALS} members.
+              No referrals yet. Share your referral code to invite members.
             </p>
           ) : (
             <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
@@ -401,12 +640,15 @@ return (
             </div>
           )}
 
-          {!canAddMoreReferrals && (
+          {!canAddMoreReferrals && isActive && (
             <p className="muted" style={{ marginTop: '1rem' }}>
-              You have reached the maximum of {MAX_REFERRALS} referrals.
+              You have reached the maximum of {MAX_REFERRALS} referrals. Complete cycle payment to refer more.
             </p>
           )}
         </div>
+        )}
+
+        
       </div>
     </div>
   );

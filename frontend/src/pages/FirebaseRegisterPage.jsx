@@ -17,6 +17,8 @@ export default function FirebaseRegisterPage() {
   const [referralError, setReferralError] = useState('');
   const [validatingReferral, setValidatingReferral] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [emailExists, setEmailExists] = useState(false);
+  const [phoneExists, setPhoneExists] = useState(false);
 
   const isValidReferral = useMemo(() => {
     if (!referralCode.trim()) return true;
@@ -29,8 +31,28 @@ export default function FirebaseRegisterPage() {
     const phoneValid = phone.trim().length >= 10;
     const utrValid = utr.trim().length > 0;
     const passwordValid = password.length >= 6;
-    return nameValid && emailValid && phoneValid && utrValid && passwordValid && isValidReferral && !loading;
-  }, [name, email, phone, utr, password, isValidReferral, loading]);
+    return nameValid && emailValid && phoneValid && utrValid && passwordValid && isValidReferral && !loading && !emailExists && !phoneExists;
+  }, [name, email, phone, utr, password, isValidReferral, loading, emailExists, phoneExists]);
+
+  function checkEmailDuplicate(emailVal) {
+    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      setEmailExists(false);
+      return;
+    }
+    FirebaseUser.findByEmail(emailVal).then(existing => {
+      setEmailExists(!!existing);
+    });
+  }
+
+  function checkPhoneDuplicate(phoneVal) {
+    if (phoneVal.trim().length < 10) {
+      setPhoneExists(false);
+      return;
+    }
+    FirebaseUser.findByPhone(phoneVal).then(existing => {
+      setPhoneExists(!!existing);
+    });
+  }
 
   async function validateReferralCode() {
     if (!referralCode.trim()) {
@@ -46,11 +68,12 @@ export default function FirebaseRegisterPage() {
         setValidatingReferral(false);
         return false;
       }
-      // Check if referral is valid (not expired/inactive)
-      const isActive = referrer.referral_active !== false;
-      const hasReachedLimit = (referrer.referrals_count || 0) >= 2;
-      
-      if (!isActive || hasReachedLimit) {
+      if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active') {
+        setReferralError('Referral code is no longer valid');
+        setValidatingReferral(false);
+        return false;
+      }
+      if ((referrer.referrals_count || 0) >= 2) {
         setReferralError('Referral code is no longer valid');
         setValidatingReferral(false);
         return false;
@@ -108,29 +131,46 @@ export default function FirebaseRegisterPage() {
       if (referralCode.trim()) {
         const referrer = await FirebaseUser.findByReferralCode(referralCode.trim().toUpperCase());
         if (referrer) {
-          // Extra validation: check if referral is still active and has not reached limit
-          const isActive = referrer.referral_active !== false;
-          const hasReachedLimit = (referrer.referrals_count || 0) >= 2;
-          
-          if (!isActive || hasReachedLimit) {
+          if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active') {
             setError('Referral code is no longer valid');
             setLoading(false);
             return;
           }
-          
+          if ((referrer.referrals_count || 0) >= 2) {
+            setError('Referral code is no longer valid');
+            setLoading(false);
+            return;
+          }
           referredBy = referralCode.trim().toUpperCase();
-          console.log('User referred by:', referredBy);
-        } else {
-          // Referral code doesn't exist - that's handled by the createWithPassword call
         }
       }
 
       console.log('=== REGISTRATION START ===');
       console.log('Name:', name.trim());
       console.log('Email:', emailVal);
+      console.log('Phone:', phone.trim());
       console.log('UTR:', utrVal);
       console.log('Referred By:', referredBy);
       
+      console.log('Checking email...');
+      const existingEmail = await FirebaseUser.findByEmail(emailVal);
+      console.log('Existing email:', existingEmail);
+      if (existingEmail) {
+        setError('This email is already registered. Please use a different email.');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('Checking phone...');
+      const existingPhone = await FirebaseUser.findByPhone(phone.trim());
+      console.log('Existing phone:', existingPhone);
+      if (existingPhone) {
+        setError('This phone number is already registered. Please use a different number.');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('Creating user...');
       const user = await FirebaseUser.createWithPassword({
         name: name.trim(),
         email: emailVal,
@@ -209,8 +249,10 @@ export default function FirebaseRegisterPage() {
               type="email" 
               value={email} 
               onChange={e => setEmail(e.target.value)} 
-              style={/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? {} : {}}
+              onBlur={e => checkEmailDuplicate(e.target.value)}
+              style={{ borderColor: emailExists ? 'var(--error)' : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'var(--success)' : '' }}
             />
+            {emailExists && <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginTop: '0.25rem' }}>This email is already registered</div>}
           </div>
           <div className="field">
             <label>Phone *</label>
@@ -219,8 +261,10 @@ export default function FirebaseRegisterPage() {
               type="tel" 
               value={phone} 
               onChange={e => setPhone(e.target.value)} 
-              style={phone.trim().length >= 10 ? {} : {}}
+              onBlur={e => checkPhoneDuplicate(e.target.value)}
+              style={{ borderColor: phoneExists ? 'var(--error)' : phone.trim().length >= 10 ? 'var(--success)' : '' }}
             />
+            {phoneExists && <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginTop: '0.25rem' }}>This phone number is already registered</div>}
           </div>
           <div className="field">
             <label>UTR Number *</label>
@@ -275,7 +319,13 @@ export default function FirebaseRegisterPage() {
             {referralError && <div className="muted" style={{ color: 'var(--error)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{referralError}</div>}
             {validatingReferral && <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>Validating...</div>}
           </div>
-          <button className="btn btn-primary" type="submit" disabled={!canSubmit} style={{ width: '100%' }}>
+          {(emailExists || phoneExists) && (
+            <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+              {emailExists && <div>This email is already registered. Please use a different email.</div>}
+              {phoneExists && <div>This phone number is already registered. Please use a different number.</div>}
+            </div>
+          )}
+          <button className="btn btn-primary" type="submit" disabled={!canSubmit || emailExists || phoneExists} style={{ width: '100%' }}>
             {loading ? 'Creating...' : 'Create Account'}
           </button>
         </form>
