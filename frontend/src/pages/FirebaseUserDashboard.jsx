@@ -54,6 +54,66 @@ export default function FirebaseUserDashboard() {
   const [referrerInfo, setReferrerInfo] = useState(null);
   const [viewCount, setViewCount] = useState(0);
 
+  const userId = localStorage.getItem('fb_user_id');
+
+  useEffect(() => {
+    if (!userId) {
+      navigate('/fb/login', { replace: true });
+      return;
+    }
+
+    let timeoutId;
+    let cancelled = false;
+
+    const loadUser = async () => {
+      timeoutId = setTimeout(() => {
+        if (!cancelled) {
+          setError('Loading is taking too long. Please check your connection and refresh the page.');
+          setLoading(false);
+        }
+      }, 15000); // 15 second timeout
+
+      try {
+        const data = await FirebaseUser.findById(userId);
+        clearTimeout(timeoutId);
+        
+        if (cancelled) return;
+        
+        if (!data) {
+          localStorage.removeItem('fb_user_id');
+          navigate('/fb/login');
+          return;
+        }
+        setUser(data);
+        setLoading(false);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (!cancelled) {
+          setError(err.message || 'Failed to load user data. Please try again.');
+          setLoading(false);
+        }
+      }
+    };
+
+    loadUser();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [userId, navigate]);
+
+  useEffect(() => {
+    if (!user?.referral_code) return;
+    const unsubscribeReferrals = FirebaseUser.subscribeToReferralsByCode(user.referral_code, (updatedReferrals) => {
+      console.log('📥 Referrals updated:', updatedReferrals);
+      setReferrals(updatedReferrals);
+    });
+    return () => {
+      if (unsubscribeReferrals) unsubscribeReferrals();
+    };
+  }, [user?.referral_code]);
+
   useEffect(() => {
     if (user?.referred_by) {
       FirebaseUser.getReferrerInfo(user.referred_by).then(setReferrerInfo);
