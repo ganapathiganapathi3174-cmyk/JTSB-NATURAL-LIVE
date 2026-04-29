@@ -113,13 +113,15 @@ export const FirebaseUser = {
       payment_status: 'pending',
       upi_screenshot_url: null,
       utr_number: null,
-referral_code: referralCode,
+      referral_code: referralCode,
       referred_by: userData.referredBy || null,
       referrals_count: 0,
       total_referral_count: 0,
       referral_limit_reached: false,
       referral_active: true,
       referral_cycle: 0,
+      referral_view_count: 0,
+      referral_view_cycle: 0,
       cycle_payment_status: null,
       cycle_payment_utr: null,
       cycle_upi_screenshot_url: null,
@@ -180,6 +182,8 @@ referral_code: referralCode,
       referral_limit_reached: false,
       referral_active: true,
       referral_cycle: 0,
+      referral_view_count: 0,
+      referral_view_cycle: 0,
       cycle_payment_status: null,
       cycle_payment_utr: null,
       cycle_upi_screenshot_url: null,
@@ -599,13 +603,16 @@ async findByUtr(utr) {
     
     const currentCount = user.referrals_count || 0;
     const newCount = Math.max(0, currentCount - 1);
+    const isQualified = newCount >= MAX_REFERRALS;
     
     const db = getDb();
     const ref = doc(db, COL_USERS, userId);
     await updateDoc(ref, {
       referrals_count: newCount,
-      referral_limit_reached: false,
-      referral_active: true,
+      total_referral_count: Math.max(0, (user.total_referral_count || 0) - 1),
+      referral_limit_reached: isQualified,
+      referral_active: !isQualified,
+      is_qualified: isQualified,
     });
   },
 
@@ -626,21 +633,27 @@ async findByUtr(utr) {
   async incrementReferralCount(userId) {
     const user = await this.findById(userId);
     if (!user) return;
-    
+
     const currentCount = user.referrals_count || 0;
     const newCount = currentCount + 1;
     const isQualified = newCount >= MAX_REFERRALS;
-    
+
     const db = getDb();
     const ref = doc(db, COL_USERS, userId);
-    await updateDoc(ref, {
+    const updateData = {
       referrals_count: newCount,
       total_referral_count: (user.total_referral_count || 0) + 1,
       referral_limit_reached: isQualified,
       referral_active: !isQualified,
       is_qualified: isQualified,
       account_status: isQualified ? 'inactive' : (user.account_status || 'active'),
-    });
+    };
+
+    if (isQualified) {
+      updateData.cycle_payment_status = null;
+    }
+
+    await updateDoc(ref, updateData);
   },
 
   async updateCyclePaymentStatus(id, status) {
@@ -695,6 +708,39 @@ async findByUtr(utr) {
     });
   },
 
+  async incrementReferralViewCount(id) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    const user = await this.findById(id);
+    if (!user) return null;
+    
+    const currentCycle = user.referral_cycle || 0;
+    const viewCycle = user.referral_view_cycle || 0;
+    
+    if (viewCycle !== currentCycle) {
+      await updateDoc(ref, {
+        referral_view_count: 1,
+        referral_view_cycle: currentCycle,
+      });
+      return { count: 1, cycle: currentCycle };
+    }
+    
+    const newCount = (user.referral_view_count || 0) + 1;
+    await updateDoc(ref, {
+      referral_view_count: newCount,
+    });
+    return { count: newCount, cycle: currentCycle };
+  },
+
+  async resetReferralViewCount(id) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    await updateDoc(ref, {
+      referral_view_count: 0,
+      referral_view_cycle: 0,
+    });
+  },
+
   async getUsersWithPayment() {
     const db = getDb();
     const colRef = collection(db, COL_USERS);
@@ -709,8 +755,16 @@ async findByUtr(utr) {
     const db = getDb();
     const colRef = collection(db, COL_USERS);
     return onSnapshot(colRef, (snap) => {
-      const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      callback(users);
+      try {
+        const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        callback(users);
+      } catch (err) {
+        console.error('subscribeToUsers error:', err);
+        callback([]);
+      }
+    }, (error) => {
+      console.error('subscribeToUsers snapshot error:', error);
+      callback([]);
     });
   },
 
@@ -718,11 +772,19 @@ async findByUtr(utr) {
     const db = getDb();
     const ref = doc(db, COL_USERS, userId);
     return onSnapshot(ref, (snap) => {
-      if (snap.exists()) {
-        callback({ id: snap.id, ...snap.data() });
-      } else {
+      try {
+        if (snap.exists()) {
+          callback({ id: snap.id, ...snap.data() });
+        } else {
+          callback(null);
+        }
+      } catch (err) {
+        console.error('subscribeToUser error:', err);
         callback(null);
       }
+    }, (error) => {
+      console.error('subscribeToUser snapshot error:', error);
+      callback(null);
     });
   },
 
@@ -731,11 +793,19 @@ async findByUtr(utr) {
     const colRef = collection(db, COL_USERS);
     const q = query(colRef);
     return onSnapshot(q, (snap) => {
-      const users = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(u => u.upi_screenshot_url || u.utr_number || u.cycle_upi_screenshot_url || u.cycle_payment_utr);
-      console.log('subscribeToPayments received:', users.length, 'users');
-      callback(users);
+      try {
+        const users = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(u => u.upi_screenshot_url || u.utr_number || u.cycle_upi_screenshot_url || u.cycle_payment_utr);
+        console.log('subscribeToPayments received:', users.length, 'users');
+        callback(users);
+      } catch (err) {
+        console.error('subscribeToPayments error:', err);
+        callback([]);
+      }
+    }, (error) => {
+      console.error('subscribeToPayments snapshot error:', error);
+      callback([]);
     });
   },
 
@@ -744,8 +814,16 @@ async findByUtr(utr) {
     const colRef = collection(db, COL_REFERRALS);
     const q = query(colRef, where('user_id', '==', userId));
     return onSnapshot(q, (snap) => {
-      const referrals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      callback(referrals);
+      try {
+        const referrals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        callback(referrals);
+      } catch (err) {
+        console.error('subscribeToUserReferrals error:', err);
+        callback([]);
+      }
+    }, (error) => {
+      console.error('subscribeToUserReferrals snapshot error:', error);
+      callback([]);
     });
   },
 
@@ -769,8 +847,16 @@ async findByUtr(utr) {
     const colRef = collection(db, COL_USERS);
     const q = query(colRef, where('referred_by', '==', referralCode.toUpperCase()));
     return onSnapshot(q, (snap) => {
-      const referrals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      callback(referrals);
+      try {
+        const referrals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        callback(referrals);
+      } catch (err) {
+        console.error('subscribeToReferralsByCode error:', err);
+        callback([]);
+      }
+    }, (error) => {
+      console.error('subscribeToReferralsByCode snapshot error:', error);
+      callback([]);
     });
   },
 };
@@ -873,16 +959,7 @@ export const FirebaseReferralAccess = {
   },
 
   async reactivate(id) {
-    const db = getDb();
-    const ref = doc(db, COL_USERS, id);
-    await updateDoc(ref, {
-      account_status: 'active',
-      is_qualified: false,
-      referrals_count: 0,
-      referral_limit_reached: false,
-      referral_active: true,
-      cycle_payment_status: 'approved',
-    });
+    return FirebaseUser.reactivate(id);
   },
 };
 

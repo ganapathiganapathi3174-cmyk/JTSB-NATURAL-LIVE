@@ -400,6 +400,7 @@ export default function FirebaseAdminUsersPage() {
                 <th>Referral Code</th>
                 <th>Referred Users</th>
                 <th>Total Refs</th>
+                <th>View Count</th>
                 <th>Qualified</th>
                 <th>Account Status</th>
                 <th>Screenshot</th>
@@ -430,6 +431,14 @@ export default function FirebaseAdminUsersPage() {
                       </button>
                     </td>
                     <td>{u.total_referral_count || 0}</td>
+                    <td>
+                      <span className="badge badge-paid" style={{ fontSize: '0.75rem' }}>
+                        {u.referral_view_count || 0}
+                        {u.referral_view_cycle !== u.referral_cycle && (
+                          <span style={{ marginLeft: '0.25rem', color: 'var(--warning)' }} title="Cycle mismatch">*</span>
+                        )}
+                      </span>
+                    </td>
                     <td>
                       {u.is_qualified ? (
                         <span style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '0.8rem' }}>Qualified</span>

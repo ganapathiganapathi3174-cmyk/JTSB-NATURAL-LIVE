@@ -52,64 +52,7 @@ export default function FirebaseUserDashboard() {
   const [showPassword, setShowPassword] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [referrerInfo, setReferrerInfo] = useState(null);
-
-  // Payment upload state
-  const [showPaymentUpload, setShowPaymentUpload] = useState(false);
-  const [paymentFile, setPaymentFile] = useState(null);
-  const [paymentPreview, setPaymentPreview] = useState(null);
-  const [paymentUtr, setPaymentUtr] = useState('');
-  const [cyclePaymentFile, setCyclePaymentFile] = useState(null);
-  const [cyclePaymentPreview, setCyclePaymentPreview] = useState(null);
-  const [cycleUtr, setCycleUtr] = useState('');
-  const [showCyclePaymentForm, setShowCyclePaymentForm] = useState(false);
-
-  const userId = localStorage.getItem('fb_user_id');
-
-  const loadUser = useCallback(async () => {
-    if (!userId) {
-      navigate('/fb/login', { replace: true });
-      return;
-    }
-    try {
-      const data = await FirebaseUser.findById(userId);
-      if (!data) {
-        localStorage.removeItem('fb_user_id');
-        navigate('/fb/login');
-        return;
-      }
-      setUser(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId, navigate]);
-
-  useEffect(() => {
-    loadUser();
-
-    const unsubscribeUser = FirebaseUser.subscribeToUser(userId, (updatedUser) => {
-      console.log('📥 User updated:', updatedUser);
-      if (updatedUser) {
-        setUser(updatedUser);
-      }
-    });
-
-    return () => {
-      if (unsubscribeUser) unsubscribeUser();
-    };
-  }, [userId, loadUser]);
-
-  useEffect(() => {
-    if (!user?.referral_code) return;
-    const unsubscribeReferrals = FirebaseUser.subscribeToReferralsByCode(user.referral_code, (updatedReferrals) => {
-      console.log('📥 Referrals updated:', updatedReferrals);
-      setReferrals(updatedReferrals);
-    });
-    return () => {
-      if (unsubscribeReferrals) unsubscribeReferrals();
-    };
-  }, [user?.referral_code]);
+  const [viewCount, setViewCount] = useState(0);
 
   useEffect(() => {
     if (user?.referred_by) {
@@ -118,6 +61,16 @@ export default function FirebaseUserDashboard() {
       setReferrerInfo(null);
     }
   }, [user?.referred_by]);
+
+  useEffect(() => {
+    if (user?.id) {
+      FirebaseUser.incrementReferralViewCount(user.id).then(result => {
+        if (result) {
+          setViewCount(result.count);
+        }
+      }).catch(err => console.error('View count error:', err));
+    }
+  }, [user?.id]);
 
   async function handleLogout() {
     await FirebaseAuth.logout();
@@ -248,7 +201,9 @@ export default function FirebaseUserDashboard() {
   const isActive = user?.account_status === 'active' && user?.payment_status === 'approved';
   const canRefer = isActive && referralCount < 2;
   const cyclePending = user?.cycle_payment_status === 'pending';
-  const showCyclePayment = isQualified && !cyclePending;
+  const cycleApproved = user?.cycle_payment_status === 'approved';
+  const needsCyclePayment = isQualified && !cycleApproved;
+  const showCyclePayment = needsCyclePayment && !cyclePending;
 
   async function copyReferralCode() {
     const code = user?.referral_code;
@@ -553,10 +508,14 @@ return (
             <h2>Referral Limit Reached</h2>
             <p>Complete payment to continue referring members.</p>
             <UpiQrDisplay />
-            
-            {!showCyclePaymentForm ? (
-              <button 
-                className="btn btn-primary" 
+
+            {cyclePending ? (
+              <div className="alert alert-info" style={{ marginTop: '1rem' }}>
+                <strong>Waiting for admin approval.</strong> Your payment is being reviewed.
+              </div>
+            ) : !showCyclePaymentForm ? (
+              <button
+                className="btn btn-primary"
                 style={{ marginTop: '1rem' }}
                 onClick={() => setShowCyclePaymentForm(true)}
               >
@@ -564,54 +523,48 @@ return (
               </button>
             ) : (
               <div style={{ marginTop: '1rem' }}>
-                {cyclePending ? (
-                  <div className="alert alert-info">
-                    <strong>Waiting for admin approval.</strong> Your payment is being reviewed.
+                <div style={{ padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                  <div className="field">
+                    <label>UTR Number *</label>
+                    <input
+                      type="text"
+                      value={cycleUtr}
+                      onChange={e => setCycleUtr(e.target.value)}
+                      placeholder="Enter UTR from payment confirmation"
+                    />
                   </div>
-                ) : (
-                  <div style={{ padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
-                    <div className="field">
-                      <label>UTR Number *</label>
-                      <input 
-                        type="text" 
-                        value={cycleUtr} 
-                        onChange={e => setCycleUtr(e.target.value)} 
-                        placeholder="Enter UTR from payment confirmation"
+                  <div className="field">
+                    <label>Payment Screenshot *</label>
+                    <input type="file" accept="image/*" onChange={handleCycleFileSelect} />
+                    {cyclePaymentPreview && (
+                      <img
+                        src={cyclePaymentPreview}
+                        alt="Preview"
+                        style={{ maxWidth: '200px', marginTop: '0.5rem', borderRadius: '8px' }}
                       />
-                    </div>
-                    <div className="field">
-                      <label>Payment Screenshot *</label>
-                      <input type="file" accept="image/*" onChange={handleCycleFileSelect} />
-                      {cyclePaymentPreview && (
-                        <img 
-                          src={cyclePaymentPreview} 
-                          alt="Preview" 
-                          style={{ maxWidth: '200px', marginTop: '0.5rem', borderRadius: '8px' }} 
-                        />
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <button 
-                        type="button"
-                        className="btn btn-primary" 
-                        onClick={() => {
-                          console.log('Submit button clicked', { cyclePaymentFile, cycleUtr, uploading });
-                          handleUploadCyclePayment();
-                        }}
-                        disabled={uploading || !cyclePaymentFile || !cycleUtr.trim()}
-                      >
-                        {uploading ? 'Submitting...' : 'Submit Payment'}
-                      </button>
-                      <button 
-                        type="button"
-                        className="btn btn-ghost" 
-                        onClick={() => setShowCyclePaymentForm(false)}
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                    )}
                   </div>
-                )}
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        console.log('Submit button clicked', { cyclePaymentFile, cycleUtr, uploading });
+                        handleUploadCyclePayment();
+                      }}
+                      disabled={uploading || !cyclePaymentFile || !cycleUtr.trim()}
+                    >
+                      {uploading ? 'Submitting...' : 'Submit Payment'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => setShowCyclePaymentForm(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -622,6 +575,9 @@ return (
         <div className={`card ${isQualified ? 'disabled-card' : ''}`}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ margin: 0 }}>My Referrals ({referrals.length})</h2>
+            <span className="badge badge-paid" style={{ fontSize: '0.75rem' }}>
+              Views: {viewCount}
+            </span>
           </div>
 
           {referrals.length === 0 ? (

@@ -14,15 +14,6 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:103883989218:web:5bad1f05fe48e686337ebb"
 };
 
-console.log('Firebase config loaded:', {
-  apiKey: firebaseConfig.apiKey?.slice(0, 10) + '...',
-  projectId: firebaseConfig.projectId,
-  authDomain: firebaseConfig.authDomain
-});
-
-const EMULATE = import.meta.env.VITE_FIREBASE_EMULATE === 'true';
-const FIREBASE_EMULATOR_HOST = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || 'localhost';
-
 // Initialize Firebase app only if not already initialized
 let app;
 if (getApps().length === 0) {
@@ -31,21 +22,25 @@ if (getApps().length === 0) {
   app = getApps()[0];
 }
 
-// Initialize Analytics (async)
-let analytics;
-isSupported().then((supported) => {
-  if (supported) {
-    analytics = getAnalytics(app);
-    console.log('Firebase Analytics initialized');
-  }
-}).catch((e) => {
-  console.error('Analytics init failed:', e);
-});
+// Initialize Analytics lazily (doesn't block rendering)
+let analytics = null;
+if (typeof window !== 'undefined') {
+  isSupported().then((supported) => {
+    if (supported) {
+      analytics = getAnalytics(app);
+      console.log('Firebase Analytics initialized');
+    }
+  }).catch((e) => {
+    console.error('Analytics init failed:', e);
+  });
+}
 
 // Initialize Firestore
 let db;
 try {
   db = getFirestore(app);
+  const EMULATE = import.meta.env.VITE_FIREBASE_EMULATE === 'true';
+  const FIREBASE_EMULATOR_HOST = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || 'localhost';
   if (EMULATE) {
     connectFirestoreEmulator(db, FIREBASE_EMULATOR_HOST, 8080);
   }
@@ -58,6 +53,8 @@ try {
 let storage;
 try {
   storage = getStorage(app);
+  const EMULATE = import.meta.env.VITE_FIREBASE_EMULATE === 'true';
+  const FIREBASE_EMULATOR_HOST = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || 'localhost';
   if (EMULATE) {
     connectStorageEmulator(storage, FIREBASE_EMULATOR_HOST, 9199);
   }
@@ -70,6 +67,8 @@ try {
 let auth;
 try {
   auth = getAuth(app);
+  const EMULATE = import.meta.env.VITE_FIREBASE_EMULATE === 'true';
+  const FIREBASE_EMULATOR_HOST = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || 'localhost';
   if (EMULATE) {
     connectAuthEmulator(auth, `http://${FIREBASE_EMULATOR_HOST}:9099`);
   }

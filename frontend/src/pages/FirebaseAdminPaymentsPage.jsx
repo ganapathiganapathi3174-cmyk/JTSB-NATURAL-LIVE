@@ -98,6 +98,7 @@ function PaymentModal({ user, onClose, onVerify }) {
                   src={getImageUrl(isCyclePayment ? user.cycle_upi_screenshot_url : user.upi_screenshot_url)} 
                   alt="Payment Screenshot" 
                   style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '0.5rem', border: '1px solid #ccc' }} 
+                  loading="lazy"
                   onError={(e) => {
                     console.error('Image load error:', e);
                     e.target.style.display = 'none';
@@ -213,19 +214,28 @@ export default function FirebaseAdminPaymentsPage() {
 
   const filteredUsers = useMemo(() => {
     let filtered = users;
-    
+
     if (statusFilter) {
-      filtered = filtered.filter(u => u.payment_status === statusFilter);
+      filtered = filtered.filter(u => {
+        const isCycle = u.cycle_payment_status === 'pending' || u.cycle_payment_utr;
+        if (isCycle) {
+          return u.cycle_payment_status === statusFilter;
+        }
+        return u.payment_status === statusFilter;
+      });
     }
-    
+
     if (q) {
-      filtered = filtered.filter(u => 
-        u.name.toLowerCase().includes(q.toLowerCase()) ||
-        u.email.toLowerCase().includes(q.toLowerCase()) ||
-        (u.utr_number && u.utr_number.includes(q))
-      );
+      filtered = filtered.filter(u => {
+        const matchesName = u.name.toLowerCase().includes(q.toLowerCase());
+        const matchesEmail = u.email.toLowerCase().includes(q.toLowerCase());
+        const isCycle = u.cycle_payment_status === 'pending' || u.cycle_payment_utr;
+        const utr = isCycle ? u.cycle_payment_utr : u.utr_number;
+        const matchesUtr = utr && utr.includes(q);
+        return matchesName || matchesEmail || matchesUtr;
+      });
     }
-    
+
     return filtered;
   }, [users, statusFilter, q]);
 
