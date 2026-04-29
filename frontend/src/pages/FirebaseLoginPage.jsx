@@ -42,15 +42,14 @@ export default function FirebaseLoginPage() {
 
     try {
       console.log('Login attempt:', inputVal);
-      // Try to find user by email or UTR
-      let user = await FirebaseUser.findByEmail(inputVal.toLowerCase());
-      console.log('User by email:', user);
+      // Try email and UTR in parallel
+      const [userByEmail, userByUtr] = await Promise.all([
+        FirebaseUser.findByEmail(inputVal.toLowerCase()).catch(() => null),
+        inputVal.length >= 10 ? FirebaseUser.findByUtr(inputVal).catch(() => null) : Promise.resolve(null),
+      ]);
       
-      // If not found by email, try UTR
-      if (!user) {
-        user = await FirebaseUser.findByUtr(inputVal);
-        console.log('User by UTR:', user);
-      }
+      const user = userByEmail || userByUtr;
+      console.log('User found:', user?.email || user?.utr_number);
       
       if (!user) {
         setError('No account found with this email or UTR. Please register first.');

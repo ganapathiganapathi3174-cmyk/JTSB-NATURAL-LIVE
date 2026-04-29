@@ -248,13 +248,10 @@ export const FirebaseUser = {
     const db = getDb();
     const colRef = collection(db, COL_USERS);
     const emailLower = email.toLowerCase();
-    console.log('findByEmail searching for:', emailLower);
     const q = query(colRef, where('email', '==', emailLower));
     const snap = await getDocs(q);
-    console.log('findByEmail results:', snap.size, 'docs');
     if (snap.empty) return null;
     const d = snap.docs[0];
-    console.log('findByEmail found user:', d.id);
     return { id: d.id, ...d.data() };
   },
 
@@ -264,7 +261,6 @@ export const FirebaseUser = {
     const phoneTrimmed = phone.trim();
     const q = query(colRef, where('phone', '==', phoneTrimmed));
     const snap = await getDocs(q);
-    console.log('findByPhone search for:', phoneTrimmed, 'found:', snap.size);
     if (snap.empty) return null;
     const d = snap.docs[0];
     return { id: d.id, ...d.data() };
@@ -299,7 +295,7 @@ export const FirebaseUser = {
     return { id: d.id, ...d.data() };
   },
 
-async findByUtr(utr) {
+  async findByUtr(utr) {
     const db = getDb();
     const colRef = collection(db, COL_USERS);
     const q = query(colRef, where('utr_number', '==', utr));
@@ -336,12 +332,6 @@ async findByUtr(utr) {
     const q = query(colRef, where('referred_by', '==', referralCode.toUpperCase()));
     const snap = await getDocs(q);
     return snap.size;
-  },
-
-  async updateStatus(id, status) {
-    const db = getDb();
-    const ref = doc(db, COL_USERS, id);
-    await updateDoc(ref, { status });
   },
 
   async updatePaymentStatus(id, payment_status) {
