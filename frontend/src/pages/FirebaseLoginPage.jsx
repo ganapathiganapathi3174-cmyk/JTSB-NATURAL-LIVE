@@ -2,6 +2,17 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FirebaseUser } from '../db/firebase-db.js';
 
+const LOGIN_TIMEOUT = 15000; // 15 seconds
+
+function withTimeout(promise, timeoutMs = LOGIN_TIMEOUT) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Login is taking too long. Please check your connection and try again.')), timeoutMs)
+    )
+  ]);
+}
+
 export default function FirebaseLoginPage() {
   const navigate = useNavigate();
   const [loginInput, setLoginInput] = useState('');
