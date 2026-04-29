@@ -54,6 +54,18 @@ export default function FirebaseUserDashboard() {
   const [referrerInfo, setReferrerInfo] = useState(null);
   const [viewCount, setViewCount] = useState(0);
 
+  // Payment upload state
+  const [paymentFile, setPaymentFile] = useState(null);
+  const [paymentUtr, setPaymentUtr] = useState('');
+  const [paymentPreview, setPaymentPreview] = useState(null);
+  const [showPaymentUpload, setShowPaymentUpload] = useState(false);
+
+  // Cycle payment state
+  const [cyclePaymentFile, setCyclePaymentFile] = useState(null);
+  const [cycleUtr, setCycleUtr] = useState('');
+  const [cyclePaymentPreview, setCyclePaymentPreview] = useState(null);
+  const [showCyclePaymentForm, setShowCyclePaymentForm] = useState(false);
+
   const userId = localStorage.getItem('fb_user_id');
 
   useEffect(() => {
