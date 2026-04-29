@@ -32,7 +32,7 @@ export default function FirebaseLoginPage() {
     }
     setLoading(true);
     try {
-      await FirebaseUser.updatePassword(setPasswordFor.id, newPassword);
+      await withTimeout(FirebaseUser.updatePassword(setPasswordFor.id, newPassword));
       // Login after setting password
       localStorage.setItem('fb_user_id', setPasswordFor.id);
       navigate('/fb/dashboard');
@@ -53,11 +53,14 @@ export default function FirebaseLoginPage() {
 
     try {
       console.log('Login attempt:', inputVal);
-      // Try email and UTR in parallel
-      const [userByEmail, userByUtr] = await Promise.all([
-        FirebaseUser.findByEmail(inputVal.toLowerCase()).catch(() => null),
-        inputVal.length >= 10 ? FirebaseUser.findByUtr(inputVal).catch(() => null) : Promise.resolve(null),
-      ]);
+      // Try email and UTR in parallel with timeout
+      const [userByEmail, userByUtr] = await withTimeout(
+        Promise.all([
+          FirebaseUser.findByEmail(inputVal.toLowerCase()).catch(() => null),
+          inputVal.length >= 10 ? FirebaseUser.findByUtr(inputVal).catch(() => null) : Promise.resolve(null),
+        ]),
+        LOGIN_TIMEOUT
+      );
       
       const user = userByEmail || userByUtr;
       console.log('User found:', user?.email || user?.utr_number);
