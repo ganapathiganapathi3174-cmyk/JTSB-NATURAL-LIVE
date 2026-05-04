@@ -88,9 +88,9 @@ export default function FirebaseUserDashboard() {
       try {
         const data = await FirebaseUser.findById(userId);
         clearTimeout(timeoutId);
-        
+
         if (cancelled) return;
-        
+
         if (!data) {
           localStorage.removeItem('fb_user_id');
           navigate('/fb/login');
@@ -101,6 +101,7 @@ export default function FirebaseUserDashboard() {
       } catch (err) {
         clearTimeout(timeoutId);
         if (!cancelled) {
+          console.error('Dashboard load error:', err);
           setError(err.message || 'Failed to load user data. Please try again.');
           setLoading(false);
         }
