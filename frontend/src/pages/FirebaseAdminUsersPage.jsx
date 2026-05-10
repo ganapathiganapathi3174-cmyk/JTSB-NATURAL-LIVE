@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FirebaseUser } from '../db/firebase-db.js';
 import { getAuthRef, getDb } from '../firebase/config.js';
 import { sendPasswordResetEmail } from 'firebase/auth';
+import { doc, deleteDoc, getDocs, query, collection } from 'firebase/firestore';
 
 const ADMIN_KEY = 'fb_admin_token';
 
@@ -289,9 +290,16 @@ export default function FirebaseAdminUsersPage() {
   }, [searchParams]);
 
   const handleDelete = async (userId) => {
-    await FirebaseUser.deleteUser(userId);
-    const allUsers = await FirebaseUser.getAllUsers();
-    setUsers(allUsers);
+    try {
+      const db = getDb();
+      await deleteDoc(doc(db, 'users_new', userId));
+      // Force fresh fetch from server to update UI
+      const snap = await getDocs(query(collection(db, 'users_new')), { source: 'server' });
+      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Delete failed: ' + (err.message || 'Unknown error'));
+    }
   };
 
   const handleDeleteReferral = async (referralCode, referredUserId) => {
@@ -475,7 +483,7 @@ export default function FirebaseAdminUsersPage() {
                     <td>
                       <div onClick={(e) => e.stopPropagation()}>
                         <button className="btn btn-primary" onClick={() => setSelectedUser(u)} style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}>View</button>
-                        <button className="btn btn-danger" onClick={async () => { if (window.confirm(`Delete "${u.name}"?`)) { await handleDelete(u.id); } }} style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}>Delete</button>
+                        <button className="btn btn-danger" onClick={() => { if (window.confirm(`Delete "${u.name}"?`)) { handleDelete(u.id).catch(err => console.error('Delete failed:', err)); } }} style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}>Delete</button>
                       </div>
                     </td>
                   </tr>

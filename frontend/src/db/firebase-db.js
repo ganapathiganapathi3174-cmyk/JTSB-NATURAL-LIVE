@@ -21,12 +21,20 @@ import {
   signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { getDb, getAuthRef } from '../firebase/config.js';
+import { getDb, getStorageRef, getAuthRef } from '../firebase/config.js';
+import { ref, deleteObject } from 'firebase/storage';
 
 const COL_USERS = 'users_new';
 const COL_REFERRALS = 'referrals_new';
 const STORAGE_FOLDER = 'new_payments';
 const MAX_REFERRALS = 2;
+const REFERRAL_EXPIRY_DAYS = 7;
+
+function computeReferralExpiryDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + REFERRAL_EXPIRY_DAYS);
+  return date.toISOString();
+}
 
 function generateReferralCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -104,6 +112,16 @@ export const FirebaseUser = {
 
     console.log('Creating user document with password:', userData.password ? 'YES' : 'NO');
     
+    if (userData.referredBy) {
+      const rc = userData.referredBy.toUpperCase();
+      const referrer = await this.findByReferralCode(rc);
+      if (referrer) {
+        const isExpired = referrer.referral_expires_at && new Date(referrer.referral_expires_at) < new Date();
+        const limitReached = (referrer.referrals_count || 0) >= MAX_REFERRALS;
+        if (isExpired || limitReached) throw new Error('Invalid Referral Code');
+      }
+    }
+    
     const userDoc = {
       name: userData.name,
       email: userData.email.toLowerCase(),
@@ -128,6 +146,8 @@ export const FirebaseUser = {
       account_status: 'inactive',
       is_first_payment_done: false,
       created_at: now,
+      referral_created_at: now,
+      referral_expires_at: computeReferralExpiryDate(),
     };
 
     const ref = await addDoc(collection(db, COL_USERS), userDoc);
@@ -136,8 +156,11 @@ export const FirebaseUser = {
     if (userData.referredBy) {
       try {
         const referrer = await this.findByReferralCode(userData.referredBy.toUpperCase());
-        if (referrer && referrer.payment_status === 'approved' && referrer.account_status === 'active' && (referrer.referrals_count || 0) < 2) {
-          await this.incrementReferralCountByCode(userData.referredBy);
+        if (referrer) {
+          const isExpired = referrer.referral_expires_at && new Date(referrer.referral_expires_at) < new Date();
+          if (!isExpired && referrer.payment_status === 'approved' && referrer.account_status === 'active' && (referrer.referrals_count || 0) < 2) {
+            await this.incrementReferralCountByCode(userData.referredBy);
+          }
         }
       } catch (e) {
         console.warn('Failed to increment referrer count:', e);
@@ -166,6 +189,16 @@ export const FirebaseUser = {
     
     let referralCode = generateReferralCode();
     
+    if (userData.referredBy) {
+      const rc = userData.referredBy.toUpperCase();
+      const referrer = await this.findByReferralCode(rc);
+      if (referrer) {
+        const isExpired = referrer.referral_expires_at && new Date(referrer.referral_expires_at) < new Date();
+        const limitReached = (referrer.referrals_count || 0) >= MAX_REFERRALS;
+        if (isExpired || limitReached) throw new Error('Invalid Referral Code');
+      }
+    }
+    
     const userDoc = {
       name: userData.name,
       email: userData.email.toLowerCase(),
@@ -190,6 +223,8 @@ export const FirebaseUser = {
       account_status: 'inactive',
       is_first_payment_done: false,
       created_at: now,
+      referral_created_at: now,
+      referral_expires_at: computeReferralExpiryDate(),
     };
 
     const ref = await addDoc(collection(db, COL_USERS), userDoc);
@@ -205,8 +240,11 @@ export const FirebaseUser = {
         const referralCode = userData.referredBy.toUpperCase();
         const referrer = await this.findByReferralCode(referralCode);
         if (referrer) {
-          // Prevent self-referral
-          if (referrer.id !== newId) {
+          const isExpired = referrer.referral_expires_at && new Date(referrer.referral_expires_at) < new Date();
+          if (isExpired) {
+            console.log('Referral code has expired:', referralCode);
+            await updateDoc(ref, { referred_by: null });
+          } else if (referrer.id !== newId) {
             const referrerLimit = referrer.referrals_count || 0;
             const isReferralActive = referrer.referral_active !== false;
             const isPaymentApproved = referrer.payment_status === 'approved';
@@ -450,6 +488,19 @@ export const FirebaseUser = {
   async updateUpiScreenshot(id, value1, value2) {
     const db = getDb();
     const userRef = doc(db, COL_USERS, id);
+
+    // Defense-in-depth: block payment submission if referrals not completed
+    if (value2 && !['pending', 'approved', 'rejected'].includes(value2)) {
+      const snap = await getDoc(userRef);
+      if (snap.exists()) {
+        const userData = snap.data();
+        const referralCount = userData.referrals_count || 0;
+        if (referralCount < 2 && !userData.is_qualified) {
+          throw new Error('Complete 2 referrals before making payment');
+        }
+      }
+    }
+
     const data = {};
     
     // value1 could be screenshot URL, status string, or null
@@ -528,6 +579,18 @@ export const FirebaseUser = {
       throw new Error('User not found');
     }
 
+    // Decrement referrer's count if this user was referred
+    if (user.referred_by) {
+      try {
+        const referrer = await FirebaseUser.findByReferralCode(user.referred_by);
+        if (referrer) {
+          await FirebaseUser.decrementReferralCount(referrer.id);
+        }
+      } catch (e) {
+        console.warn('Failed to decrement referrer count:', e);
+      }
+    }
+
     // Delete UPI screenshot from storage if exists
     if (user.upi_screenshot_url) {
       try {
@@ -540,15 +603,19 @@ export const FirebaseUser = {
     }
 
     // Delete all referrals for this user
-    const referrals = await FirebaseUser.getReferrals(id);
-    for (const referral of referrals) {
-      const referralRef = doc(db, COL_REFERRALS, referral.id);
-      await deleteDoc(referralRef);
+    try {
+      const referrals = await FirebaseUser.getReferrals(id);
+      for (const referral of referrals) {
+        const referralRef = doc(db, COL_REFERRALS, referral.id);
+        await deleteDoc(referralRef);
+      }
+    } catch (e) {
+      console.warn('Failed to delete referrals:', e);
     }
 
     // Delete user document
-    const ref = doc(db, COL_USERS, id);
-    await deleteDoc(ref);
+    const userRef = doc(db, COL_USERS, id);
+    await deleteDoc(userRef);
   },
 
   async getAllUsers() {
@@ -610,6 +677,10 @@ export const FirebaseUser = {
     const referrer = await this.findByReferralCode(referralCode);
     if (!referrer) {
       console.log('Referrer not found for code:', referralCode);
+      return;
+    }
+    if (referrer.referral_expires_at && new Date(referrer.referral_expires_at) < new Date()) {
+      console.log('Referral code has expired:', referralCode);
       return;
     }
     if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || (referrer.referrals_count || 0) >= 2) {
@@ -933,7 +1004,20 @@ export async function seedDefaultAdmin() {
   }
 }
 
-export { generateReferralCode, MAX_REFERRALS, STORAGE_FOLDER };
+export async function checkReferralLinkExpiry(referralCode) {
+  if (!referralCode) return { valid: false, reason: 'no_code' };
+  const referrer = await FirebaseUser.findByReferralCode(referralCode);
+  if (!referrer) return { valid: false, reason: 'not_found' };
+  if (referrer.referral_expires_at && new Date(referrer.referral_expires_at) < new Date()) {
+    return { valid: false, reason: 'expired', referrer };
+  }
+  if ((referrer.referrals_count || 0) >= MAX_REFERRALS) {
+    return { valid: false, reason: 'limit_reached', referrer };
+  }
+  return { valid: true, reason: 'valid', referrer };
+}
+
+export { generateReferralCode, MAX_REFERRALS, REFERRAL_EXPIRY_DAYS, STORAGE_FOLDER };
 
 export const FirebaseReferralAccess = {
   async check(userId) {

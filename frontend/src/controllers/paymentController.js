@@ -58,6 +58,12 @@ export async function submitPayment(req) {
   const user = await FirebaseUser.findByEmail(normalizedEmail);
   
   if (user) {
+    // Validate referral completion before allowing payment
+    const referralCount = user.referrals_count || 0;
+    if (referralCount < 2 && !user.is_qualified) {
+      throw { status: 403, message: 'Complete 2 referrals before submitting payment' };
+    }
+
     await FirebaseUser.updateUpiScreenshot(user.id, screenshotUrl);
     
     return {

@@ -1,5 +1,5 @@
 import jwt from '../utils/jwt.js';
-import { FirebaseUser } from '../db/firebase-db.js';
+import { FirebaseUser, checkReferralLinkExpiry } from '../db/firebase-db.js';
 
 const JWT_SECRET = import.meta.env.VITE_JWT_SECRET || 'jtsb-secret-key-2026';
 const TOKEN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -49,8 +49,12 @@ export async function register(req) {
   let referredBy = null;
   if (referralCode && referralCode.trim()) {
     const rc = referralCode.trim().toUpperCase();
-    const referrer = await FirebaseUser.findByReferralCode(rc);
-    if (!referrer) throw { status: 400, message: 'Invalid referral code' };
+    const expiryCheck = await checkReferralLinkExpiry(rc);
+    if (!expiryCheck.valid) {
+      if (expiryCheck.reason === 'expired') throw { status: 400, message: 'Referral link has expired' };
+      if (expiryCheck.reason === 'limit_reached') throw { status: 400, message: 'Invalid Referral Code' };
+      throw { status: 400, message: 'Invalid referral code' };
+    }
     referredBy = rc;
   }
 

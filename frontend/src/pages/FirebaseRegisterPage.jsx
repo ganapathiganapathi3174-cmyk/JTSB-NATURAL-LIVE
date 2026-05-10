@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser, FirebaseAuth, generateReferralCode } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseAuth, generateReferralCode, checkReferralLinkExpiry } from '../db/firebase-db.js';
 
 export default function FirebaseRegisterPage() {
   const navigate = useNavigate();
@@ -62,18 +62,20 @@ export default function FirebaseRegisterPage() {
     }
     setReferralError('');
     try {
-      const referrer = await FirebaseUser.findByReferralCode(referralCode.trim().toUpperCase());
-      if (!referrer) {
-        setReferralError('Invalid referral code');
+      const expiryResult = await checkReferralLinkExpiry(referralCode.trim().toUpperCase());
+      if (!expiryResult.valid) {
+        if (expiryResult.reason === 'expired') {
+          setReferralError('Referral link has expired');
+        } else if (expiryResult.reason === 'limit_reached') {
+          setReferralError('Invalid Referral Code');
+        } else {
+          setReferralError('Invalid referral code');
+        }
         setValidatingReferral(false);
         return false;
       }
+      const referrer = expiryResult.referrer;
       if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active') {
-        setReferralError('Referral code is no longer valid');
-        setValidatingReferral(false);
-        return false;
-      }
-      if ((referrer.referrals_count || 0) >= 2) {
         setReferralError('Referral code is no longer valid');
         setValidatingReferral(false);
         return false;
@@ -129,20 +131,25 @@ export default function FirebaseRegisterPage() {
 
       let referredBy = null;
       if (referralCode.trim()) {
-        const referrer = await FirebaseUser.findByReferralCode(referralCode.trim().toUpperCase());
-        if (referrer) {
-          if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active') {
-            setError('Referral code is no longer valid');
-            setLoading(false);
-            return;
+        const expiryCheck = await checkReferralLinkExpiry(referralCode.trim().toUpperCase());
+        if (!expiryCheck.valid) {
+          if (expiryCheck.reason === 'expired') {
+            setError('Referral link has expired. Please use a valid referral code.');
+          } else if (expiryCheck.reason === 'limit_reached') {
+            setError('Invalid Referral Code');
+          } else {
+            setError('Invalid referral code');
           }
-          if ((referrer.referrals_count || 0) >= 2) {
-            setError('Referral code is no longer valid');
-            setLoading(false);
-            return;
-          }
-          referredBy = referralCode.trim().toUpperCase();
+          setLoading(false);
+          return;
         }
+        const referrer = expiryCheck.referrer;
+        if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active') {
+          setError('Referral code is no longer valid');
+          setLoading(false);
+          return;
+        }
+        referredBy = referralCode.trim().toUpperCase();
       }
 
       console.log('=== REGISTRATION START ===');

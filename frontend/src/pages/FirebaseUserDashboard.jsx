@@ -204,6 +204,19 @@ export default function FirebaseUserDashboard() {
 
   async function handleUploadPayment() {
     if (!paymentFile || !paymentUtr.trim()) return;
+
+    // Backend validation: ensure user has completed 2 referrals
+    const freshUser = await FirebaseUser.findById(userId);
+    if (!freshUser) {
+      setError('User not found');
+      return;
+    }
+    const freshCount = freshUser.referrals_count || 0;
+    if (freshCount < 2 && !freshUser.is_qualified) {
+      setError('Complete 2 referrals before making payment');
+      return;
+    }
+
     setUploading(true);
     setError('');
 
@@ -386,45 +399,73 @@ return (
             )}
             
             {user?.referral_code && (
-            <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <strong>Referral Code:</strong> 
-              <code style={{ background: 'var(--bg)', padding: '0.4rem 0.6rem', borderRadius: '4px', fontSize: '1.1rem', fontWeight: 'bold' }}>
-                {user?.referral_code}
-              </code>
-              <button className="btn btn-ghost" onClick={copyReferralCode}>
-                {copied ? '✓ Copied!' : 'Copy'}
-              </button>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-              <strong>Referral Link:</strong> 
-              <code style={{ background: 'var(--bg)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.85rem', fontFamily: 'monospace' }}>
-                {typeof window !== 'undefined' ? window.location.origin + '/fb/register?ref=' + user?.referral_code : ''}
-              </code>
-              <button className="btn btn-ghost" onClick={copyReferralLink} style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
-                {copiedLink ? '✓ Copied!' : 'Copy Link'}
-              </button>
-              {navigator.share && (
-                <button className="btn btn-ghost" onClick={shareReferralLink} style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
-                  Share
+            <div className="referral-card">
+              <h3>Refer & Earn</h3>
+              <p className="subtitle">Invite friends to earn rewards</p>
+
+              <div className="referral-row">
+                <span className="referral-label">Your Code</span>
+                <span className="referral-code-value">{user?.referral_code}</span>
+                <button
+                  className={`btn-copy-primary ${copied ? 'copied' : ''}`}
+                  onClick={copyReferralCode}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  {copied ? 'Copied!' : 'Copy'}
                 </button>
-              )}
-            </div>
-            <div>
-              <strong>Total Referrals:</strong> 
-              <span style={{ marginLeft: '0.5rem', fontWeight: 'bold', color: referrals.length >= MAX_REFERRALS ? 'var(--error)' : 'var(--success)' }}>
-                {referrals.length} / {MAX_REFERRALS}
-              </span>
-              {user?.total_referral_count > 0 && (
-                <span className="muted" style={{ marginLeft: '0.5rem' }}>(Total: {user.total_referral_count})</span>
-              )}
-              {referrals.length >= 2 && (
-                <span style={{ marginLeft: '0.5rem', color: 'var(--success)', fontWeight: 'bold' }}>
-                  ✓ Qualified!
+              </div>
+
+              <div className="referral-row">
+                <span className="referral-label">Share Link</span>
+                <span className="referral-link-value">
+                  {typeof window !== 'undefined' ? window.location.origin + '/fb/register?ref=' + user?.referral_code : ''}
                 </span>
-              )}
+                <button
+                  className={`btn-copy-primary ${copiedLink ? 'copied' : ''}`}
+                  onClick={copyReferralLink}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  {copiedLink ? 'Copied!' : 'Copy'}
+                </button>
+                {navigator.share && (
+                  <button className="btn-share-modern" onClick={shareReferralLink}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="18" cy="5" r="3"></circle>
+                      <circle cx="6" cy="12" r="3"></circle>
+                      <circle cx="18" cy="19" r="3"></circle>
+                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                    </svg>
+                    Share
+                  </button>
+                )}
+              </div>
+
+              <div className="referral-stats-bar">
+                <div className="referral-stat-item">
+                  <span className={`referral-stat-value ${referrals.length >= MAX_REFERRALS ? 'danger' : 'success'}`}>
+                    {referrals.length}
+                  </span>
+                  <span className="referral-stat-label">/ {MAX_REFERRALS} Referrals</span>
+                </div>
+                {user?.total_referral_count > 0 && (
+                  <div className="referral-stat-item">
+                    <span className="referral-stat-value info">{user.total_referral_count}</span>
+                    <span className="referral-stat-label">Total</span>
+                  </div>
+                )}
+                {referrals.length >= 2 && (
+                  <span className="qualified-pill">&#10003; Qualified</span>
+                )}
+              </div>
             </div>
-            </>)}
+            )}
             
             <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
               <strong>Password:</strong> 
@@ -505,9 +546,26 @@ return (
           </div>
         </div>
 
-        {/* First-time payment for inactive users */}
-        {!isActive && !user?.is_first_payment_done && !isQualified && (
-          <div className="card" style={{ marginBottom: '1.5rem', border: '2px solid var(--warning)' }}>
+        {/* Referral progress - complete 2 referrals to unlock payment */}
+        {!isQualified && !isActive && !user?.is_first_payment_done && (
+          <div className="card" style={{ marginBottom: '1.5rem', border: '1px solid var(--border)' }}>
+            <h2>Complete Referrals to Unlock Payment</h2>
+            <p className="muted">Invite 2 friends using your referral code to unlock payment access.</p>
+            <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ flex: 1, height: '8px', background: 'var(--surface-2)', borderRadius: '999px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${Math.min((referralCount / 2) * 100, 100)}%`, background: 'linear-gradient(90deg, var(--accent), var(--success))', borderRadius: '999px', transition: 'width 0.5s ease' }}></div>
+              </div>
+              <span style={{ fontWeight: 700, fontSize: '0.9rem', whiteSpace: 'nowrap', color: 'var(--text)' }}>{referralCount} / 2</span>
+            </div>
+          </div>
+        )}
+
+        {/* First-time payment for qualified users */}
+        {isQualified && !isActive && !user?.is_first_payment_done && (
+          <div className="card" style={{ marginBottom: '1.5rem', border: '2px solid var(--success)' }}>
+            <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
+              <strong>Referral Target Completed!</strong> Your payment is now unlocked.
+            </div>
             <h2>Complete Your Payment</h2>
             <p>Please submit your payment to activate your account.</p>
             <UpiQrDisplay />
@@ -568,8 +626,8 @@ return (
           </div>
         )}
 
-        {/* Qualified Banner */}
-        {isQualified && (
+        {/* Qualified Banner - only for active users who reached limit */}
+        {isQualified && isActive && (
           <div className="alert alert-warning" style={{ marginBottom: '1.5rem' }}>
             <strong>Referral Limit Reached!</strong> Complete the cycle payment to continue referring members.
           </div>

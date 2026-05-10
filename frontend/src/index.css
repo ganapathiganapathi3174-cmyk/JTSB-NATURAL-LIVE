@@ -574,3 +574,312 @@ tr:last-child td {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+/* ===== REFERRAL ENHANCEMENTS ===== */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(91, 140, 255, 0.15); }
+  50% { box-shadow: 0 0 35px rgba(91, 140, 255, 0.3); }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scale-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(0.95); }
+}
+.referral-card {
+  background: linear-gradient(135deg, #1a2035, #10141e);
+  border: 1px solid rgba(91, 140, 255, 0.15);
+  border-radius: 20px;
+  padding: 2rem 1.75rem;
+  margin-top: 1.25rem;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(91, 140, 255, 0.05) inset;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.referral-card:hover {
+  border-color: rgba(91, 140, 255, 0.25);
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(91, 140, 255, 0.08) inset;
+}
+.referral-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), #7c5cff, var(--success));
+  opacity: 0.8;
+}
+.referral-card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(91, 140, 255, 0.04), transparent 70%);
+  pointer-events: none;
+}
+.referral-card h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--text), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.referral-card .subtitle {
+  margin: 0 0 1.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.referral-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.15rem;
+  background: rgba(15, 18, 25, 0.7);
+  border-radius: 14px;
+  margin-bottom: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+.referral-row:hover {
+  border-color: rgba(91, 140, 255, 0.15);
+  background: rgba(15, 18, 25, 0.85);
+}
+.referral-row:last-of-type {
+  margin-bottom: 1.25rem;
+}
+.referral-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  min-width: 75px;
+}
+.referral-code-value {
+  background: linear-gradient(135deg, rgba(91, 140, 255, 0.1), rgba(124, 92, 255, 0.05));
+  padding: 0.5rem 1.15rem;
+  border-radius: 10px;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  border: 1px solid rgba(91, 140, 255, 0.2);
+  box-shadow: 0 0 20px rgba(91, 140, 255, 0.08);
+  text-shadow: 0 0 20px rgba(91, 140, 255, 0.15);
+}
+.referral-link-value {
+  flex: 1;
+  min-width: 0;
+  background: rgba(31, 36, 51, 0.6);
+  padding: 0.45rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-family: 'DM Sans', monospace;
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: border-color 0.25s ease, color 0.25s ease;
+}
+.referral-row:hover .referral-link-value {
+  border-color: rgba(91, 140, 255, 0.12);
+  color: var(--text);
+}
+.btn-copy-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.25rem;
+  border-radius: 12px;
+  border: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-family: inherit;
+  background: linear-gradient(135deg, var(--accent), #7c5cff);
+  color: #fff;
+  white-space: nowrap;
+  box-shadow: 0 4px 18px rgba(91, 140, 255, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+.btn-copy-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.1) 50%, transparent 60%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+.btn-copy-primary:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 8px 30px rgba(91, 140, 255, 0.5);
+}
+.btn-copy-primary:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 10px rgba(91, 140, 255, 0.2);
+  transition-duration: 0.08s;
+}
+.btn-copy-primary.copied {
+  background: linear-gradient(135deg, var(--success), #1a9e3e);
+  box-shadow: 0 4px 18px rgba(52, 199, 89, 0.4);
+  animation: scale-pop 0.3s ease;
+}
+.btn-copy-primary.copied::after {
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.15) 50%, transparent 60%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+.btn-share-modern {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid rgba(106, 13, 173, 0.35);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-family: inherit;
+  background: linear-gradient(135deg, rgba(106, 13, 173, 0.2), rgba(74, 20, 140, 0.1));
+  color: #b39ddb;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+.btn-share-modern::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 40%, rgba(106, 13, 173, 0.1) 50%, transparent 60%);
+  background-size: 200% 100%;
+  animation: shimmer 4s ease-in-out infinite;
+  pointer-events: none;
+}
+.btn-share-modern:hover {
+  background: linear-gradient(135deg, rgba(106, 13, 173, 0.3), rgba(74, 20, 140, 0.2));
+  transform: translateY(-2px) scale(1.02);
+  border-color: rgba(106, 13, 173, 0.6);
+  box-shadow: 0 6px 24px rgba(106, 13, 173, 0.3);
+  color: #d1c4e9;
+}
+.btn-share-modern:active {
+  transform: scale(0.95);
+  transition-duration: 0.08s;
+}
+.referral-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.85rem 1.15rem;
+  background: rgba(15, 18, 25, 0.6);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  flex-wrap: wrap;
+  transition: border-color 0.25s ease;
+}
+.referral-stats-bar:hover {
+  border-color: rgba(91, 140, 255, 0.12);
+}
+.referral-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding-right: 0.25rem;
+}
+.referral-stat-value {
+  font-weight: 800;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.referral-stat-value.success {
+  color: var(--success);
+  text-shadow: 0 0 12px rgba(52, 199, 89, 0.25);
+}
+.referral-stat-value.danger {
+  color: var(--danger);
+  text-shadow: 0 0 12px rgba(243, 18, 96, 0.25);
+}
+.referral-stat-value.info {
+  color: var(--accent);
+  text-shadow: 0 0 12px rgba(91, 140, 255, 0.25);
+}
+.referral-stat-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+.qualified-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(52, 199, 89, 0.15), rgba(52, 199, 89, 0.06));
+  color: var(--success);
+  border: 1px solid rgba(52, 199, 89, 0.25);
+  box-shadow: 0 0 16px rgba(52, 199, 89, 0.08);
+  animation: glow-pulse 2.5s ease-in-out infinite;
+}
+
+@media (max-width: 600px) {
+  .referral-card {
+    padding: 1.25rem 1rem;
+    border-radius: 16px;
+  }
+  .referral-row {
+    padding: 0.85rem 0.85rem;
+    gap: 0.6rem;
+  }
+  .referral-label {
+    min-width: 65px;
+    font-size: 0.7rem;
+  }
+  .referral-code-value {
+    font-size: 0.95rem;
+    padding: 0.4rem 0.85rem;
+    letter-spacing: 0.08em;
+  }
+  .referral-link-value {
+    font-size: 0.68rem;
+    padding: 0.35rem 0.65rem;
+  }
+  .btn-copy-primary,
+  .btn-share-modern {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.78rem;
+  }
+  .referral-stats-bar {
+    gap: 1rem;
+    padding: 0.7rem 0.85rem;
+  }
+  .referral-stat-value {
+    font-size: 1rem;
+  }
+  .referral-stat-label {
+    font-size: 0.75rem;
+  }
+}
