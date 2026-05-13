@@ -188,10 +188,6 @@ export default function FirebaseRegisterPage() {
 
       console.log('User created with ID:', user.id);
 
-      if (referredBy) {
-        await FirebaseUser.incrementReferralCountByCode(referredBy);
-      }
-
       await FirebaseUser.updatePayment(user.id, null, utrVal);
       console.log('UTR updated');
       

@@ -701,6 +701,13 @@ tr:last-child td {
   border-color: rgba(91, 140, 255, 0.12);
   color: var(--text);
 }
+.referral-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
 .btn-copy-primary {
   display: inline-flex;
   align-items: center;
@@ -871,6 +878,9 @@ tr:last-child td {
   .btn-share-modern {
     padding: 0.45rem 0.9rem;
     font-size: 0.78rem;
+  }
+  .referral-actions {
+    gap: 0.4rem;
   }
   .referral-stats-bar {
     gap: 1rem;
