@@ -74,7 +74,7 @@ function PaymentModal({ user, onClose, onVerify }) {
           <div>
             <div className="muted" style={{ fontSize: '0.85rem' }}>Current Status</div>
             <span className={`badge ${(isCyclePayment ? user.cycle_payment_status : user.payment_status) === 'approved' ? 'badge-paid' : (isCyclePayment ? user.cycle_payment_status : user.payment_status) === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-              {isCyclePayment ? (user.cycle_payment_status || 'pending') : (user.payment_status || 'pending')}
+              {isCyclePayment ? (user.cycle_payment_status ? user.cycle_payment_status.charAt(0).toUpperCase() + user.cycle_payment_status.slice(1) : 'Pending') : (user.payment_status ? user.payment_status.charAt(0).toUpperCase() + user.payment_status.slice(1) : 'Pending')}
             </span>
             {isCyclePayment && user.cycle_payment_status === 'pending' && (
               <span style={{ marginLeft: '0.5rem', color: 'var(--warning)', fontSize: '0.8rem' }}>(Cycle Payment)</span>
@@ -321,7 +321,7 @@ export default function FirebaseAdminPaymentsPage() {
                     </td>
                     <td>
                       <span className={`badge ${displayStatus === 'approved' ? 'badge-paid' : displayStatus === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-                        {displayStatus || 'pending'}
+                        {displayStatus ? displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1) : 'Pending'}
                       </span>
                     </td>
                     <td>

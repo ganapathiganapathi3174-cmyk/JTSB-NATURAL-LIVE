@@ -380,7 +380,7 @@ return (
             <div>
               <strong>Status:</strong> 
               <span className={`badge ${user?.status === 'approved' ? 'badge-paid' : user?.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`} style={{ marginLeft: '0.5rem' }}>
-                {user?.status || 'pending'}
+                {user?.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Pending'}
               </span>
               {user?.is_qualified && (
                 <span className="badge badge-paid" style={{ marginLeft: '0.5rem' }}>Qualified</span>

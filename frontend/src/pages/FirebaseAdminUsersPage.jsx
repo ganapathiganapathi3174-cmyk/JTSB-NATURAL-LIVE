@@ -114,7 +114,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral }) {
           <div>
             <div className="muted" style={{ fontSize: '0.85rem' }}>Payment Status</div>
             <span className={`badge ${user.payment_status === 'approved' ? 'badge-paid' : user.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-              {user.payment_status || 'pending'}
+              {user.payment_status ? user.payment_status.charAt(0).toUpperCase() + user.payment_status.slice(1) : 'Pending'}
             </span>
           </div>
           
@@ -328,6 +328,25 @@ export default function FirebaseAdminUsersPage() {
     }
   };
 
+  const referralCounts = useMemo(() => {
+    const codeToId = {};
+    users.forEach(u => {
+      if (u.referral_code) {
+        codeToId[u.referral_code] = u.id;
+      }
+    });
+    const counts = {};
+    users.forEach(u => {
+      if (u.referred_by) {
+        const refId = codeToId[u.referred_by];
+        if (refId) {
+          counts[refId] = (counts[refId] || 0) + 1;
+        }
+      }
+    });
+    return counts;
+  }, [users]);
+
   const filteredUsers = useMemo(() => {
     let filtered = users;
     
@@ -435,16 +454,13 @@ export default function FirebaseAdminUsersPage() {
                         onClick={(e) => { e.stopPropagation(); handleToggleUserExpand(u.id); }}
                         style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
                       >
-                        {expandedUserId === u.id ? 'Hide' : `View${u.payment_status === 'approved' ? ` (${u.referrals_count || 0})` : ''}`}
+                        {expandedUserId === u.id ? 'Hide' : `View${u.payment_status === 'approved' ? ` (${referralCounts[u.id] || 0})` : ''}`}
                       </button>
                     </td>
                     <td>{u.total_referral_count || 0}</td>
                     <td>
                       <span className="badge badge-paid" style={{ fontSize: '0.75rem' }}>
-                        {u.referral_view_count || 0}
-                        {u.referral_view_cycle !== u.referral_cycle && (
-                          <span style={{ marginLeft: '0.25rem', color: 'var(--warning)' }} title="Cycle mismatch">*</span>
-                        )}
+                        {referralCounts[u.id] || 0}
                       </span>
                     </td>
                     <td>
@@ -477,7 +493,7 @@ export default function FirebaseAdminUsersPage() {
                     </td>
                     <td>
                       <span className={`badge ${u.payment_status === 'approved' ? 'badge-paid' : u.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-                        {u.payment_status || 'pending'}
+                        {u.payment_status ? u.payment_status.charAt(0).toUpperCase() + u.payment_status.slice(1) : 'Pending'}
                       </span>
                     </td>
                     <td>

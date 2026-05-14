@@ -256,11 +256,19 @@ export const FirebaseUser = {
             } else {
               await updateDoc(ref, { referred_by: referralCode });
               const newCount = referrerLimit + 1;
-              await updateDoc(doc(db, COL_USERS, referrer.id), {
+              const isQualified = newCount >= 2;
+              const updateData = {
                 referrals_count: newCount,
-                referral_limit_reached: newCount >= 2,
-                referral_active: newCount < 2,
-              });
+                total_referral_count: (referrer.total_referral_count || 0) + 1,
+                referral_limit_reached: isQualified,
+                referral_active: !isQualified,
+                is_qualified: isQualified,
+                account_status: isQualified ? 'inactive' : (referrer.account_status || 'active'),
+              };
+              if (isQualified) {
+                updateData.cycle_payment_status = null;
+              }
+              await updateDoc(doc(db, COL_USERS, referrer.id), updateData);
               console.log('Referral linked:', referralCode, '->', newId, ', referrer count:', newCount);
             }
           } else {
@@ -745,6 +753,8 @@ export const FirebaseUser = {
       referral_limit_reached: false,
       referral_active: true,
       cycle_payment_status: 'approved',
+      referral_expires_at: computeReferralExpiryDate(),
+      referral_created_at: new Date().toISOString(),
     });
   },
 
