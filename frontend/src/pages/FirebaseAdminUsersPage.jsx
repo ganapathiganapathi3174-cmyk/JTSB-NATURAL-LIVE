@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FirebaseUser } from '../db/firebase-db.js';
-import { getAuthRef, getDb } from '../firebase/config.js';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { doc, deleteDoc, getDocs, query, collection } from 'firebase/firestore';
+import { getDb } from '../firebase/config.js';
+import { doc, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
 
 const ADMIN_KEY = 'fb_admin_token';
 
@@ -29,16 +28,16 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral }) {
   }, [user?.id, user?.referral_code]);
 
   async function handleResetPassword() {
-    if (!window.confirm(`Send password reset email to "${user.email}"?`)) return;
+    if (!window.confirm(`Reset password for "${user.email}"? A new password will be generated.`)) return;
     setResetting(true);
     setResetMsg('');
     try {
-      const auth = getAuthRef();
-      await sendPasswordResetEmail(auth, user.email);
-      setResetMsg('Password reset email sent!');
+      const newPwd = Math.random().toString(36).slice(-8) + Math.floor(Math.random() * 100);
+      await FirebaseUser.updatePassword(user.id, newPwd);
+      setResetMsg(`Password reset successfully! New password: ${newPwd}`);
     } catch (err) {
       console.error('Reset error:', err);
-      setResetMsg('Error: ' + err.message);
+      setResetMsg('Error: ' + (err.message || 'Failed to reset password'));
     } finally {
       setResetting(false);
     }
@@ -207,10 +206,14 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral }) {
             onClick={handleResetPassword}
             disabled={resetting}
           >
-            {resetting ? 'Sending...' : 'Reset Password'}
+            {resetting ? 'Resetting...' : 'Reset Password'}
           </button>
         </div>
-        {resetMsg && <div className="alert alert-success" style={{ marginTop: '0.5rem' }}>{resetMsg}</div>}
+        {resetMsg && (
+          <div className="alert alert-success" style={{ marginTop: '0.75rem', wordBreak: 'break-all' }}>
+            {resetMsg}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -275,7 +278,6 @@ export default function FirebaseAdminUsersPage() {
     }
 
     const unsubscribe = FirebaseUser.subscribeToUsers((allUsers) => {
-      console.log('Admin received all users:', allUsers.length);
       setUsers(allUsers);
     });
 
@@ -293,9 +295,7 @@ export default function FirebaseAdminUsersPage() {
     try {
       const db = getDb();
       await deleteDoc(doc(db, 'users_new', userId));
-      // Force fresh fetch from server to update UI
-      const snap = await getDocs(query(collection(db, 'users_new')), { source: 'server' });
-      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setUsers(prev => prev.filter(u => u.id !== userId));
     } catch (err) {
       console.error('Delete error:', err);
       alert('Delete failed: ' + (err.message || 'Unknown error'));
@@ -304,7 +304,6 @@ export default function FirebaseAdminUsersPage() {
 
   const handleDeleteReferral = async (referralCode, referredUserId) => {
     const db = getDb();
-    const { doc, updateDoc, getDoc } = await import('firebase/firestore');
     try {
       const userRef = doc(db, 'users_new', referredUserId);
       const snap = await getDoc(userRef);
@@ -321,7 +320,6 @@ export default function FirebaseAdminUsersPage() {
         }
         await updateDoc(userRef, { referred_by: null, referral_limit_reached: false });
       }
-      console.log('Referral removed:', referredUserId);
     } catch (err) {
       console.error('Delete referral error:', err);
       throw err;
@@ -351,14 +349,21 @@ export default function FirebaseAdminUsersPage() {
     let filtered = users;
     
     if (statusFilter) {
-      filtered = filtered.filter(u => u.payment_status === statusFilter);
+      if (statusFilter === 'account_active') {
+        filtered = filtered.filter(u => u.account_status === 'active');
+      } else if (statusFilter === 'account_inactive') {
+        filtered = filtered.filter(u => u.account_status === 'inactive');
+      } else {
+        filtered = filtered.filter(u => u.payment_status === statusFilter);
+      }
     }
     
     if (q) {
+      const ql = q.toLowerCase();
       filtered = filtered.filter(u => 
-        u.name.toLowerCase().includes(q.toLowerCase()) ||
-        u.email.toLowerCase().includes(q.toLowerCase()) ||
-        (u.referral_code && u.referral_code.toLowerCase().includes(q.toLowerCase())) ||
+        (u.name && u.name.toLowerCase().includes(ql)) ||
+        (u.email && u.email.toLowerCase().includes(ql)) ||
+        (u.referral_code && u.referral_code.toLowerCase().includes(ql)) ||
         (u.utr_number && u.utr_number.includes(q))
       );
     }
@@ -400,12 +405,15 @@ export default function FirebaseAdminUsersPage() {
           <select
             value={statusFilter}
             onChange={e => updateStatusFilter(e.target.value)}
-            style={{ maxWidth: '180px' }}
+            style={{ maxWidth: '200px' }}
           >
             <option value="">All Users</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
+            <option value="pending">Payment: Pending</option>
+            <option value="approved">Payment: Approved</option>
+            <option value="rejected">Payment: Rejected</option>
+            <option disabled>──────────</option>
+            <option value="account_active">Account: Active</option>
+            <option value="account_inactive">Account: Inactive</option>
           </select>
         </div>
       </div>
@@ -413,7 +421,7 @@ export default function FirebaseAdminUsersPage() {
       <div className="card">
         <h2>All Users ({filteredUsers.length})</h2>
         <p className="muted" style={{ marginTop: '0.5rem', marginBottom: '1rem' }}>
-          Total users: {users.length} | Approved: {users.filter(u => u.payment_status === 'approved').length} | Pending: {users.filter(u => u.payment_status === 'pending').length}
+          Total: {users.length} | Payment — Approved: {users.filter(u => u.payment_status === 'approved').length} / Pending: {users.filter(u => u.payment_status === 'pending').length} / Rejected: {users.filter(u => u.payment_status === 'rejected').length} | Account — Active: {users.filter(u => u.account_status === 'active').length} / Inactive: {users.filter(u => u.account_status === 'inactive').length}
         </p>
         
         <div className="table-wrap">

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FirebaseUser, FirebaseAuth } from '../db/firebase-db.js';
+import { FirebaseUser } from '../db/firebase-db.js';
 
 const ADMIN_KEY = 'fb_admin_token';
 
@@ -86,13 +86,14 @@ export default function FirebaseAdminDashboardPage() {
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [showAddUser, setShowAddUser] = useState(false);
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    pendingPayments: 0,
-    approvedPayments: 0,
-    rejectedPayments: 0,
-    totalReferrals: 0,
-  });
+
+  const stats = useMemo(() => ({
+    totalUsers: users.length,
+    pendingPayments: users.filter(u => u.payment_status === 'pending').length,
+    approvedPayments: users.filter(u => u.payment_status === 'approved').length,
+    rejectedPayments: users.filter(u => u.payment_status === 'rejected').length,
+    totalReferrals: users.reduce((sum, u) => sum + (u.referrals_count || 0), 0),
+  }), [users]);
 
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
@@ -103,19 +104,6 @@ export default function FirebaseAdminDashboardPage() {
 
     const unsubscribe = FirebaseUser.subscribeToUsers((allUsers) => {
       setUsers(allUsers);
-      
-      const pending = allUsers.filter(u => u.payment_status === 'pending').length;
-      const approved = allUsers.filter(u => u.payment_status === 'approved').length;
-      const rejected = allUsers.filter(u => u.payment_status === 'rejected').length;
-      const totalRefs = allUsers.reduce((sum, u) => sum + (u.referrals_count || 0), 0);
-      
-      setStats({
-        totalUsers: allUsers.length,
-        pendingPayments: pending,
-        approvedPayments: approved,
-        rejectedPayments: rejected,
-        totalReferrals: totalRefs,
-      });
     });
 
     return () => {

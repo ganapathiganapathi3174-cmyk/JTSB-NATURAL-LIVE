@@ -12,6 +12,7 @@ const FirebaseAdminDashboardPage = lazy(() => import('./pages/FirebaseAdminDashb
 const FirebaseAdminPaymentsPage = lazy(() => import('./pages/FirebaseAdminPaymentsPage.jsx'));
 const FirebaseAdminUsersPage = lazy(() => import('./pages/FirebaseAdminUsersPage.jsx'));
 const ReferralGraphPage = lazy(() => import('./pages/ReferralGraphPage.jsx'));
+const FirebaseAdminStatusPage = lazy(() => import('./pages/FirebaseAdminStatusPage.jsx'));
 
 function LoadingFallback() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="/fb-admin/dashboard" element={<ProtectedFirebaseAdmin><FirebaseAdminDashboardPage /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/payments" element={<ProtectedFirebaseAdmin><FirebaseAdminPaymentsPage /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/users" element={<ProtectedFirebaseAdmin><FirebaseAdminUsersPage /></ProtectedFirebaseAdmin>} />
+        <Route path="/fb-admin/status" element={<ProtectedFirebaseAdmin><FirebaseAdminStatusPage /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/referral-graph" element={<ReferralGraphPage />} />
 
         <Route path="*" element={<Navigate to="/payment" replace />} />

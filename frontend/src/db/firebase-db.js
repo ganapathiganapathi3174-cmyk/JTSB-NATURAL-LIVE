@@ -133,6 +133,7 @@ export const FirebaseUser = {
       utr_number: null,
       referral_code: referralCode,
       referred_by: userData.referredBy || null,
+      referred_by_status: userData.referredBy ? 'pending' : null,
       referrals_count: 0,
       total_referral_count: 0,
       referral_limit_reached: false,
@@ -158,12 +159,12 @@ export const FirebaseUser = {
         const referrer = await this.findByReferralCode(userData.referredBy.toUpperCase());
         if (referrer) {
           const isExpired = referrer.referral_expires_at && new Date(referrer.referral_expires_at) < new Date();
-          if (!isExpired && referrer.payment_status === 'approved' && referrer.account_status === 'active' && (referrer.referrals_count || 0) < 2) {
-            await this.incrementReferralCountByCode(userData.referredBy);
+          if (!isExpired && referrer.payment_status === 'approved' && referrer.account_status === 'active' && referrer.admin_status !== 'suspicious' && (referrer.referrals_count || 0) < 2) {
+            console.log('Referral stored as pending:', userData.referredBy);
           }
         }
       } catch (e) {
-        console.warn('Failed to increment referrer count:', e);
+        console.warn('Referral check failed:', e);
       }
     }
     return { id: ref.id, ...userDoc };
@@ -210,6 +211,7 @@ export const FirebaseUser = {
       utr_number: null,
       referral_code: referralCode,
       referred_by: userData.referredBy || null,
+      referred_by_status: userData.referredBy ? 'pending' : null,
       referrals_count: 0,
       total_referral_count: 0,
       referral_limit_reached: false,
@@ -249,27 +251,14 @@ export const FirebaseUser = {
             const isReferralActive = referrer.referral_active !== false;
             const isPaymentApproved = referrer.payment_status === 'approved';
             const isAccountActive = referrer.account_status === 'active';
-            
-            if (referrerLimit >= 2 || !isReferralActive || !isPaymentApproved || !isAccountActive) {
+            const isSuspicious = referrer.admin_status === 'suspicious';
+
+            if (referrerLimit >= 2 || !isReferralActive || !isPaymentApproved || !isAccountActive || isSuspicious) {
               console.log('Referral code is no longer valid:', referralCode, 'limit:', referrerLimit, 'active:', isReferralActive, 'payment:', isPaymentApproved, 'account:', isAccountActive);
               await updateDoc(ref, { referred_by: null });
             } else {
-              await updateDoc(ref, { referred_by: referralCode });
-              const newCount = referrerLimit + 1;
-              const isQualified = newCount >= 2;
-              const updateData = {
-                referrals_count: newCount,
-                total_referral_count: (referrer.total_referral_count || 0) + 1,
-                referral_limit_reached: isQualified,
-                referral_active: !isQualified,
-                is_qualified: isQualified,
-                account_status: isQualified ? 'inactive' : (referrer.account_status || 'active'),
-              };
-              if (isQualified) {
-                updateData.cycle_payment_status = null;
-              }
-              await updateDoc(doc(db, COL_USERS, referrer.id), updateData);
-              console.log('Referral linked:', referralCode, '->', newId, ', referrer count:', newCount);
+              await updateDoc(ref, { referred_by: referralCode, referred_by_status: 'pending' });
+              console.log('Referral stored as pending:', referralCode, '->', newId);
             }
           } else {
             console.log('Self-referral prevented');
@@ -357,7 +346,8 @@ export const FirebaseUser = {
     const colRef = collection(db, COL_USERS);
     const q = query(colRef, where('referred_by', '==', referralCode.toUpperCase()));
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return users.filter(u => u.referred_by_status === 'approved' || !u.referred_by_status);
   },
 
   async getReferredUsers(referralCode) {
@@ -377,12 +367,18 @@ export const FirebaseUser = {
     const colRef = collection(db, COL_USERS);
     const q = query(colRef, where('referred_by', '==', referralCode.toUpperCase()));
     const snap = await getDocs(q);
-    return snap.size;
+    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return users.filter(u => u.referred_by_status === 'approved' || !u.referred_by_status).length;
   },
 
   async updatePaymentStatus(id, payment_status) {
     const db = getDb();
     const ref = doc(db, COL_USERS, id);
+    const user = await this.findById(id);
+    if (!user) {
+      console.log('User not found for payment status update:', id);
+      return;
+    }
     console.log('Updating payment status for:', id, 'to:', payment_status);
     const updateData = {
       payment_status,
@@ -395,9 +391,51 @@ export const FirebaseUser = {
       updateData.referral_limit_reached = false;
       updateData.referral_active = true;
       updateData.is_qualified = false;
+      
+      if (user.referred_by && user.referred_by_status === 'pending') {
+        updateData.referred_by_status = 'approved';
+      }
     }
     await updateDoc(ref, updateData);
     console.log('Payment status updated successfully');
+    
+    // Activate pending referral for the referrer after admin approval
+    if (payment_status === 'approved' && user.referred_by && user.referred_by_status === 'pending') {
+      try {
+        const referrer = await this.findByReferralCode(user.referred_by);
+        if (referrer && referrer.id !== id) {
+          const referrerLimit = referrer.referrals_count || 0;
+          if (referrerLimit < 2) {
+            const newCount = referrerLimit + 1;
+            const isQualified = newCount >= 2;
+            const referrerUpdate = {
+              referrals_count: newCount,
+              total_referral_count: (referrer.total_referral_count || 0) + 1,
+              referral_limit_reached: isQualified,
+              referral_active: !isQualified,
+              is_qualified: isQualified,
+              account_status: isQualified ? 'inactive' : (referrer.account_status || 'active'),
+            };
+            if (isQualified) {
+              referrerUpdate.cycle_payment_status = null;
+            }
+            await updateDoc(doc(db, COL_USERS, referrer.id), referrerUpdate);
+            
+            await addDoc(collection(db, COL_REFERRALS), {
+              user_id: referrer.id,
+              name: user.name || 'Unknown',
+              email: user.email || '',
+              phone: user.phone || '',
+              created_at: new Date().toISOString(),
+            });
+            
+            console.log('Referral activated for referrer:', referrer.id, 'count:', newCount);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to activate pending referral:', e);
+      }
+    }
   },
 
   async updatePassword(id, newPassword) {
@@ -444,16 +482,9 @@ export const FirebaseUser = {
           throw new Error('Referral code is no longer valid');
         }
         
-        await updateDoc(ref, { referred_by: refCode });
+        await updateDoc(ref, { referred_by: refCode, referred_by_status: 'pending' });
         
-        // Increment referrer's count
-        const newCount = (referrer.referrals_count || 0) + 1;
-        await updateDoc(doc(db, COL_USERS, referrer.id), {
-          referrals_count: newCount,
-          referral_limit_reached: newCount >= 2,
-          referral_active: newCount < 2,
-        });
-        console.log('Referral code updated:', refCode);
+        console.log('Referral code updated (pending):', refCode);
       } else {
         console.log('Referrer not found for code:', refCode);
       }
@@ -587,8 +618,8 @@ export const FirebaseUser = {
       throw new Error('User not found');
     }
 
-    // Decrement referrer's count if this user was referred
-    if (user.referred_by) {
+    // Decrement referrer's count if this user was referred and approved
+    if (user.referred_by && user.referred_by_status === 'approved') {
       try {
         const referrer = await FirebaseUser.findByReferralCode(user.referred_by);
         if (referrer) {
@@ -658,6 +689,12 @@ export const FirebaseUser = {
     await updateDoc(ref, { payment_status: status });
   },
 
+  async updateAdminStatus(id, adminStatus) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    await updateDoc(ref, { admin_status: adminStatus });
+  },
+
   async updateUpiQrUrl(id, url) {
     return this.updateUpiScreenshot(id, url);
   },
@@ -691,7 +728,7 @@ export const FirebaseUser = {
       console.log('Referral code has expired:', referralCode);
       return;
     }
-    if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || (referrer.referrals_count || 0) >= 2) {
+    if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || referrer.admin_status === 'suspicious' || (referrer.referrals_count || 0) >= 2) {
       console.log('Referrer not eligible:', referralCode);
       return;
     }
@@ -906,6 +943,9 @@ export const FirebaseUser = {
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(u => u.cycle_upi_screenshot_url || u.cycle_payment_utr);
       callback(users);
+    }, (error) => {
+      console.error('subscribeToCyclePayments error:', error);
+      callback([]);
     });
   },
 
@@ -1127,6 +1167,9 @@ export const FirebaseNewReferral = {
     return onSnapshot(q, (snap) => {
       const referrals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       callback(referrals);
+    }, (error) => {
+      console.error('subscribeToUserReferrals error:', error);
+      callback([]);
     });
   },
 };

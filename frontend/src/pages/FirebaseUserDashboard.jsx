@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess } from '../db/firebase-db.js';
@@ -12,16 +12,23 @@ function buildUpiUri() {
   return `upi://pay?pa=${pa}&pn=${pn}&am=&cu=INR`;
 }
 
-function UpiQrDisplay() {
+const UpiQrDisplay = memo(function UpiQrDisplay() {
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [qrError, setQrError] = useState('');
 
   useEffect(() => {
-    QRCode.toDataURL(buildUpiUri(), { width: 200, margin: 2 }).then(setQrDataUrl);
+    QRCode.toDataURL(buildUpiUri(), { width: 200, margin: 2 }).then(setQrDataUrl).catch(() => setQrError('Failed to generate QR'));
   }, []);
 
   return (
     <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-      {qrDataUrl && <img src={qrDataUrl} alt="UPI QR" style={{ borderRadius: '8px', border: '1px solid var(--border)' }} />}
+      {qrError ? (
+        <div className="muted" style={{ padding: '1rem' }}>{qrError}</div>
+      ) : qrDataUrl ? (
+        <img src={qrDataUrl} alt="UPI QR" style={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
+      ) : (
+        <div className="muted" style={{ padding: '1rem' }}>Loading QR...</div>
+      )}
       <div className="upi-id-box" style={{ marginTop: '0.75rem' }}>
         <div className="label">UPI ID / VPA</div>
         <code style={{ fontSize: '1rem' }}>{UPI_VPA}</code>
@@ -74,52 +81,31 @@ export default function FirebaseUserDashboard() {
       return;
     }
 
-    let timeoutId;
-    let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      setError('Loading is taking too long. Please check your connection and refresh the page.');
+      setLoading(false);
+    }, 15000);
 
-    const loadUser = async () => {
-      timeoutId = setTimeout(() => {
-        if (!cancelled) {
-          setError('Loading is taking too long. Please check your connection and refresh the page.');
-          setLoading(false);
-        }
-      }, 15000); // 15 second timeout
-
-      try {
-        const data = await FirebaseUser.findById(userId);
-        clearTimeout(timeoutId);
-
-        if (cancelled) return;
-
-        if (!data) {
-          localStorage.removeItem('fb_user_id');
-          navigate('/fb/login');
-          return;
-        }
-        setUser(data);
-        setLoading(false);
-      } catch (err) {
-        clearTimeout(timeoutId);
-        if (!cancelled) {
-          console.error('Dashboard load error:', err);
-          setError(err.message || 'Failed to load user data. Please try again.');
-          setLoading(false);
-        }
+    const unsub = FirebaseUser.subscribeToUser(userId, (data) => {
+      clearTimeout(timeoutId);
+      if (!data) {
+        localStorage.removeItem('fb_user_id');
+        navigate('/fb/login');
+        return;
       }
-    };
-
-    loadUser();
+      setUser(data);
+      setLoading(false);
+    });
 
     return () => {
-      cancelled = true;
       clearTimeout(timeoutId);
+      if (unsub) unsub();
     };
   }, [userId, navigate]);
 
   useEffect(() => {
     if (!user?.referral_code) return;
     const unsubscribeReferrals = FirebaseUser.subscribeToReferralsByCode(user.referral_code, (updatedReferrals) => {
-      console.log('📥 Referrals updated:', updatedReferrals);
       setReferrals(updatedReferrals);
     });
     return () => {
@@ -129,7 +115,7 @@ export default function FirebaseUserDashboard() {
 
   useEffect(() => {
     if (user?.referred_by) {
-      FirebaseUser.getReferrerInfo(user.referred_by).then(setReferrerInfo);
+      FirebaseUser.getReferrerInfo(user.referred_by).then(setReferrerInfo).catch(() => setReferrerInfo(null));
     } else {
       setReferrerInfo(null);
     }
@@ -204,15 +190,10 @@ export default function FirebaseUserDashboard() {
 
   async function handleUploadPayment() {
     if (!paymentFile || !paymentUtr.trim()) return;
+    if (!user) return;
 
-    // Backend validation: ensure user has completed 2 referrals
-    const freshUser = await FirebaseUser.findById(userId);
-    if (!freshUser) {
-      setError('User not found');
-      return;
-    }
-    const freshCount = freshUser.referrals_count || 0;
-    if (freshCount < 2 && !freshUser.is_qualified) {
+    const currentCount = user.referrals_count || 0;
+    if (currentCount < 2 && !user.is_qualified) {
       setError('Complete 2 referrals before making payment');
       return;
     }
@@ -252,12 +233,9 @@ export default function FirebaseUserDashboard() {
     }
     setUploading(true);
     setError('');
-    console.log('Cycle payment: userId=', userId, 'UTR=', cycleUtr, 'file=', cyclePaymentFile?.name);
     try {
       const url = await FirebaseStorage.uploadCyclePaymentScreenshot(userId, cyclePaymentFile);
-      console.log('Uploaded to:', url);
       await FirebaseUser.updateCyclePayment(userId, url, cycleUtr.trim());
-      console.log('Cycle payment submitted');
       setCyclePaymentFile(null);
       setCyclePaymentPreview(null);
       setCycleUtr('');
@@ -276,15 +254,36 @@ export default function FirebaseUserDashboard() {
         <div className="topbar">
           <div className="brand">Loading...</div>
         </div>
-        <div style={{ textAlign: 'center', padding: '2rem' }}>Loading...</div>
+        <div style={{ padding: '1rem', maxWidth: '800px', margin: '0 auto' }}>
+          {error && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+          <div className="skeleton-card">
+            <div className="skeleton skeleton-line-lg" />
+            <div className="skeleton skeleton-line-sm" style={{ width: '30%' }} />
+            <div style={{ marginTop: '1.5rem' }}>
+              <div className="skeleton skeleton-line" />
+              <div className="skeleton skeleton-line" />
+              <div className="skeleton skeleton-line" style={{ width: '60%' }} />
+            </div>
+            <div style={{ marginTop: '1.5rem' }}>
+              <div className="skeleton skeleton-line" />
+              <div className="skeleton skeleton-line" style={{ width: '45%' }} />
+            </div>
+          </div>
+          <div className="skeleton-card">
+            <div className="skeleton skeleton-line-lg" style={{ width: '50%' }} />
+            <div className="skeleton skeleton-line" />
+            <div className="skeleton skeleton-line" style={{ width: '35%' }} />
+          </div>
+        </div>
       </div>
     );
   }
 
   const canAddMoreReferrals = referrals.length < MAX_REFERRALS;
   const referralCount = user?.referrals_count || 0;
-  const isQualified = referralCount >= 2 || user?.is_qualified === true;
-  const isActive = user?.account_status === 'active' && user?.payment_status === 'approved';
+  const isQualified = useMemo(() => referralCount >= 2 || user?.is_qualified === true, [referralCount, user?.is_qualified]);
+  const isActive = useMemo(() => user?.account_status === 'active' && user?.payment_status === 'approved', [user?.account_status, user?.payment_status]);
+  const isSuspicious = user?.admin_status === 'suspicious';
   const canRefer = isActive && referralCount < 2;
   const cyclePending = user?.cycle_payment_status === 'pending';
   const cycleApproved = user?.cycle_payment_status === 'approved';
@@ -321,7 +320,7 @@ export default function FirebaseUserDashboard() {
         setTimeout(() => setCopiedLink(false), 2000);
       }
     } catch (err) {
-      console.log('Share failed:', err);
+      // Share cancelled or failed
     }
   }
 
@@ -399,74 +398,87 @@ return (
             )}
             
             {user?.referral_code && (
-            <div className="referral-card">
-              <h3>Refer & Earn</h3>
-              <p className="subtitle">Invite friends to earn rewards</p>
+              isActive ? (
+              <div className="referral-card">
+                <h3>Refer & Earn</h3>
+                <p className="subtitle">Invite friends to earn rewards</p>
 
-              <div className="referral-row">
-                <span className="referral-label">Your Code</span>
-                <span className="referral-code-value">{user?.referral_code}</span>
-                <button
-                  className={`btn-copy-primary ${copied ? 'copied' : ''}`}
-                  onClick={copyReferralCode}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-
-              <div className="referral-row">
-                <span className="referral-label">Share Link</span>
-                <span className="referral-link-value">
-                  {typeof window !== 'undefined' ? window.location.origin + '/fb/register?ref=' + user?.referral_code : ''}
-                </span>
-                <div className="referral-actions">
+                <div className="referral-row">
+                  <span className="referral-label">Your Code</span>
+                  <span className="referral-code-value">{user?.referral_code}</span>
                   <button
-                    className={`btn-copy-primary ${copiedLink ? 'copied' : ''}`}
-                    onClick={copyReferralLink}
+                    className={`btn-copy-primary ${copied ? 'copied' : ''}`}
+                    onClick={copyReferralCode}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
-                    {copiedLink ? 'Copied!' : 'Copy'}
+                    {copied ? 'Copied!' : 'Copy'}
                   </button>
-                  {navigator.share && (
-                    <button className="btn-share-modern" onClick={shareReferralLink}>
+                </div>
+
+                <div className="referral-row">
+                  <span className="referral-label">Share Link</span>
+                  <span className="referral-link-value">
+                    {typeof window !== 'undefined' ? window.location.origin + '/fb/register?ref=' + user?.referral_code : ''}
+                  </span>
+                  <div className="referral-actions">
+                    <button
+                      className={`btn-copy-primary ${copiedLink ? 'copied' : ''}`}
+                      onClick={copyReferralLink}
+                    >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="18" cy="5" r="3"></circle>
-                        <circle cx="6" cy="12" r="3"></circle>
-                        <circle cx="18" cy="19" r="3"></circle>
-                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                       </svg>
-                      Share
+                      {copiedLink ? 'Copied!' : 'Copy'}
                     </button>
+                    {navigator.share && (
+                      <button className="btn-share-modern" onClick={shareReferralLink}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="18" cy="5" r="3"></circle>
+                          <circle cx="6" cy="12" r="3"></circle>
+                          <circle cx="18" cy="19" r="3"></circle>
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
+                        Share
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="referral-stats-bar">
+                  <div className="referral-stat-item">
+                    <span className={`referral-stat-value ${referrals.length >= MAX_REFERRALS ? 'danger' : 'success'}`}>
+                      {referrals.length}
+                    </span>
+                    <span className="referral-stat-label">/ {MAX_REFERRALS} Referrals</span>
+                  </div>
+                  {user?.total_referral_count > 0 && (
+                    <div className="referral-stat-item">
+                      <span className="referral-stat-value info">{user.total_referral_count}</span>
+                      <span className="referral-stat-label">Total</span>
+                    </div>
+                  )}
+                  {referrals.length >= 2 && (
+                    <span className="qualified-pill">&#10003; Qualified</span>
                   )}
                 </div>
               </div>
-
-              <div className="referral-stats-bar">
-                <div className="referral-stat-item">
-                  <span className={`referral-stat-value ${referrals.length >= MAX_REFERRALS ? 'danger' : 'success'}`}>
-                    {referrals.length}
-                  </span>
-                  <span className="referral-stat-label">/ {MAX_REFERRALS} Referrals</span>
-                </div>
-                {user?.total_referral_count > 0 && (
-                  <div className="referral-stat-item">
-                    <span className="referral-stat-value info">{user.total_referral_count}</span>
-                    <span className="referral-stat-label">Total</span>
-                  </div>
-                )}
-                {referrals.length >= 2 && (
-                  <span className="qualified-pill">&#10003; Qualified</span>
+              ) : (
+              <div className="referral-card referral-locked">
+                <h3>Refer & Earn</h3>
+                {isSuspicious ? (
+                  <p className="muted">Your account is currently suspended.</p>
+                ) : user?.account_status === 'inactive' ? (
+                  <p className="muted">Your account is currently inactive.</p>
+                ) : (
+                  <p className="muted">Referral access will be enabled after admin approval.</p>
                 )}
               </div>
-            </div>
+              )
             )}
             
             <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
@@ -635,8 +647,8 @@ return (
           </div>
         )}
 
-        {/* Cycle Payment Card */}
-        {isQualified && (
+        {/* Cycle Payment Card (only after first payment is done) */}
+        {isQualified && user?.is_first_payment_done && (
           <div className="card" style={{ marginBottom: '1.5rem', border: '2px solid var(--warning)' }}>
             <h2>Referral Limit Reached</h2>
             <p>Complete payment to continue referring members.</p>
@@ -681,10 +693,7 @@ return (
                     <button
                       type="button"
                       className="btn btn-primary"
-                      onClick={() => {
-                        console.log('Submit button clicked', { cyclePaymentFile, cycleUtr, uploading });
-                        handleUploadCyclePayment();
-                      }}
+                      onClick={() => handleUploadCyclePayment()}
                       disabled={uploading || !cyclePaymentFile || !cycleUtr.trim()}
                     >
                       {uploading ? 'Submitting...' : 'Submit Payment'}

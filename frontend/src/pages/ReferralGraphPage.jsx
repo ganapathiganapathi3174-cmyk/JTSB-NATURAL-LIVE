@@ -7,27 +7,32 @@ function ReferralGraphModal({ user, onClose }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user?.referral_code) {
-      setLoading(true);
-      loadGraphData();
-    }
-  }, [user?.referral_code]);
+    if (!user?.referral_code) return;
+    let cancelled = false;
+    setLoading(true);
 
-  async function loadGraphData() {
-    try {
-      const referrer = await FirebaseUser.findByReferralCode(user.referral_code);
-      let referredByUser = null;
-      if (referrer?.referred_by) {
-        referredByUser = await FirebaseUser.findByReferralCode(referrer.referred_by);
+    async function loadGraphData() {
+      try {
+        const referrer = await FirebaseUser.findByReferralCode(user.referral_code);
+        if (cancelled) return;
+        let referredByUser = null;
+        if (referrer?.referred_by) {
+          referredByUser = await FirebaseUser.findByReferralCode(referrer.referred_by);
+        }
+        if (cancelled) return;
+        const referredUsers = await FirebaseUser.getReferralsByReferrerCode(user.referral_code);
+        if (!cancelled) setGraphData({ referrer, referredByUser, referredUsers });
+      } catch (err) {
+        if (!cancelled) console.error('Graph load error:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      const referredUsers = await FirebaseUser.getReferralsByReferrerCode(user.referral_code);
-      setGraphData({ referrer, referredByUser, referredUsers });
-    } catch (err) {
-      console.error('Graph load error:', err);
-    } finally {
-      setLoading(false);
     }
-  }
+
+    loadGraphData();
+
+    return () => { cancelled = true; };
+  }, [user?.referral_code]);
 
   if (!user) return null;
 
@@ -158,22 +163,28 @@ export default function ReferralGraphPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadUser(code) {
+      try {
+        const userData = await FirebaseUser.findByReferralCode(code);
+        if (!cancelled) setUser(userData);
+      } catch (err) {
+        if (!cancelled) console.error('Load error:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     const code = searchParams.get('code');
     if (code) {
       loadUser(code);
-    }
-  }, [searchParams]);
-
-  async function loadUser(code) {
-    try {
-      const userData = await FirebaseUser.findByReferralCode(code);
-      setUser(userData);
-    } catch (err) {
-      console.error('Load error:', err);
-    } finally {
+    } else {
       setLoading(false);
     }
-  }
+
+    return () => { cancelled = true; };
+  }, [searchParams]);
 
   if (loading) {
     return (

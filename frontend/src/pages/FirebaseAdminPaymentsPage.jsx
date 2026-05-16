@@ -179,7 +179,6 @@ export default function FirebaseAdminPaymentsPage() {
     }
 
     const unsubscribe = FirebaseUser.subscribeToPayments((usersWithPayment) => {
-      console.log('Admin received users with payment:', usersWithPayment.length);
       setUsers(usersWithPayment);
     });
 
@@ -226,9 +225,10 @@ export default function FirebaseAdminPaymentsPage() {
     }
 
     if (q) {
+      const ql = q.toLowerCase();
       filtered = filtered.filter(u => {
-        const matchesName = u.name.toLowerCase().includes(q.toLowerCase());
-        const matchesEmail = u.email.toLowerCase().includes(q.toLowerCase());
+        const matchesName = u.name && u.name.toLowerCase().includes(ql);
+        const matchesEmail = u.email && u.email.toLowerCase().includes(ql);
         const isCycle = u.cycle_payment_status === 'pending' || u.cycle_payment_utr;
         const utr = isCycle ? u.cycle_payment_utr : u.utr_number;
         const matchesUtr = utr && utr.includes(q);

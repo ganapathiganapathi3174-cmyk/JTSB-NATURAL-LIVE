@@ -41,7 +41,7 @@ export default function FirebaseRegisterPage() {
     }
     FirebaseUser.findByEmail(emailVal).then(existing => {
       setEmailExists(!!existing);
-    });
+    }).catch(() => setEmailExists(false));
   }
 
   function checkPhoneDuplicate(phoneVal) {
@@ -51,7 +51,7 @@ export default function FirebaseRegisterPage() {
     }
     FirebaseUser.findByPhone(phoneVal).then(existing => {
       setPhoneExists(!!existing);
-    });
+    }).catch(() => setPhoneExists(false));
   }
 
   async function validateReferralCode() {
@@ -75,7 +75,7 @@ export default function FirebaseRegisterPage() {
         return false;
       }
       const referrer = expiryResult.referrer;
-      if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active') {
+      if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || referrer.admin_status === 'suspicious') {
         setReferralError('Referral code is no longer valid');
         setValidatingReferral(false);
         return false;
@@ -144,7 +144,7 @@ export default function FirebaseRegisterPage() {
           return;
         }
         const referrer = expiryCheck.referrer;
-        if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active') {
+        if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || referrer.admin_status === 'suspicious') {
           setError('Referral code is no longer valid');
           setLoading(false);
           return;
@@ -152,32 +152,6 @@ export default function FirebaseRegisterPage() {
         referredBy = referralCode.trim().toUpperCase();
       }
 
-      console.log('=== REGISTRATION START ===');
-      console.log('Name:', name.trim());
-      console.log('Email:', emailVal);
-      console.log('Phone:', phone.trim());
-      console.log('UTR:', utrVal);
-      console.log('Referred By:', referredBy);
-      
-      console.log('Checking email...');
-      const existingEmail = await FirebaseUser.findByEmail(emailVal);
-      console.log('Existing email:', existingEmail);
-      if (existingEmail) {
-        setError('This email is already registered. Please use a different email.');
-        setLoading(false);
-        return;
-      }
-      
-      console.log('Checking phone...');
-      const existingPhone = await FirebaseUser.findByPhone(phone.trim());
-      console.log('Existing phone:', existingPhone);
-      if (existingPhone) {
-        setError('This phone number is already registered. Please use a different number.');
-        setLoading(false);
-        return;
-      }
-      
-      console.log('Creating user...');
       const user = await FirebaseUser.createWithPassword({
         name: name.trim(),
         email: emailVal,
@@ -186,12 +160,7 @@ export default function FirebaseRegisterPage() {
         referredBy: referredBy,
       });
 
-      console.log('User created with ID:', user.id);
-
       await FirebaseUser.updatePayment(user.id, null, utrVal);
-      console.log('UTR updated');
-      
-      console.log('=== REGISTRATION COMPLETE ===');
 
       setSuccess(true);
       setTimeout(() => navigate('/fb/login'), 2000);

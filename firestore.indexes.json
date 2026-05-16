@@ -1,7 +1,23 @@
 {
   "indexes": [
     {
-      "collectionGroup": "users",
+      "collectionGroup": "users_new",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "email", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users_new",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "phone", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users_new",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "referral_code", "order": "ASCENDING" },
@@ -9,7 +25,7 @@
       ]
     },
     {
-      "collectionGroup": "users",
+      "collectionGroup": "users_new",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "utr_number", "order": "ASCENDING" },
@@ -17,7 +33,23 @@
       ]
     },
     {
-      "collectionGroup": "referrals",
+      "collectionGroup": "users_new",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "referred_by", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users_new",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "payment_status", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "referrals_new",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "user_id", "order": "ASCENDING" },
