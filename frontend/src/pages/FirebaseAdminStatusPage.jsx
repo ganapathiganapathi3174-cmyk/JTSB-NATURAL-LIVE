@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { FirebaseUser } from '../db/firebase-db.js';
 import { getDb } from '../firebase/config.js';
 import { doc, updateDoc } from 'firebase/firestore';
+import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
 
@@ -28,13 +29,17 @@ function Toast({ message, type, onClose }) {
 
 function ConfirmModal({ message, onConfirm, onCancel }) {
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
-        <h3 style={{ marginTop: 0 }}>Confirm Status Change</h3>
-        <p style={{ color: 'var(--muted)', lineHeight: 1.5 }}>{message}</p>
-        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-          <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-primary" onClick={onConfirm}>Confirm</button>
+    <div className="modal-modern-overlay" onClick={onCancel}>
+      <div className="modal-modern" onClick={e => e.stopPropagation()}>
+        <div className="modal-modern-header">
+          <h2>Confirm Status Change</h2>
+        </div>
+        <div className="modal-modern-body">
+          <p style={{ color: 'var(--muted)', lineHeight: 1.5, margin: 0 }}>{message}</p>
+        </div>
+        <div className="modal-modern-footer" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn-modern btn-modern-ghost" onClick={onCancel}>Cancel</button>
+          <button className="btn-modern btn-modern-primary" onClick={onConfirm}>Confirm</button>
         </div>
       </div>
     </div>
@@ -59,9 +64,9 @@ const StatusCard = React.memo(function StatusCard({ user, statusColor, onDragSta
       </div>
     </div>
   );
-}
+});
 
-const StatusColumn = React.memo(function StatusColumn({ statusKey, config, users, onDrop, onDragStart, onDragEnd, isOver, draggedUser, updating, onDragOverStatus, onTouchStart }) {
+const StatusColumn = React.memo(function StatusColumn({ statusKey, config, users, onDrop, onDragStart, onDragEnd, isOver, draggedUser, onDragOverStatus, onTouchStart }) {
   const handleDragOver = (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -107,7 +112,7 @@ const StatusColumn = React.memo(function StatusColumn({ statusKey, config, users
       </div>
     </div>
   );
-}
+});
 
 export default function FirebaseAdminStatusPage() {
   const navigate = useNavigate();
@@ -193,6 +198,46 @@ export default function FirebaseAdminStatusPage() {
     setDraggedOverStatus(key);
   }, []);
 
+  const executeDrop = useCallback(async (user, targetStatus) => {
+    setDraggedOverStatus(null);
+    setUpdating(true);
+    try {
+      const db = getDb();
+      const ref = doc(db, 'users_new', user.id);
+      const updateFields = { admin_status: targetStatus };
+      if (targetStatus === 'active') updateFields.account_status = 'active';
+      if (targetStatus === 'inactive') updateFields.account_status = 'inactive';
+      await updateDoc(ref, updateFields);
+      showToast(`"${user.name}" moved to ${STATUSES[targetStatus].label}`);
+    } catch (err) {
+      showToast('Update failed: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      setUpdating(false);
+      setDraggedUser(null);
+    }
+  }, [showToast]);
+
+  const handleDropWithTarget = useCallback((user, targetStatus) => {
+    if (!user || user.admin_status === targetStatus) {
+      setDraggedUser(null);
+      return;
+    }
+    if (targetStatus === 'suspicious') {
+      setConfirm({
+        message: `Are you sure you want to mark "${user.name}" as ${STATUSES[targetStatus].label}?`,
+        onConfirm: () => { setConfirm(null); executeDrop(user, targetStatus); },
+        onCancel: () => { setConfirm(null); setDraggedUser(null); setDraggedOverStatus(null); },
+      });
+    } else {
+      executeDrop(user, targetStatus);
+    }
+  }, [executeDrop]);
+
+  const handleDrop = useCallback((targetStatus) => {
+    setDraggedOverStatus(null);
+    handleDropWithTarget(draggedUser, targetStatus);
+  }, [draggedUser, handleDropWithTarget]);
+
   const handleTouchEnd = useCallback((e) => {
     if (!draggedUser) return;
     const touch = e.changedTouches[0];
@@ -229,108 +274,72 @@ export default function FirebaseAdminStatusPage() {
     };
   }, [draggedUser, handleTouchMove, handleTouchEnd]);
 
-  const executeDrop = useCallback(async (user, targetStatus) => {
-    setDraggedOverStatus(null);
-    setUpdating(true);
-    try {
-      const db = getDb();
-      const ref = doc(db, 'users_new', user.id);
-      const updateFields = { admin_status: targetStatus };
-      if (targetStatus === 'active') updateFields.account_status = 'active';
-      if (targetStatus === 'inactive') updateFields.account_status = 'inactive';
-      await updateDoc(ref, updateFields);
-      showToast(`"${user.name}" moved to ${STATUSES[targetStatus].label}`);
-    } catch (err) {
-      showToast('Update failed: ' + (err.message || 'Unknown error'), 'error');
-    } finally {
-      setUpdating(false);
-      setDraggedUser(null);
-    }
-  }, [showToast]);
-
-  const handleDropWithTarget = useCallback((user, targetStatus) => {
-    if (!user || user.admin_status === targetStatus) {
-      setDraggedUser(null);
-      return;
-    }
-    if (targetStatus === 'suspicious' || targetStatus === 'inactive') {
-      setConfirm({
-        message: `Are you sure you want to mark "${user.name}" as ${STATUSES[targetStatus].label}?`,
-        onConfirm: () => { setConfirm(null); executeDrop(user, targetStatus); },
-        onCancel: () => { setConfirm(null); setDraggedUser(null); setDraggedOverStatus(null); },
-      });
-    } else {
-      executeDrop(user, targetStatus);
-    }
-  }, [executeDrop]);
-
-  const handleDrop = useCallback((targetStatus) => {
-    setDraggedOverStatus(null);
-    handleDropWithTarget(draggedUser, targetStatus);
-  }, [draggedUser, handleDropWithTarget]);
-
   const totalCount = users.length;
   const filteredCount = Object.values(groupedUsers).reduce((s, a) => s + a.length, 0);
 
-  return (
-    <div className="app-shell">
-      <div className="topbar">
-        <div className="brand">Status Management</div>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <Link className="btn btn-ghost" to="/fb-admin/dashboard">Dashboard</Link>
-          <Link className="btn btn-ghost" to="/fb-admin/users">Users</Link>
-          <Link className="btn btn-ghost" to="/fb-admin/payments">Payments</Link>
-          <button
-            className="btn btn-ghost"
-            onClick={() => { localStorage.removeItem(ADMIN_KEY); navigate('/fb-admin'); }}
-          >
-            Log out
-          </button>
-        </div>
-      </div>
+  function getAdminName() {
+    try {
+      return sessionStorage.getItem('fb_admin_name') || localStorage.getItem('fb_admin_name') || 'Admin';
+    } catch { return 'Admin'; }
+  }
 
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <div className="copy-row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by name, email, phone, code..."
-            style={{ maxWidth: '300px' }}
-          />
-          <div className="muted">
-            Showing {filteredCount} of {totalCount} users
+  return (
+    <div className="admin-layout">
+      <AdminSidebar userName={getAdminName()} />
+
+      <main className="admin-content">
+        <div className="admin-content-inner">
+          <div className="admin-page-header">
+            <h1 className="admin-page-title">
+              <span className="admin-page-title-icon">{'\u{1F4CB}'}</span>
+              Status Board
+            </h1>
+            <div className="admin-page-actions">
+              <span className="muted" style={{ fontSize: '0.85rem' }}>
+                Showing {filteredCount} of {totalCount} users
+              </span>
+            </div>
+          </div>
+
+          <div className="card-modern" style={{ marginBottom: '1rem' }}>
+            <div className="search-bar-modern" style={{ justifyContent: 'space-between' }}>
+              <input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search by name, email, phone, code..."
+              />
+            </div>
+          </div>
+
+          <div className="kanban-board">
+            {Object.entries(STATUSES).map(([key, config]) => (
+              <StatusColumn
+                key={key}
+                statusKey={key}
+                config={config}
+                users={groupedUsers[key] || []}
+                onDrop={handleDrop}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onTouchStart={handleTouchStart}
+                isOver={draggedOverStatus === key}
+                draggedUser={draggedUser}
+              />
+            ))}
           </div>
         </div>
-      </div>
 
-      <div className="kanban-board">
-        {Object.entries(STATUSES).map(([key, config]) => (
-          <StatusColumn
-            key={key}
-            statusKey={key}
-            config={config}
-            users={groupedUsers[key] || []}
-            onDrop={handleDrop}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onTouchStart={handleTouchStart}
-            isOver={draggedOverStatus === key}
-            draggedUser={draggedUser}
-            updating={updating}
+        {toast && (
+          <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+        )}
+        {confirm && (
+          <ConfirmModal
+            message={confirm.message}
+            onConfirm={confirm.onConfirm}
+            onCancel={confirm.onCancel}
           />
-        ))}
-      </div>
-
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
-      )}
-      {confirm && (
-        <ConfirmModal
-          message={confirm.message}
-          onConfirm={confirm.onConfirm}
-          onCancel={confirm.onCancel}
-        />
-      )}
+        )}
+      </main>
     </div>
   );
 }

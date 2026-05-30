@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser, FirebaseAuth, generateReferralCode, checkReferralLinkExpiry } from '../db/firebase-db.js';
+import { FirebaseUser, checkReferralLinkExpiry } from '../db/firebase-db.js';
 
 export default function FirebaseRegisterPage() {
   const navigate = useNavigate();
@@ -19,6 +19,9 @@ export default function FirebaseRegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [emailExists, setEmailExists] = useState(false);
   const [phoneExists, setPhoneExists] = useState(false);
+  const [utrExists, setUtrExists] = useState(false);
+  const [checkingUtr, setCheckingUtr] = useState(false);
+  const utrTimer = useRef(null);
 
   const isValidReferral = useMemo(() => {
     if (!referralCode.trim()) return true;
@@ -31,7 +34,7 @@ export default function FirebaseRegisterPage() {
     const phoneValid = phone.trim().length >= 10;
     const utrValid = utr.trim().length > 0;
     const passwordValid = password.length >= 6;
-    return nameValid && emailValid && phoneValid && utrValid && passwordValid && isValidReferral && !loading && !emailExists && !phoneExists;
+    return nameValid && emailValid && phoneValid && utrValid && passwordValid && isValidReferral && !loading && !emailExists && !phoneExists && !utrExists;
   }, [name, email, phone, utr, password, isValidReferral, loading, emailExists, phoneExists]);
 
   function checkEmailDuplicate(emailVal) {
@@ -52,6 +55,26 @@ export default function FirebaseRegisterPage() {
     FirebaseUser.findByPhone(phoneVal).then(existing => {
       setPhoneExists(!!existing);
     }).catch(() => setPhoneExists(false));
+  }
+
+  function checkUtrDuplicate(val) {
+    if (utrTimer.current) clearTimeout(utrTimer.current);
+    if (!val.trim()) {
+      setUtrExists(false);
+      setCheckingUtr(false);
+      return;
+    }
+    setCheckingUtr(true);
+    utrTimer.current = setTimeout(async () => {
+      try {
+        const exists = await FirebaseUser.checkUtrExists(val.trim());
+        setUtrExists(exists);
+      } catch {
+        setUtrExists(false);
+      } finally {
+        setCheckingUtr(false);
+      }
+    }, 500);
   }
 
   async function validateReferralCode() {
@@ -75,7 +98,7 @@ export default function FirebaseRegisterPage() {
         return false;
       }
       const referrer = expiryResult.referrer;
-      if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || referrer.admin_status === 'suspicious') {
+      if (!referrer || referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || referrer.admin_status === 'suspicious') {
         setReferralError('Referral code is no longer valid');
         setValidatingReferral(false);
         return false;
@@ -121,6 +144,12 @@ export default function FirebaseRegisterPage() {
         setLoading(false);
         return;
       }
+      const dupCheck = await FirebaseUser.checkUtrExists(utrVal);
+      if (dupCheck) {
+        setError('This UTR number already exists.');
+        setLoading(false);
+        return;
+      }
 
       const passVal = password;
       if (!passVal || passVal.length < 6) {
@@ -144,7 +173,7 @@ export default function FirebaseRegisterPage() {
           return;
         }
         const referrer = expiryCheck.referrer;
-        if (referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || referrer.admin_status === 'suspicious') {
+        if (!referrer || referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || referrer.admin_status === 'suspicious') {
           setError('Referral code is no longer valid');
           setLoading(false);
           return;
@@ -240,12 +269,18 @@ export default function FirebaseRegisterPage() {
           </div>
           <div className="field">
             <label>UTR Number *</label>
-            <input 
-              required 
-              value={utr} 
-              onChange={e => setUtr(e.target.value)} 
-              style={utr.trim() ? {} : {}}
+            <input
+              required
+              value={utr}
+              onChange={e => {
+                setUtr(e.target.value);
+                checkUtrDuplicate(e.target.value);
+              }}
+              className={utrExists ? 'input-error' : (utr.trim() && !utrExists ? 'input-valid' : '')}
             />
+            {checkingUtr && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking UTR...</div>}
+            {utrExists && <div className="field-error">This UTR number already exists.</div>}
+            {utr.trim() && !utrExists && !checkingUtr && <div className="hint" style={{ color: 'var(--success)', marginTop: '0.25rem' }}>UTR number is available</div>}
           </div>
           <div className="field">
             <label>Password *</label>
@@ -297,7 +332,7 @@ export default function FirebaseRegisterPage() {
               {phoneExists && <div>This phone number is already registered. Please use a different number.</div>}
             </div>
           )}
-          <button className="btn btn-primary" type="submit" disabled={!canSubmit || emailExists || phoneExists} style={{ width: '100%' }}>
+          <button className={`btn btn-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={!canSubmit || emailExists || phoneExists} style={{ width: '100%' }}>
             {loading ? 'Creating...' : 'Create Account'}
           </button>
         </form>

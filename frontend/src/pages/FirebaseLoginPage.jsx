@@ -71,10 +71,29 @@ export default function FirebaseLoginPage() {
         return;
       }
 
+      // Admin approval check (new field — existing users without it are treated as approved)
+      const adminApproval = user.admin_approval_status;
+      if (adminApproval === 'PENDING') {
+        setError('Your account is waiting for admin approval');
+        setLoading(false);
+        return;
+      }
+      if (adminApproval === 'REJECTED') {
+        setError('Your account has been rejected by admin');
+        setLoading(false);
+        return;
+      }
+
       // Check account is active (first payment approved and account activated)
       const isActive = user.account_status === 'active';
       if (!isActive) {
-        setError('Your account is pending approval. Please wait for admin to approve your payment.');
+        if (user.account_status === 'inactive' && (user.inactive_reason === 'own_topup_completed' || user.sponsor_awaiting_credit)) {
+          setError('Your account is inactive (own topup completed). Please contact admin for reactivation.');
+        } else if (user.account_status === 'inactive') {
+          setError('Your account is inactive. Please contact admin.');
+        } else {
+          setError('Your account is pending approval. Please wait for admin to approve your payment.');
+        }
         setLoading(false);
         return;
       }
@@ -143,7 +162,7 @@ export default function FirebaseLoginPage() {
                   </button>
                 </div>
               </div>
-              <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
+              <button type="submit" className={`btn btn-primary${loading ? ' btn-loading' : ''}`} disabled={loading} style={{ width: '100%' }}>
                 {loading ? 'Setting...' : 'Set Password & Login'}
               </button>
             </form>
@@ -182,7 +201,7 @@ export default function FirebaseLoginPage() {
               </button>
             </div>
           </div>
-          <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%' }}>
+          <button className={`btn btn-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading} style={{ width: '100%' }}>
             {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>

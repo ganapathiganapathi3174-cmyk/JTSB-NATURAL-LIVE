@@ -23,6 +23,48 @@ function toBase64(file) {
   });
 }
 
+function enhanceImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.onload = () => {
+      try {
+        const scale = 1.5;
+        const w = img.width * scale;
+        const h = img.height * scale;
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, w, h);
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const d = imageData.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          const contrast = 1.6;
+          let val = contrast * (gray - 128) + 128;
+          val = Math.max(0, Math.min(255, val));
+          d[i] = val; d[i + 1] = val; d[i + 2] = val;
+        }
+        const sharp = new Uint8ClampedArray(d.length);
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            const idx = (y * w + x) * 4;
+            const v = -d[((y-1)*w+(x-1))*4] - d[((y-1)*w+x)*4] - d[((y-1)*w+(x+1))*4] - d[(y*w+(x-1))*4] + 9*d[idx] - d[(y*w+(x+1))*4] - d[((y+1)*w+(x-1))*4] - d[((y+1)*w+x)*4] - d[((y+1)*w+(x+1))*4];
+            sharp[idx] = Math.max(0, Math.min(255, v)); sharp[idx+1] = sharp[idx]; sharp[idx+2] = sharp[idx]; sharp[idx+3] = d[idx+3];
+          }
+        }
+        for (let y = 1; y < h - 1; y++) { for (let x = 1; x < w - 1; x++) { const idx = (y * w + x) * 4; d[idx] = sharp[idx]; d[idx+1] = sharp[idx+1]; d[idx+2] = sharp[idx+2]; } }
+        ctx.putImageData(imageData, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 export default function PaymentPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -35,12 +77,17 @@ export default function PaymentPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [utr, setUtr] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [confirmedAmount, setConfirmedAmount] = useState(false);
   const [screenshot, setScreenshot] = useState(null);
   const [screenshotPreview, setScreenshotPreview] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [utrExists, setUtrExists] = useState(false);
+  const [checkingUtr, setCheckingUtr] = useState(false);
+  const utrTimer = useRef(null);
 
   const MAX_FILE_SIZE = 500000; // 500KB limit for base64
   const UPI_REF_REGEX = /^[0-9]{10,20}$/;
@@ -74,8 +121,37 @@ export default function PaymentPage() {
     setError('');
     setScreenshot(file);
     const reader = new FileReader();
-    reader.onload = (e) => setScreenshotPreview(e.target?.result);
+    reader.onload = async (e) => {
+      const previewUrl = e.target?.result;
+      // Show enhanced preview
+      try {
+        const enhanced = await enhanceImage(file);
+        setScreenshotPreview(enhanced);
+      } catch {
+        setScreenshotPreview(previewUrl);
+      }
+    };
     reader.readAsDataURL(file);
+  }
+
+  function checkUtrDuplicate(val) {
+    if (utrTimer.current) clearTimeout(utrTimer.current);
+    if (!val || !UPI_REF_REGEX.test(val.trim())) {
+      setUtrExists(false);
+      setCheckingUtr(false);
+      return;
+    }
+    setCheckingUtr(true);
+    utrTimer.current = setTimeout(async () => {
+      try {
+        const exists = await FirebaseUser.checkUtrExists(val.trim());
+        setUtrExists(exists);
+      } catch {
+        setUtrExists(false);
+      } finally {
+        setCheckingUtr(false);
+      }
+    }, 500);
   }
 
   function validateForm() {
@@ -93,6 +169,14 @@ export default function PaymentPage() {
     }
     if (!utr.trim() || !UPI_REF_REGEX.test(utr.trim())) {
       setError('Enter a valid UPI Reference Number (10-20 digits)');
+      return false;
+    }
+    if (utrExists) {
+      setError('This UTR number already exists.');
+      return false;
+    }
+    if (!confirmedAmount) {
+      setError('Please confirm you have paid ₹120');
       return false;
     }
     if (!screenshot) {
@@ -117,6 +201,14 @@ export default function PaymentPage() {
     console.log('Loading started');
 
     try {
+      const trimmedUtr = utr.trim();
+      const dupCheck = await FirebaseUser.checkUtrExists(trimmedUtr);
+      if (dupCheck) {
+        setError('This UTR number already exists.');
+        setLoading(false);
+        return;
+      }
+
       const normalizedEmail = email.trim().toLowerCase();
       console.log('Email:', normalizedEmail);
 
@@ -127,17 +219,20 @@ export default function PaymentPage() {
       let screenshotData = null;
       if (screenshot) {
         try {
-          const base64 = await toBase64(screenshot);
+          const base64 = await enhanceImage(screenshot);
           screenshotData = base64;
-          console.log('Screenshot converted to base64');
+          console.log('Screenshot enhanced and converted to base64');
         } catch (err) {
-          console.error('Failed to convert screenshot:', err);
+          console.error('Failed to enhance screenshot:', err);
+          try {
+            screenshotData = await toBase64(screenshot);
+          } catch {}
         }
       }
 
       if (user) {
         console.log('Updating existing user...');
-        await FirebaseUser.updatePayment(user.id, screenshotData, utr.trim());
+        await FirebaseUser.updatePayment(user.id, screenshotData, utr.trim(), String(AMOUNT), paymentDate);
         // If no password, save it
         if (!user.password && password) {
           await FirebaseUser.updatePassword(user.id, password);
@@ -158,7 +253,7 @@ export default function PaymentPage() {
           referredBy: manualReferralCode || referredBy || null,
         });
         console.log('New user created:', user.id);
-        await FirebaseUser.updatePayment(user.id, screenshotData, utr.trim());
+        await FirebaseUser.updatePayment(user.id, screenshotData, utr.trim(), String(AMOUNT), paymentDate);
       }
 
       console.log('Done!');
@@ -337,13 +432,45 @@ export default function PaymentPage() {
               onChange={(e) => {
                 const val = e.target.value.replace(/\D/g, '');
                 setUtr(val.slice(0, 20));
+                checkUtrDuplicate(val.slice(0, 20));
               }}
               inputMode="numeric"
               placeholder="e.g. 1234567890123"
+              className={utrExists ? 'input-error' : (utr && UPI_REF_REGEX.test(utr) && !utrExists ? 'input-valid' : '')}
             />
+            {checkingUtr && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking UTR...</div>}
+            {utrExists && <div className="field-error">This UTR number already exists.</div>}
+            {utr && UPI_REF_REGEX.test(utr) && !utrExists && !checkingUtr && <div className="hint" style={{ color: 'var(--success)', marginTop: '0.25rem' }}>UTR number is available</div>}
             <div className="hint">
               This is the UPI Reference Number (10-20 digits) shown in your payment app after completing the payment
             </div>
+          </div>
+
+          <div className="field">
+            <label>Payment Amount *</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0' }}>
+              <span style={{ fontSize: '1.3rem', fontWeight: 700 }}>₹{AMOUNT}</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={confirmedAmount}
+                  onChange={(e) => setConfirmedAmount(e.target.checked)}
+                />
+                <span style={{ fontSize: '0.9rem' }}>I confirm I paid exactly ₹{AMOUNT}</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Payment Date *</label>
+            <input
+              required
+              type="date"
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
+            />
+            <div className="hint">Date of payment (must be today)</div>
           </div>
 
           <div className="field">
@@ -362,7 +489,7 @@ export default function PaymentPage() {
           </div>
 
           <button
-            className="btn btn-primary"
+            className={`btn btn-primary${loading ? ' btn-loading' : ''}`}
             type="submit"
             disabled={loading}
             style={{ width: '100%', padding: '0.85rem', fontSize: '1.05rem' }}
