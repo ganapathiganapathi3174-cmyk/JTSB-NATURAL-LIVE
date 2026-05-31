@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
-import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess, FirebaseTopup, FirebaseTopupReferral } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess, FirebaseTopup, FirebaseTopupReferral, FirebaseNotification } from '../db/firebase-db.js';
 
 const UPI_VPA = import.meta.env.VITE_UPI_VPA || 'jayarajj126-3@okicici';
 const UPI_PAYEE_NAME = import.meta.env.VITE_UPI_PAYEE_NAME || 'Community';
@@ -21,11 +21,11 @@ const UpiQrDisplay = memo(function UpiQrDisplay() {
   }, []);
 
   return (
-    <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+    <div className="upi-qr-section">
       {qrError ? (
         <div className="muted" style={{ padding: '1rem' }}>{qrError}</div>
       ) : qrDataUrl ? (
-        <img src={qrDataUrl} alt="UPI QR" style={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
+        <img src={qrDataUrl} alt="UPI QR" style={{ borderRadius: '8px', border: '1px solid var(--border)', maxWidth: '100%' }} />
       ) : (
         <div className="muted" style={{ padding: '1rem' }}>Loading QR...</div>
       )}
@@ -83,6 +83,9 @@ export default function FirebaseUserDashboard() {
   const [submittingTopup, setSubmittingTopup] = useState(false);
   const [topupIncome, setTopupIncome] = useState([]);
   const [claimingId, setClaimingId] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [recentNotifications, setRecentNotifications] = useState([]);
+  const [showBellDropdown, setShowBellDropdown] = useState(false);
 
   const userId = localStorage.getItem('fb_user_id');
 
@@ -123,6 +126,15 @@ export default function FirebaseUserDashboard() {
       if (unsubscribeReferrals) unsubscribeReferrals();
     };
   }, [user?.referral_code]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const unsub = FirebaseNotification.subscribeToUserNotifications(userId, (items) => {
+      setUnreadCount(items.filter(n => n.status === 'unread').length);
+      setRecentNotifications(items.slice(0, 10));
+    });
+    return () => { if (unsub) unsub(); };
+  }, [userId]);
 
   useEffect(() => {
     if (user?.referred_by) {
@@ -377,17 +389,17 @@ const userHasOwnTopup = useMemo(() => {
         <div className="topbar">
           <div className="brand">Loading...</div>
         </div>
-        <div style={{ padding: '1rem', maxWidth: '800px', margin: '0 auto' }}>
-          {error && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+        <div className="dashboard-loading">
+          {error && <div className="alert alert-error mb-md">{error}</div>}
           <div className="skeleton-card">
             <div className="skeleton skeleton-line-lg" />
-            <div className="skeleton skeleton-line-sm" style={{ width: '30%' }} />
-            <div style={{ marginTop: '1.5rem' }}>
+            <div className="skeleton skeleton-line-sm" />
+            <div className="mt-lg">
               <div className="skeleton skeleton-line" />
               <div className="skeleton skeleton-line" />
               <div className="skeleton skeleton-line" style={{ width: '60%' }} />
             </div>
-            <div style={{ marginTop: '1.5rem' }}>
+            <div className="mt-lg">
               <div className="skeleton skeleton-line" />
               <div className="skeleton skeleton-line" style={{ width: '45%' }} />
             </div>
@@ -468,212 +480,269 @@ return (
     <div className="app-shell">
       <div className="topbar">
         <div className="brand">Dashboard</div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }} className="topbar-actions">
+          <div className="notification-bell-wrapper" style={{ position: 'relative' }}>
+            <button className="btn btn-ghost" onClick={() => setShowBellDropdown(v => !v)}
+              style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '0.35rem', border: 'none', background: 'transparent', cursor: 'pointer' }}
+              title="Notifications"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              {unreadCount > 0 && (
+                <span className="notification-bell-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+              )}
+            </button>
+            {showBellDropdown && (
+              <>
+                <div className="notification-bell-backdrop" onClick={() => setShowBellDropdown(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
+                <div className="notification-bell-dropdown"
+                  style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', width: '340px', maxHeight: '420px', overflowY: 'auto', marginTop: '4px' }}
+                >
+                  <div style={{ padding: '0.6rem 0.85rem', borderBottom: '1px solid #f0f0f0', fontWeight: 600, fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Notifications</span>
+                    <Link to="/fb/messages" style={{ fontSize: '0.75rem', color: '#2563eb', textDecoration: 'none' }} onClick={() => setShowBellDropdown(false)}>
+                      View all
+                    </Link>
+                  </div>
+                  {recentNotifications.length === 0 ? (
+                    <div style={{ padding: '1.5rem', textAlign: 'center', color: '#999', fontSize: '0.8rem' }}>No notifications yet</div>
+                  ) : (
+                    recentNotifications.map(n => (
+                      <Link to="/fb/messages" key={n.id} style={{ display: 'block', padding: '0.6rem 0.85rem', borderBottom: '1px solid #f5f5f5', textDecoration: 'none', color: 'inherit', background: n.status === 'unread' ? '#f0f7ff' : 'transparent' }}
+                        onClick={() => setShowBellDropdown(false)}
+                      >
+                        <div style={{ fontSize: '0.8rem', fontWeight: n.status === 'unread' ? 600 : 400, marginBottom: '0.15rem' }}>{n.title || 'Notification'}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.message}</div>
+                        <div style={{ fontSize: '0.65rem', color: '#aaa', marginTop: '0.2rem' }}>
+                          {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
+                        </div>
+                      </Link>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <button className="btn btn-ghost" onClick={handleLogout}>Log out</button>
         </div>
       </div>
 
-      {error && <div className="alert alert-error" style={{ margin: '1rem' }}>{error}</div>}
+      {error && <div className="alert alert-error mb-md">{error}</div>}
 
-      <div style={{ padding: '1rem', maxWidth: '800px', margin: '0 auto' }}>
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h2>My Profile</h2>
-          <div style={{ marginTop: '1rem', display: 'grid', gap: '0.75rem' }}>
-            <div>
-              <strong>Name:</strong> {user?.name}
+      <div className="user-dashboard-wrap">
+        <div className="card mb-lg">
+          <div className="flex-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0 }}>My Profile</h2>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <Link to="/fb/messages" className="msg-inbox-link">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+                Inbox
+                {unreadCount > 0 && <span className="msg-inbox-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+              </Link>
+              <Link to="/fb/chat" className="msg-inbox-link" style={{ position: 'relative', padding: '0.3rem 0.6rem', borderRadius: '6px', background: '#f0f7ff', fontSize: '0.8rem', textDecoration: 'none', color: '#2563eb', fontWeight: 500 }}>
+                Chat
+              </Link>
             </div>
-            <div>
-              <strong>Email:</strong> {user?.email}
+          </div>
+          <div className="profile-grid">
+            <div className="detail-row">
+              <span className="detail-label">Name</span>
+              <span className="detail-value">{user?.name}</span>
             </div>
-            <div>
-              <strong>Phone:</strong> {user?.phone || '—'}
+            <div className="detail-row">
+              <span className="detail-label">Email</span>
+              <span className="detail-value">{user?.email}</span>
             </div>
-            <div>
-              <strong>Status:</strong> 
-              <span className={`badge ${user?.status === 'approved' ? 'badge-paid' : user?.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`} style={{ marginLeft: '0.5rem' }}>
-                {user?.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Pending'}
-              </span>
-              {user?.is_qualified && (
-                <span className="badge badge-paid" style={{ marginLeft: '0.5rem' }}>Qualified</span>
-              )}
-              {user?.account_status === 'inactive' && !user?.sponsor_awaiting_credit && (
-                <span className="badge badge-rejected" style={{ marginLeft: '0.5rem' }}>Inactive</span>
-              )}
-              {user?.topup_referral_qualified && !user?.sponsor_topup_completed && !user?.sponsor_cycle_completed && pendingTopups.length === 0 && (
-                <span className="badge badge-paid" style={{ marginLeft: '0.5rem' }}>Sponsor Eligible</span>
-              )}
-              {user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
-                <span className="badge badge-rejected" style={{ marginLeft: '0.5rem' }}>Sponsor Inactive</span>
-              )}
-              {user?.sponsor_credited && (
-                <span className="badge badge-paid" style={{ marginLeft: '0.5rem' }}>Credited</span>
-              )}
+            <div className="detail-row">
+              <span className="detail-label">Phone</span>
+              <span className="detail-value">{user?.phone || '—'}</span>
             </div>
-            {user?.topup_referral_qualified && (
-              <div className="card" style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', background: '#fff8e1', border: '1px solid #ffc107', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#856404' }}>Sponsor No:</span>
-                <span style={{ fontFamily: 'monospace', fontSize: '1rem', fontWeight: 700, color: '#533f03', background: '#fff3cd', padding: '0.25rem 0.75rem', borderRadius: '6px', letterSpacing: '0.5px', border: '1px solid #ffc107' }}>{user?.referral_code || '—'}</span>
-              </div>
-            )}
-            {user?.topup_referral_qualified && !user?.sponsor_topup_completed && !user?.sponsor_cycle_completed && pendingTopups.length === 0 && (
-              <div className="alert alert-success" style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
-                ✅ Referral topup condition met! Complete your own topup to receive sponsor benefits.
-              </div>
-            )}
-            {user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
-              <div className="alert alert-info" style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
-                ⏳ Your own topup is approved. Account set to Inactive. Awaiting admin credit of <strong>₹{Number(user?.sponsor_topup_amount || 0).toFixed(2)}</strong>.
-              </div>
-            )}
-            {user?.sponsor_credited && (
-              <div className="alert alert-success" style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
-                ✅ Admin credited <strong>₹{Number(user?.sponsor_credited_amount || 0).toFixed(2)}</strong> to your account.
-              </div>
-            )}
-            {user?.referred_by && (
-              <div>
-                <strong>Referred By:</strong> 
-                <span style={{ marginLeft: '0.5rem' }}>
-                  {referrerInfo ? `${referrerInfo.name} (${referrerInfo.email})` : user.referred_by}
+            <div className="detail-row">
+              <span className="detail-label">Status</span>
+              <span className="detail-value">
+                <span className={`badge ${user?.status === 'approved' ? 'badge-paid' : user?.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+                  {user?.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Pending'}
                 </span>
+                {user?.is_qualified && (
+                  <span className="badge badge-paid ml-sm">Qualified</span>
+                )}
+                {user?.account_status === 'inactive' && !user?.sponsor_awaiting_credit && (
+                  <span className="badge badge-rejected ml-sm">Inactive</span>
+                )}
+                {user?.topup_referral_qualified && !user?.sponsor_topup_completed && !user?.sponsor_cycle_completed && pendingTopups.length === 0 && (
+                  <span className="badge badge-paid ml-sm">Sponsor Eligible</span>
+                )}
+                {user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
+                  <span className="badge badge-rejected ml-sm">Sponsor Inactive</span>
+                )}
+                {user?.sponsor_credited && (
+                  <span className="badge badge-paid ml-sm">Credited</span>
+                )}
+              </span>
+            </div>
+            {user?.referred_by && (
+              <div className="detail-row">
+                <span className="detail-label">Referred By</span>
+                <span className="detail-value">{referrerInfo ? `${referrerInfo.name} (${referrerInfo.email})` : user.referred_by}</span>
               </div>
             )}
-            
-            {user?.referral_code && (
-              isActive ? (
-              <div className="referral-card">
-                <h3>Refer & Earn</h3>
-                <p className="subtitle">Invite friends to earn rewards</p>
+          </div>
 
-                <div className="referral-row">
-                  <span className="referral-label">Your Code</span>
-                  <span className="referral-code-value">{user?.referral_code}</span>
+          {user?.topup_referral_qualified && (
+            <div className="sponsor-banner">
+              <span className="text-sm font-semibold" style={{ color: 'var(--warning)' }}>Sponsor No:</span>
+              <span className="code-inline ml-sm">{user?.referral_code || '—'}</span>
+            </div>
+          )}
+          {user?.topup_referral_qualified && !user?.sponsor_topup_completed && !user?.sponsor_cycle_completed && pendingTopups.length === 0 && (
+            <div className="alert alert-success text-sm mt-sm">
+              ✅ Referral topup condition met! Complete your own topup to receive sponsor benefits.
+            </div>
+          )}
+          {user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
+            <div className="alert alert-warning text-sm mt-sm">
+              ⏳ Your own topup is approved. Account set to Inactive. Awaiting admin credit of <strong>₹{Number(user?.sponsor_topup_amount || 0).toFixed(2)}</strong>.
+            </div>
+          )}
+          {user?.sponsor_credited && (
+            <div className="alert alert-success text-sm mt-sm">
+              ✅ Admin credited <strong>₹{Number(user?.sponsor_credited_amount || 0).toFixed(2)}</strong> to your account.
+            </div>
+          )}
+
+          {user?.referral_code && (
+            isActive ? (
+            <div className="referral-card">
+              <h3>Refer & Earn</h3>
+              <p className="subtitle">Invite friends to earn rewards</p>
+
+              <div className="referral-row">
+                <span className="referral-label">Your Code</span>
+                <span className="referral-code-value">{user?.referral_code}</span>
+                <button
+                  className={`btn-copy-primary ${copied ? 'copied' : ''}`}
+                  onClick={copyReferralCode}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+
+              <div className="referral-row">
+                <span className="referral-label">Share Link</span>
+                <span className="referral-link-value">
+                  {typeof window !== 'undefined' ? window.location.origin + '/fb/register?ref=' + user?.referral_code : ''}
+                </span>
+                <div className="referral-actions">
                   <button
-                    className={`btn-copy-primary ${copied ? 'copied' : ''}`}
-                    onClick={copyReferralCode}
+                    className={`btn-copy-primary ${copiedLink ? 'copied' : ''}`}
+                    onClick={copyReferralLink}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
-                    {copied ? 'Copied!' : 'Copy'}
+                    {copiedLink ? 'Copied!' : 'Copy'}
                   </button>
-                </div>
-
-                <div className="referral-row">
-                  <span className="referral-label">Share Link</span>
-                  <span className="referral-link-value">
-                    {typeof window !== 'undefined' ? window.location.origin + '/fb/register?ref=' + user?.referral_code : ''}
-                  </span>
-                  <div className="referral-actions">
-                    <button
-                      className={`btn-copy-primary ${copiedLink ? 'copied' : ''}`}
-                      onClick={copyReferralLink}
-                    >
+                  {navigator.share && (
+                    <button className="btn-share-modern" onClick={shareReferralLink}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        <circle cx="18" cy="5" r="3"></circle>
+                        <circle cx="6" cy="12" r="3"></circle>
+                        <circle cx="18" cy="19" r="3"></circle>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
                       </svg>
-                      {copiedLink ? 'Copied!' : 'Copy'}
+                      Share
                     </button>
-                    {navigator.share && (
-                      <button className="btn-share-modern" onClick={shareReferralLink}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="18" cy="5" r="3"></circle>
-                          <circle cx="6" cy="12" r="3"></circle>
-                          <circle cx="18" cy="19" r="3"></circle>
-                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-                        </svg>
-                        Share
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="referral-stats-bar">
-                  <div className="referral-stat-item">
-                    <span className={`referral-stat-value ${approvedReferralCount >= MAX_REFERRALS ? 'danger' : 'success'}`}>
-                      {approvedReferralCount}
-                    </span>
-                    <span className="referral-stat-label">/ {MAX_REFERRALS} Approved</span>
-                  </div>
-                  {pendingReferralCount > 0 && (
-                    <div className="referral-stat-item">
-                      <span className="referral-stat-value warning">{pendingReferralCount}</span>
-                      <span className="referral-stat-label">Pending</span>
-                    </div>
-                  )}
-                  {approvedReferralCount >= 2 && (
-                    <span className="qualified-pill">&#10003; Qualified</span>
                   )}
                 </div>
               </div>
-              ) : (
-              <div className="referral-card referral-locked">
-                <h3>Refer & Earn</h3>
-                {isSuspicious ? (
-                  <p className="muted">Your account is currently suspended.</p>
-                ) : pendingReferralCount > 0 ? (
-                  <>
-                    <p className="muted">Waiting for admin approval of {pendingReferralCount} referral(s).</p>
-                    <p className="muted">Payment cycle will unlock after 2 admin-approved referrals.</p>
-                  </>
-                ) : user?.account_status === 'inactive' ? (
-                  <p className="muted">Your account is currently inactive.</p>
-                ) : (
-                  <p className="muted">Referral access will be enabled after admin approval.</p>
+
+              <div className="referral-stats-bar">
+                <div className="referral-stat-item">
+                  <span className={`referral-stat-value ${approvedReferralCount >= MAX_REFERRALS ? 'danger' : 'success'}`}>
+                    {approvedReferralCount}
+                  </span>
+                  <span className="referral-stat-label">/ {MAX_REFERRALS} Approved</span>
+                </div>
+                {pendingReferralCount > 0 && (
+                  <div className="referral-stat-item">
+                    <span className="referral-stat-value warning">{pendingReferralCount}</span>
+                    <span className="referral-stat-label">Pending</span>
+                  </div>
+                )}
+                {approvedReferralCount >= 2 && (
+                  <span className="qualified-pill">&#10003; Qualified</span>
                 )}
               </div>
-              )
-            )}
-            
-            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-              <strong>Password:</strong> 
-              <span style={{ marginLeft: '0.5rem', color: user?.password ? 'var(--success)' : 'var(--error)' }}>
+            </div>
+            ) : (
+            <div className="referral-card referral-locked">
+              <h3>Refer & Earn</h3>
+              {isSuspicious ? (
+                <p className="muted">Your account is currently suspended.</p>
+              ) : pendingReferralCount > 0 ? (
+                <>
+                  <p className="muted">Waiting for admin approval of {pendingReferralCount} referral(s).</p>
+                  <p className="muted">Payment cycle will unlock after 2 admin-approved referrals.</p>
+                </>
+              ) : user?.account_status === 'inactive' ? (
+                <p className="muted">Your account is currently inactive.</p>
+              ) : (
+                <p className="muted">Referral access will be enabled after admin approval.</p>
+              )}
+            </div>
+            )
+          )}
+
+          <div className="password-section">
+            <div className="password-status-row">
+              <span className="password-label">Password</span>
+              <span className={`password-status ${user?.password ? 'set' : 'not-set'}`}>
                 {user?.password ? 'Set' : 'Not Set'}
               </span>
               {!user?.password && (
-                <button 
-                  className="btn btn-primary" 
-                  onClick={() => setShowPasswordForm(true)}
-                  style={{ marginLeft: '1rem' }}
-                >
+                <button className="btn btn-primary btn-sm" onClick={() => setShowPasswordForm(true)}>
                   Set Password
                 </button>
               )}
+              {user?.password && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowPasswordForm(!showPasswordForm)}>
+                  {showPasswordForm ? 'Cancel' : 'Change'}
+                </button>
+              )}
             </div>
-            
+
             {showPasswordForm && (
-              <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
-                <h3>Set Your Password</h3>
+              <div className="password-form">
+                <h3 className="password-form-title">Set Your Password</h3>
                 <form onSubmit={handleUpdatePassword}>
                   <div className="field">
                     <label>New Password</label>
-                    <div style={{ position: 'relative' }}>
-                      <input 
-                        type={showPassword ? 'text' : 'password'} 
-                        value={newPassword} 
+                    <div className="password-field-wrap">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={newPassword}
                         onChange={e => setNewPassword(e.target.value)}
                         minLength={6}
                         required
                         placeholder="At least 6 characters"
-                        style={{ width: '100%', paddingRight: '2.5rem' }}
+                        className="w-full"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '0.5rem',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontSize: '1.1rem',
-                          padding: '0.25rem'
-                        }}
+                        className="password-toggle-btn"
                       >
                         {showPassword ? '👁' : '👁️'}
                       </button>
@@ -681,19 +750,19 @@ return (
                   </div>
                   <div className="field">
                     <label>Confirm Password</label>
-                    <div style={{ position: 'relative' }}>
-                      <input 
-                        type={showPassword ? 'text' : 'password'} 
-                        value={confirmPassword} 
+                    <div className="password-field-wrap">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={confirmPassword}
                         onChange={e => setConfirmPassword(e.target.value)}
                         minLength={6}
                         required
                         placeholder="Re-enter password"
-                        style={{ width: '100%', paddingRight: '2.5rem' }}
+                        className="w-full"
                       />
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <div className="flex-row mt-sm">
                     <button type="submit" className={`btn btn-primary${updatingPassword ? ' btn-loading' : ''}`} disabled={updatingPassword}>
                       {updatingPassword ? 'Saving...' : 'Save Password'}
                     </button>
@@ -709,27 +778,27 @@ return (
 
         {/* Referral progress - complete 2 approved referrals to unlock payment */}
         {!isQualified && !isActive && !user?.is_first_payment_done && (
-          <div className="card" style={{ marginBottom: '1.5rem', border: '1px solid var(--border)' }}>
+          <div className="card mb-lg">
             <h2>Complete Referrals to Unlock Payment</h2>
             <p className="muted">Payment cycle will unlock after 2 admin-approved referrals.</p>
             {pendingReferralCount > 0 && (
-              <div className="alert alert-info" style={{ marginBottom: '0.75rem', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
+              <div className="alert alert-info text-sm mb-sm">
                 {pendingReferralCount} referral(s) pending admin approval. Only approved referrals count.
               </div>
             )}
-            <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ flex: 1, height: '8px', background: 'var(--surface-2)', borderRadius: '999px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.min((approvedReferralCount / 2) * 100, 100)}%`, background: 'linear-gradient(90deg, var(--accent), var(--success))', borderRadius: '999px', transition: 'width 0.5s ease' }}></div>
+            <div className="progress-container">
+              <div className="progress-bar-wrap">
+                <div className="progress-bar-fill" style={{ width: `${Math.min((approvedReferralCount / 2) * 100, 100)}%` }}></div>
               </div>
-              <span style={{ fontWeight: 700, fontSize: '0.9rem', whiteSpace: 'nowrap', color: 'var(--text)' }}>{approvedReferralCount} / 2 approved</span>
+              <span className="progress-label">{approvedReferralCount} / 2 approved</span>
             </div>
           </div>
         )}
 
         {/* First-time payment for qualified users */}
         {isQualified && !isActive && !user?.is_first_payment_done && (
-          <div className="card" style={{ marginBottom: '1.5rem', border: '2px solid var(--success)' }}>
-            <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
+          <div className="card mb-lg" style={{ border: '2px solid var(--success)' }}>
+            <div className="alert alert-success mb-md">
               <strong>Referral Target Completed!</strong> Your payment is now unlocked.
             </div>
             <h2>Complete Your Payment</h2>
@@ -738,19 +807,18 @@ return (
             
             {!showPaymentUpload ? (
               <button 
-                className="btn btn-primary" 
-                style={{ marginTop: '1rem' }}
+                className="btn btn-primary mt-md"
                 onClick={() => setShowPaymentUpload(true)}
               >
                 Submit Payment Details
               </button>
             ) : (
               user?.payment_status === 'pending' ? (
-                <div className="alert alert-info" style={{ marginTop: '1rem' }}>
+                <div className="alert alert-info mt-md">
                   <strong>Payment submitted.</strong> Waiting for admin approval.
                 </div>
               ) : (
-                <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                <div className="surface-card mt-md">
                   <div className="field">
                     <label>UTR Number *</label>
                     <input 
@@ -767,11 +835,11 @@ return (
                       <img 
                         src={paymentPreview} 
                         alt="Preview" 
-                        style={{ maxWidth: '200px', marginTop: '0.5rem', borderRadius: '8px' }} 
+                        className="screenshot-preview"
                       />
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <div className="flex-row mt-sm">
                     <button 
                       className={`btn btn-primary${uploading ? ' btn-loading' : ''}`}
                       onClick={handleUploadPayment}
@@ -794,33 +862,32 @@ return (
 
         {/* Qualified Banner - only for active users who reached limit */}
         {isQualified && isActive && (
-          <div className="alert alert-warning" style={{ marginBottom: '1.5rem' }}>
+          <div className="alert alert-warning mb-lg">
             <strong>Referral Limit Reached!</strong> Complete the cycle payment to continue referring members.
           </div>
         )}
 
         {/* Cycle Payment Card (only after first payment is done) */}
         {isQualified && user?.is_first_payment_done && (
-          <div className="card" style={{ marginBottom: '1.5rem', border: '2px solid var(--warning)' }}>
+          <div className="card mb-lg" style={{ border: '2px solid var(--warning)' }}>
             <h2>Referral Limit Reached</h2>
             <p>Complete payment to continue referring members.</p>
             <UpiQrDisplay />
 
             {cyclePending ? (
-              <div className="alert alert-info" style={{ marginTop: '1rem' }}>
+              <div className="alert alert-info mt-md">
                 <strong>Waiting for admin approval.</strong> Your payment is being reviewed.
               </div>
             ) : !showCyclePaymentForm ? (
               <button
-                className="btn btn-primary"
-                style={{ marginTop: '1rem' }}
+                className="btn btn-primary mt-md"
                 onClick={() => setShowCyclePaymentForm(true)}
               >
                 Submit Payment Details
               </button>
             ) : (
-              <div style={{ marginTop: '1rem' }}>
-                <div style={{ padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+              <div className="mt-md">
+                <div className="surface-card">
                   <div className="field">
                     <label>UTR Number *</label>
                     <input
@@ -837,11 +904,11 @@ return (
                       <img
                         src={cyclePaymentPreview}
                         alt="Preview"
-                        style={{ maxWidth: '200px', marginTop: '0.5rem', borderRadius: '8px' }}
+                        className="screenshot-preview"
                       />
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <div className="flex-row mt-sm">
                     <button
                       type="button"
                       className={`btn btn-primary${uploading ? ' btn-loading' : ''}`}
@@ -865,48 +932,51 @@ return (
         )}
 
         {/* ===== TOPUP SECTION ===== */}
-        <div className="card" style={{ marginBottom: '1.5rem', border: '1px solid var(--border)' }}>
-          <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="card mb-lg">
+          <h2 className="flex-row gap-sm">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
             </svg>
             Topup
           </h2>
-          <p className="muted" style={{ marginBottom: '1rem' }}>
+          <p className="muted mb-md">
             Submit a topup payment request. Once approved by admin, your sponsor will receive a referral benefit.
           </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
-              <div className="stat" style={{ padding: '0.75rem' }}>
-                <div className="value" style={{ fontSize: '1.2rem', color: 'var(--success)' }}>{approvedTopups.length}</div>
-                <div className="label">Approved</div>
+            <div className="stats-grid-modern mb-md">
+              <div className="stat-card-modern success">
+                <div className="stat-bg-icon">✓</div>
+                <div className="stat-value">{approvedTopups.length}</div>
+                <div className="stat-label">Approved</div>
               </div>
-              <div className="stat" style={{ padding: '0.75rem' }}>
-                <div className="value" style={{ fontSize: '1.2rem', color: 'var(--warning)' }}>{pendingTopups.length}</div>
-                <div className="label">Pending</div>
+              <div className="stat-card-modern warning">
+                <div className="stat-bg-icon">⏳</div>
+                <div className="stat-value">{pendingTopups.length}</div>
+                <div className="stat-label">Pending</div>
               </div>
-              <div className="stat" style={{ padding: '0.75rem' }}>
-                <div className="value" style={{ fontSize: '1.2rem', color: 'var(--danger)' }}>{rejectedTopups.length}</div>
-                <div className="label">Rejected</div>
+              <div className="stat-card-modern danger">
+                <div className="stat-bg-icon">✕</div>
+                <div className="stat-value">{rejectedTopups.length}</div>
+                <div className="stat-label">Rejected</div>
               </div>
-              <div className="stat" style={{ padding: '0.75rem' }}>
-                <div className="value" style={{ fontSize: '1.2rem', color: 'var(--accent)' }}>₹{totalTopupIncome.toFixed(2)}</div>
-                <div className="label">Total Income</div>
+              <div className="stat-card-modern accent">
+                <div className="stat-bg-icon">₹</div>
+                <div className="stat-value">₹{totalTopupIncome.toFixed(2)}</div>
+                <div className="stat-label">Total Income</div>
               </div>
-              <div className="stat" style={{ padding: '0.75rem' }}>
-                <div className="value" style={{ fontSize: '1.2rem', color: userHasOwnTopup ? 'var(--success)' : 'var(--warning)' }}>
-                  ₹{pendingClaimAmount.toFixed(2)}
-                </div>
-                <div className="label">Claimable</div>
+              <div className={`stat-card-modern ${userHasOwnTopup ? 'success' : 'warning'}`}>
+                <div className="stat-bg-icon">💰</div>
+                <div className="stat-value">₹{pendingClaimAmount.toFixed(2)}</div>
+                <div className="stat-label">Claimable</div>
               </div>
             </div>
 
           {!showTopupForm ? (
-            <button className="btn btn-primary" onClick={() => setShowTopupForm(true)} style={{ marginBottom: '1rem' }}>
+            <button className="btn btn-primary mb-md" onClick={() => setShowTopupForm(true)}>
               Submit Topup Request
             </button>
           ) : (
-            <div style={{ padding: '1rem', background: 'var(--bg)', borderRadius: '8px', marginBottom: '1rem' }}>
+            <div className="surface-card mb-md">
               <UpiQrDisplay />
               <div className="field">
                 <label>Amount (INR) *</label>
@@ -920,10 +990,10 @@ return (
                 <label>Payment Screenshot *</label>
                 <input type="file" accept="image/*" onChange={handleTopupFileSelect} />
                 {topupPreview && (
-                  <img src={topupPreview} alt="Preview" style={{ maxWidth: '200px', marginTop: '0.5rem', borderRadius: '8px' }} />
+                  <img src={topupPreview} alt="Preview" className="screenshot-preview" />
                 )}
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div className="flex-row">
                 <button className={`btn btn-primary${submittingTopup ? ' btn-loading' : ''}`} onClick={handleSubmitTopup} disabled={submittingTopup || !topupAmount || !topupTransactionId.trim() || !topupFile}>
                   {submittingTopup ? 'Submitting...' : 'Submit Topup'}
                 </button>
@@ -935,7 +1005,7 @@ return (
           )}
 
           {topups.length > 0 && (
-            <div style={{ marginTop: '0.75rem' }}>
+            <div className="mt-sm">
               <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Topup History</h3>
               <div className="table-wrap">
                 <table>
@@ -951,21 +1021,21 @@ return (
                   <tbody>
                     {topups.map(t => (
                       <tr key={t.id}>
-                        <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                        <td data-label="Date" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
                           {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '—'}
                         </td>
-                        <td style={{ fontWeight: 700 }}>₹{Number(t.amount || 0).toFixed(2)}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{t.transactionId || '—'}</td>
-                        <td>
+                        <td data-label="Amount" style={{ fontWeight: 700 }}>₹{Number(t.amount || 0).toFixed(2)}</td>
+                        <td data-label="Transaction ID" className="font-mono text-sm">{t.transactionId || '—'}</td>
+                        <td data-label="Status">
                           <span className={`badge ${t.status === 'approved' ? 'badge-paid' : t.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
                             {t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : 'Pending'}
                           </span>
                         </td>
-                        <td>
+                        <td data-label="Sponsor Benefit">
                           {t.status === 'approved' ? (
                             <span className="badge badge-paid">Done</span>
                           ) : (
-                            <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>
+                            <span className="muted text-xs">—</span>
                           )}
                         </td>
                       </tr>
@@ -976,23 +1046,23 @@ return (
             </div>
           )}
 
-          <div className="card" style={{ marginTop: '1rem', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+          <div className="surface-card mt-md">
             <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Topup Referral Income</h3>
 
             {!userHasOwnTopup && (
-              <div className="alert alert-warning" style={{ marginBottom: '1rem', padding: '0.75rem', fontSize: '0.85rem' }}>
+              <div className="alert alert-warning text-sm mb-md">
                 <strong>Topup required!</strong> Complete your own topup to unlock referral income claims.
               </div>
             )}
 
             {lockedIncome.length > 0 && (
-              <div className="alert alert-info" style={{ marginBottom: '1rem', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
+              <div className="alert alert-warning text-sm mb-md">
                 <strong>{lockedIncome.length} income record(s) locked.</strong> Complete your own topup to make them eligible.
               </div>
             )}
 
             {pendingClaimAmount > 0 && (
-              <div className="alert alert-success" style={{ marginBottom: '1rem', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
+              <div className="alert alert-success text-sm mb-md">
                 <strong>₹{pendingClaimAmount.toFixed(2)}</strong> eligible for claim!
               </div>
             )}
@@ -1011,14 +1081,14 @@ return (
                 <tbody>
                   {topupIncome.map(inc => (
                     <tr key={inc.id}>
-                      <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                      <td data-label="Date" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
                         {inc.createdAt ? new Date(inc.createdAt).toLocaleDateString() : '—'}
                       </td>
-                      <td>{inc.fromUserName || inc.fromUserId || '—'}</td>
-                      <td style={{ fontWeight: 700, color: inc.status === 'claimed' ? 'var(--text-muted)' : 'var(--success)' }}>
+                      <td data-label="From">{inc.fromUserName || inc.fromUserId || '—'}</td>
+                      <td data-label="Amount" style={{ fontWeight: 700, color: inc.status === 'claimed' ? 'var(--muted)' : 'var(--success)' }}>
                         +₹{Number(inc.amount || 0).toFixed(2)}
                       </td>
-                      <td>
+                      <td data-label="Status">
                         {inc.status === 'locked' && (
                           <span className="badge badge-pending" style={{ background: 'var(--warning)', color: '#000' }}>Locked</span>
                         )}
@@ -1026,34 +1096,33 @@ return (
                           <span className="badge badge-paid">Eligible</span>
                         )}
                         {inc.status === 'claimed' && (
-                          <span className="badge badge-rejected" style={{ background: 'var(--text-muted)' }}>Claimed</span>
+                          <span className="badge badge-rejected">Claimed</span>
                         )}
                         {!inc.status && (
                           <span className="badge badge-pending">Pending</span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Action">
                         {inc.status === 'eligible' && userHasOwnTopup && !user?.sponsor_awaiting_credit && (
                           <button
-                            className="btn btn-primary"
+                            className="btn btn-primary btn-modern-sm"
                             onClick={() => handleClaimIncome(inc.id)}
                             disabled={claimingId === inc.id}
-                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                           >
                             {claimingId === inc.id ? 'Claiming...' : 'Claim'}
                           </button>
                         )}
                         {inc.status === 'eligible' && user?.sponsor_awaiting_credit && (
-                          <span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>Pending Admin Credit</span>
+                          <span className="badge badge-pending text-xs">Pending Admin Credit</span>
                         )}
                         {inc.status === 'locked' && (
-                          <span className="muted" style={{ fontSize: '0.75rem' }}>Locked</span>
+                          <span className="muted text-xs">Locked</span>
                         )}
                         {inc.status === 'claimed' && (
-                          <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>
+                          <span className="muted text-xs">—</span>
                         )}
                         {!inc.status && (
-                          <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>
+                          <span className="muted text-xs">—</span>
                         )}
                       </td>
                     </tr>
@@ -1066,45 +1135,115 @@ return (
 
         {/* Referrals Card - only show after payment approval */}
         {user?.payment_status === 'approved' && (
-        <div className={`card ${isQualified ? 'disabled-card' : ''}`}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0 }}>My Referrals ({approvedReferralCount})</h2>
-            <span className="badge badge-paid" style={{ fontSize: '0.75rem' }}>
+        <div className={`card${isQualified ? ' card-dim' : ''}`}>
+          <div className="flex-row-wrap refer-header">
+            <h2 className="refer-header-title">My Referrals ({approvedReferralCount})</h2>
+            <span className="badge badge-paid text-xs">
               Views: {viewCount}
             </span>
           </div>
 
           {pendingReferralCount > 0 && (
-            <div className="alert alert-info" style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
+            <div className="alert alert-info text-sm mt-sm">
               Waiting for admin approval of {pendingReferralCount} referral(s).
             </div>
           )}
 
           {approvedReferralCount === 0 ? (
-            <p className="muted" style={{ marginTop: '1rem' }}>
+            <p className="muted mt-md">
               No referrals yet. Share your referral code to invite members.
             </p>
           ) : (
-            <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
+            <div className="referral-grid mt-md">
               {referrals.map((ref) => (
-                <div key={ref.id} style={{ padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
-                  <div style={{ fontWeight: 'bold' }}>{ref.name}</div>
-                  <div className="muted">📧 {ref.email}</div>
-                  <div className="muted">📞 {ref.phone}</div>
+                <div key={ref.id} className="surface-card">
+                  <div className="font-semibold">{ref.name}</div>
+                  <div className="muted text-sm">📧 {ref.email}</div>
+                  <div className="muted text-sm">📞 {ref.phone || '—'}</div>
                 </div>
               ))}
             </div>
           )}
 
           {!canAddMoreReferrals && isActive && (
-            <p className="muted" style={{ marginTop: '1rem' }}>
+            <p className="muted mt-md">
               You have reached the maximum of {MAX_REFERRALS} referrals. Complete cycle payment to refer more.
             </p>
           )}
         </div>
         )}
 
-        
+        {/* Activity Feed */}
+        <div className="card mb-lg">
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+            Recent Activity
+          </h2>
+          {recentNotifications.length === 0 ? (
+            <p className="muted" style={{ fontSize: '0.85rem' }}>No recent activity.</p>
+          ) : (
+            <div className="activity-feed" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {recentNotifications.slice(0, 5).map(n => (
+                <div key={n.id} className="activity-item" style={{
+                  display: 'flex', alignItems: 'flex-start', gap: '0.6rem', padding: '0.5rem 0',
+                  borderBottom: '1px solid #f0f0f0', fontSize: '0.85rem'
+                }}>
+                  <span style={{
+                    width: '8px', height: '8px', borderRadius: '50%', marginTop: '0.35rem', flexShrink: 0,
+                    background: n.status === 'unread' ? '#2563eb' : '#d1d5db'
+                  }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: n.status === 'unread' ? 600 : 400 }}>{n.title || 'Notification'}</div>
+                    <div style={{ color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.message}</div>
+                    <div style={{ fontSize: '0.7rem', color: '#aaa', marginTop: '0.15rem' }}>
+                      {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
+                    </div>
+                  </div>
+                  <Link to="/fb/messages" style={{ fontSize: '0.7rem', color: '#2563eb', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    View
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Approval Timeline */}
+        <div className="card mb-lg">
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+            Approval Timeline
+          </h2>
+          {recentNotifications.length === 0 ? (
+            <p className="muted" style={{ fontSize: '0.85rem' }}>No timeline events yet.</p>
+          ) : (
+            <div className="timeline" style={{ position: 'relative', paddingLeft: '1.25rem' }}>
+              <div style={{ position: 'absolute', left: '0.4rem', top: '0.25rem', bottom: '0.25rem', width: '2px', background: '#e5e7eb' }} />
+              {recentNotifications.filter(n => n.type && (n.type.includes('approv') || n.type.includes('reject') || n.type.includes('activat'))).map(n => (
+                <div key={n.id} className="timeline-item" style={{
+                  position: 'relative', paddingLeft: '1rem', paddingBottom: '1rem'
+                }}>
+                  <div style={{
+                    position: 'absolute', left: '-1.3rem', top: '0.35rem', width: '12px', height: '12px', borderRadius: '50%',
+                    background: n.type.includes('reject') ? '#ef4444' : '#22c55e', border: '2px solid #fff', boxShadow: '0 0 0 2px #e5e7eb'
+                  }} />
+                  <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>{n.title || 'Update'}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.15rem' }}>{n.message}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#aaa', marginTop: '0.15rem' }}>
+                    {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
+                  </div>
+                </div>
+              ))}
+              {recentNotifications.filter(n => n.type && (n.type.includes('approv') || n.type.includes('reject') || n.type.includes('activat'))).length === 0 && (
+                <p className="muted" style={{ fontSize: '0.85rem' }}>No approval events yet.</p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -2432,8 +2432,12 @@ select:focus {
     display: flex;
   }
 
-  .admin-content {
+  .admin-content, .admin-main-content {
     margin-left: 0;
+  }
+  .admin-content-inner {
+    padding: 1rem;
+    padding-top: 4rem;
   }
 
   .admin-content-inner {
@@ -3623,3 +3627,3131 @@ input, select, textarea, button {
 }
 
 /* --- End of responsive enhancements --- */
+
+/* ============================================================
+   PREMIUM MOBILE DESIGN SYSTEM v2 — Production-Ready
+   Safe areas, touch optimization, glassmorphism, animations
+   Added without modifying any existing rules.
+   ============================================================ */
+
+/* --- 1. Safe Area Insets for Notched Devices --- */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --nav-height: 56px;
+}
+
+/* Apply safe areas to fixed elements */
+.sidebar-toggle {
+  top: calc(0.75rem + var(--safe-top));
+  left: calc(0.75rem + var(--safe-left));
+}
+
+.toast {
+  bottom: calc(1.5rem + var(--safe-bottom));
+  right: calc(1.5rem + var(--safe-right));
+}
+
+@media (max-width: 640px) {
+  .toast {
+    left: calc(1rem + var(--safe-left));
+    right: calc(1rem + var(--safe-right));
+    bottom: calc(1rem + var(--safe-bottom));
+  }
+}
+
+.zoom-overlay {
+  padding: calc(1rem + var(--safe-top)) calc(1rem + var(--safe-right)) calc(1rem + var(--safe-bottom)) calc(1rem + var(--safe-left));
+}
+
+/* --- 2. Touch & Accessibility Improvements --- */
+html {
+  -webkit-tap-highlight-color: rgba(96, 165, 250, 0.15);
+  scroll-behavior: smooth;
+}
+
+/* Optimize for touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .btn, .btn-modern, .btn-primary, .btn-ghost, .btn-danger,
+  .btn-copy-primary, .btn-share-modern, .copy-btn,
+  button, .admin-sidebar-link, .sidebar-toggle,
+  .kanban-card, .stat, .stat-card-modern, .card-modern,
+  .referral-row, .priority-card {
+    cursor: default;
+  }
+
+  .btn-modern, .btn, .btn-primary, .btn-ghost, .btn-danger,
+  .btn-copy-primary, .btn-share-modern, .copy-btn,
+  .admin-sidebar-link, .sidebar-toggle {
+    min-height: 44px;
+  }
+
+  .field input, .field select, .field textarea,
+  input, select, textarea, .search-bar-modern input,
+  .search-bar-modern select {
+    min-height: 48px;
+    font-size: 16px !important;
+  }
+
+  select, .field select, .search-bar-modern select {
+    min-height: 48px;
+  }
+
+  a, .clickable, [role="button"] {
+    padding: 0.35rem 0;
+  }
+
+  /* Better spacing for list items */
+  .admin-sidebar-link {
+    padding: 0.85rem 1rem;
+    min-height: 48px;
+  }
+
+  .kanban-card {
+    padding: 0.85rem;
+    min-height: 70px;
+  }
+
+  .admin-sidebar-logout {
+    padding: 0.85rem 1rem;
+    min-height: 48px;
+  }
+}
+
+/* Prevent zoom on input focus for iOS */
+@media screen and (max-width: 768px) {
+  input, select, textarea, .field input, .field select, .field textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Better focus-visible for keyboard + touch */
+:focus-visible {
+  outline: 2.5px solid rgba(96, 165, 250, 0.6) !important;
+  outline-offset: 2px;
+}
+
+button:focus-visible, .btn:focus-visible, a:focus-visible,
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2.5px solid rgba(96, 165, 250, 0.6) !important;
+  outline-offset: 2px;
+}
+
+/* --- 3. Responsive Typography Refinements --- */
+:root {
+  --font-size-xs: clamp(0.65rem, 1.2vw, 0.72rem);
+  --line-height-tight: 1.3;
+  --line-height-relaxed: 1.7;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Improve readability at all sizes */
+p, .step-text, .empty-state-text, .muted {
+  line-height: 1.6;
+}
+
+/* --- 4. Premium Card Design System --- */
+.card-modern,
+.card,
+.stat-card-modern,
+.referral-card,
+.priority-card {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle shimmer overlay on cards */
+.card-modern::after,
+.card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.02), transparent);
+  transition: left 0.8s ease;
+  pointer-events: none;
+}
+
+.card-modern:hover::after,
+.card:hover::after {
+  left: 100%;
+}
+
+/* Premium glassmorphism card variant */
+.card-glass {
+  background: rgba(7, 17, 41, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(96, 165, 250, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(96, 165, 250, 0.05) inset;
+}
+
+/* Better card hover states for devices that support hover */
+@media (hover: hover) {
+  .card-modern:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg), 0 0 40px rgba(96, 165, 250, 0.06);
+    border-color: rgba(96, 165, 250, 0.2);
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+
+  .stat-card-modern:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 0 30px rgba(96, 165, 250, 0.06);
+  }
+}
+
+/* Card spacing consistency */
+.card + .card,
+.card-modern + .card-modern,
+.card + .card-modern,
+.card-modern + .card {
+  margin-top: 1rem;
+}
+
+/* --- 5. Mobile Navigation Enhancements --- */
+.sidebar-toggle {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(7, 17, 41, 0.85) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 201;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(11, 31, 58, 0.95) !important;
+  transform: scale(1.05);
+}
+
+.sidebar-toggle:active {
+  transform: scale(0.92);
+}
+
+.sidebar-overlay {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  background: rgba(2, 6, 23, 0.6) !important;
+  transition: opacity 0.3s ease;
+  z-index: 99;
+}
+
+.admin-sidebar {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 100;
+}
+
+.admin-sidebar.open {
+  box-shadow: 4px 0 40px rgba(0, 0, 0, 0.5);
+}
+
+/* --- 6. Mobile Form Design --- */
+@media (max-width: 480px) {
+  .field {
+    margin-bottom: 1.25rem;
+  }
+
+  .field label {
+    font-size: 0.8rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    padding: 0.85rem 0.9rem;
+    border-radius: 12px;
+    font-size: 16px !important;
+    min-height: 50px;
+  }
+
+  .field .hint {
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .field .field-error {
+    font-size: 0.75rem;
+  }
+
+  /* Better checkbox/radio touch targets */
+  .field input[type="checkbox"],
+  .field input[type="radio"] {
+    min-height: 22px;
+    min-width: 22px;
+    cursor: pointer;
+  }
+
+  .field input[type="checkbox"] + label,
+  .field input[type="radio"] + label {
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+    cursor: pointer;
+  }
+}
+
+/* Form field focus glow */
+.field input:focus,
+.field textarea:focus,
+.search-bar-modern input:focus,
+input:focus, textarea:focus, select:focus {
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1), 0 0 20px rgba(96, 165, 250, 0.06);
+}
+
+/* File input styling */
+input[type="file"] {
+  padding: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-right: 0.75rem;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+
+/* --- 7. Mobile Button System --- */
+@media (max-width: 480px) {
+  .btn-modern {
+    padding: 0.7rem 1.1rem;
+    font-size: 0.9rem;
+    border-radius: 12px;
+    min-height: 48px;
+  }
+
+  .btn-modern-sm {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
+    min-height: 40px;
+  }
+
+  .btn-modern-xs {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.75rem;
+    min-height: 36px;
+  }
+
+  .btn, .btn-primary, .btn-ghost, .btn-danger {
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+    min-height: 48px;
+    border-radius: 12px;
+  }
+
+  .btn-modern-primary,
+  .btn-modern-success,
+  .btn-modern-danger,
+  .btn-modern-warning {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Full-width buttons on mobile for easier tapping */
+  .btn-full-mobile {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .copy-btn {
+    padding: 0.5rem 1rem;
+    min-height: 40px;
+    font-size: 0.85rem;
+  }
+}
+
+/* Button press feedback */
+.btn-modern:active,
+.btn:active,
+.btn-primary:active {
+  transform: scale(0.96);
+  transition-duration: 0.05s;
+}
+
+/* --- 8. Mobile Modal Design (Bottom Sheet) --- */
+@media (max-width: 768px) {
+  .modal-modern-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-modern {
+    max-height: 92vh;
+    border-radius: 24px 24px 0 0;
+    margin: 0;
+    max-width: 100%;
+    width: 100%;
+    animation: slide-up-modal 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-modern-header {
+    border-radius: 24px 24px 0 0;
+    padding: 1.1rem 1.25rem;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    border-bottom: 1px solid var(--border);
+    min-height: 56px;
+  }
+
+  .modal-modern-body {
+    padding: 1.25rem;
+    padding-top: 0.5rem;
+  }
+
+  .modal-modern-footer {
+    padding: 0.85rem 1.25rem;
+    padding-bottom: calc(0.85rem + var(--safe-bottom));
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 2;
+  }
+
+  /* Drag handle for mobile modals */
+  .modal-modern-header::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Old modal system bottom sheet */
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    max-height: 92vh;
+    border-radius: 24px 24px 0 0;
+    margin: 0;
+    max-width: 100%;
+    width: 100%;
+    animation: slide-up-modal 0.3s ease;
+  }
+
+  @keyframes slide-up-modal {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .modal-modern-footer .btn-modern {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Fullscreen modals on smallest screens */
+@media (max-width: 374px) {
+  .modal-modern {
+    max-height: 100vh;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .modal-modern-header {
+    border-radius: 0;
+  }
+
+  .modal-modern-header::before {
+    display: none;
+  }
+}
+
+/* --- 9. Improved Loading States --- */
+.loading-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+.loading-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(96, 165, 250, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.loading-spinner-lg {
+  width: 48px;
+  height: 48px;
+  border-width: 4px;
+}
+
+.loading-text {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Skeleton improvements */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.04), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.skeleton-card-modern {
+  position: relative;
+  overflow: hidden;
+}
+
+/* --- 10. Improved Empty States --- */
+.empty-state-modern {
+  padding: 3.5rem 1.5rem;
+  background: var(--surface);
+  border: 1px dashed rgba(96, 165, 250, 0.12);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.3s ease;
+}
+
+.empty-state-modern:hover {
+  border-color: rgba(96, 165, 250, 0.2);
+}
+
+.empty-state-modern .empty-icon {
+  font-size: 3.5rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.15;
+  filter: grayscale(0.5);
+}
+
+.empty-state-modern .empty-text {
+  font-size: 0.95rem;
+  max-width: 320px;
+  line-height: 1.6;
+}
+
+.empty-state-card {
+  padding: 3.5rem 1.5rem;
+  transition: border-color 0.3s ease;
+}
+
+@media (max-width: 480px) {
+  .empty-state-modern {
+    padding: 2.5rem 1rem;
+  }
+
+  .empty-state-modern .empty-icon {
+    font-size: 2.5rem;
+  }
+
+  .empty-state-modern .empty-text {
+    font-size: 0.85rem;
+  }
+
+  .empty-state-card {
+    padding: 2.5rem 1rem;
+  }
+}
+
+/* --- 11. Glassmorphism & Visual Effects --- */
+.glass-premium {
+  background: rgba(7, 17, 41, 0.5);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid rgba(96, 165, 250, 0.06);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(96, 165, 250, 0.04) inset;
+}
+
+.glow-border {
+  position: relative;
+}
+
+.glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), transparent 40%, rgba(167, 139, 250, 0.1) 70%, transparent);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Gradient divider */
+.divider-gradient {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.2), rgba(167, 139, 250, 0.15), transparent);
+  margin: 1.5rem 0;
+  border: none;
+}
+
+/* Subtle nebula effect for page backgrounds */
+.nebula-glow {
+  position: relative;
+}
+
+.nebula-glow::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  right: -10%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.04), transparent 70%);
+  pointer-events: none;
+}
+
+/* --- 12. Page-Specific Utilities --- */
+
+/* Centered card container for auth pages */
+.auth-container {
+  max-width: 440px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+@media (max-width: 480px) {
+  .auth-container {
+    margin: 1.5rem auto;
+    padding: 0 0.75rem;
+  }
+}
+
+.auth-card {
+  max-width: 440px;
+  margin: 2rem auto;
+}
+
+@media (max-width: 480px) {
+  .auth-card {
+    margin: 1rem auto;
+    max-width: 100%;
+  }
+}
+
+.payment-card {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+@media (max-width: 480px) {
+  .payment-card {
+    max-width: 100%;
+    margin: 0;
+  }
+}
+
+/* Mobile-friendly stacked actions */
+.actions-stack {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  .actions-stack {
+    flex-direction: column;
+  }
+
+  .actions-stack .btn-modern,
+  .actions-stack .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Mobile detail grid */
+@media (max-width: 480px) {
+  .detail-grid {
+    gap: 0.75rem;
+  }
+
+  .detail-row .detail-label {
+    font-size: 0.7rem;
+  }
+
+  .detail-row .detail-value {
+    font-size: 0.9rem;
+  }
+}
+
+/* Better spacing for admin page headers */
+@media (max-width: 480px) {
+  .admin-page-header {
+    margin-bottom: 1rem;
+  }
+
+  .admin-page-title {
+    font-size: 1.15rem;
+    width: 100%;
+  }
+
+  .admin-page-title-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.9rem;
+  }
+}
+
+/* --- 13. Statistics & Data Display on Mobile --- */
+@media (max-width: 480px) {
+  .stats-grid-modern {
+    gap: 0.6rem;
+  }
+
+  .stat-card-modern {
+    padding: 0.9rem;
+    border-radius: 14px;
+  }
+
+  .stat-card-modern .stat-value {
+    font-size: 1.35rem;
+  }
+
+  .stat-card-modern .stat-label {
+    font-size: 0.68rem;
+  }
+
+  .stat-card-modern .stat-sub {
+    font-size: 0.62rem;
+  }
+
+  .stat-card-modern .stat-bg-icon {
+    font-size: 3rem;
+    right: -0.25rem;
+    bottom: -0.25rem;
+  }
+
+  .grid-stats {
+    gap: 0.6rem;
+  }
+
+  .stat {
+    padding: 0.85rem;
+  }
+
+  .stat .value {
+    font-size: 1.2rem;
+  }
+
+  .stat .label {
+    font-size: 0.75rem;
+  }
+}
+
+/* Priority cards on mobile */
+@media (max-width: 480px) {
+  .priority-card {
+    padding: 1rem;
+  }
+
+  .priority-card .card-value {
+    font-size: 1.4rem;
+  }
+
+  .priority-card .card-label {
+    font-size: 0.72rem;
+  }
+
+  .priority-card .card-icon {
+    font-size: 1.2rem;
+    margin-bottom: 0.35rem;
+  }
+}
+
+/* --- 14. Referral Section Mobile Improvements --- */
+@media (max-width: 480px) {
+  .referral-card {
+    padding: 1rem 0.85rem;
+    border-radius: 16px;
+    margin-top: 1rem;
+  }
+
+  .referral-card h3 {
+    font-size: 1.05rem;
+  }
+
+  .referral-card .subtitle {
+    font-size: 0.78rem;
+    margin-bottom: 1rem;
+  }
+
+  .referral-row {
+    padding: 0.75rem;
+    gap: 0.5rem;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .referral-label {
+    min-width: auto;
+    font-size: 0.68rem;
+    margin-bottom: 0.15rem;
+  }
+
+  .referral-code-value {
+    font-size: 0.9rem;
+    padding: 0.45rem 0.75rem;
+    text-align: center;
+    letter-spacing: 0.06em;
+  }
+
+  .referral-link-value {
+    font-size: 0.68rem;
+    padding: 0.35rem 0.65rem;
+    text-align: center;
+  }
+
+  .referral-actions {
+    margin-left: 0;
+    justify-content: stretch;
+    width: 100%;
+    gap: 0.4rem;
+  }
+
+  .referral-actions .btn-copy-primary,
+  .referral-actions .btn-share-modern {
+    flex: 1;
+    justify-content: center;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.78rem;
+  }
+
+  .referral-stats-bar {
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    justify-content: center;
+  }
+
+  .referral-stat-item {
+    gap: 0.3rem;
+  }
+
+  .referral-stat-value {
+    font-size: 0.95rem;
+  }
+
+  .referral-stat-label {
+    font-size: 0.7rem;
+  }
+}
+
+/* --- 15. Payment Page Mobile Improvements --- */
+@media (max-width: 480px) {
+  .payment-header h1 {
+    font-size: 1.4rem;
+  }
+
+  .payment-header .muted {
+    font-size: 0.85rem;
+  }
+
+  .payment-steps {
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  .payment-steps h3 {
+    font-size: 0.9rem;
+  }
+
+  .step-item {
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .step-number {
+    width: 24px;
+    height: 24px;
+    font-size: 0.75rem;
+  }
+
+  .step-text {
+    font-size: 0.82rem;
+  }
+
+  .qr-container {
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  .qr-box {
+    padding: 0.75rem;
+    max-width: 240px;
+  }
+
+  .qr-box img {
+    max-width: 200px;
+  }
+
+  .amount-display .amount {
+    font-size: 2rem;
+  }
+
+  .amount-display .label {
+    font-size: 0.8rem;
+  }
+
+  .upi-id-box {
+    padding: 0.85rem;
+  }
+
+  .upi-id-box code {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+    word-break: break-all;
+  }
+
+  .form-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+  }
+
+  .form-section h2 {
+    font-size: 1.1rem;
+  }
+
+  .divider {
+    margin: 1.25rem 0;
+  }
+}
+
+/* --- 16. Login Page Mobile --- */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 0 0.5rem;
+  }
+
+  .login-card {
+    padding: 1.5rem 1rem;
+  }
+
+  .login-title {
+    font-size: 1.3rem;
+  }
+
+  .login-subtitle {
+    font-size: 0.85rem;
+  }
+}
+
+/* --- 17. Dashboard Mobile Improvements --- */
+@media (max-width: 480px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .dashboard-profile {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .dashboard-profile .detail-row {
+    padding: 0.5rem 0.75rem;
+    background: var(--surface-2);
+    border-radius: 10px;
+  }
+
+  /* Progress bar */
+  .progress-container {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .progress-bar-wrap {
+    width: 100%;
+    height: 10px;
+  }
+}
+
+/* --- 18. Kanban Board Mobile --- */
+@media (max-width: 640px) {
+  .kanban-column {
+    max-height: 350px;
+  }
+
+  .kanban-header {
+    padding: 0.65rem 0.85rem;
+  }
+
+  .kanban-body {
+    padding: 0.5rem;
+  }
+
+  .kanban-card {
+    padding: 0.65rem;
+  }
+
+  .kanban-card-name {
+    font-size: 0.8rem;
+  }
+
+  .kanban-card-email {
+    font-size: 0.7rem;
+  }
+
+  .kanban-card-meta {
+    font-size: 0.65rem;
+  }
+}
+
+/* --- 19. Table Responsive Enhancements --- */
+@media (max-width: 768px) {
+  .table-wrap-modern td {
+    padding: 0.25rem 0;
+    font-size: 0.82rem;
+  }
+
+  .table-wrap-modern td::before {
+    min-width: 80px;
+  }
+
+  .table-wrap-modern tr {
+    padding: 0.75rem;
+  }
+
+  .badge, .status-badge, .verification-badge {
+    font-size: 0.68rem;
+    padding: 0.15rem 0.4rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-wrap-modern td::before {
+    min-width: 70px;
+    font-size: 0.62rem;
+  }
+
+  .table-wrap-modern td {
+    font-size: 0.78rem;
+  }
+}
+
+/* --- 20. Toast Notification Enhancements --- */
+.toast {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast:hover {
+  transform: translateY(-2px);
+}
+
+/* --- 21. Image & Media Responsiveness --- */
+.screenshot-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+
+.screenshot-thumb:hover {
+  transform: scale(1.08);
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(96, 165, 250, 0.15);
+}
+
+@media (max-width: 480px) {
+  .screenshot-thumb {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+  }
+}
+
+/* --- 22. Smooth Tab/Pill Transitions --- */
+.badge, .status-badge, .verification-badge, .validation-pill {
+  transition: all 0.2s ease;
+}
+
+/* --- 23. User Dashboard Specific Fixes --- */
+.user-dashboard-wrap {
+  padding: 1rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+@media (max-width: 480px) {
+  .user-dashboard-wrap {
+    padding: 0.5rem;
+    max-width: 100%;
+  }
+}
+
+/* Profile grid in dashboard */
+.profile-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 480px) {
+  .profile-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Sponsor banner */
+.sponsor-banner {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(245, 165, 36, 0.04));
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 12px;
+  font-size: 0.85rem;
+  color: var(--warning);
+}
+
+/* Password field wrapper */
+.password-field-wrap {
+  position: relative;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+  font-size: 1.1rem;
+  line-height: 1;
+  z-index: 2;
+}
+
+.password-toggle-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.password-toggle-btn:active {
+  transform: translateY(-50%) scale(0.9);
+}
+
+/* Amount confirmation row */
+.amount-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  flex-wrap: wrap;
+}
+
+.amount-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.amount-check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.amount-check-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+@media (max-width: 480px) {
+  .amount-confirm-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
+/* Screenshot preview */
+.screenshot-preview {
+  margin-top: 0.5rem;
+  max-width: 150px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.screenshot-preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+@media (max-width: 480px) {
+  .screenshot-preview {
+    max-width: 120px;
+  }
+}
+
+/* Submit button full width */
+.submit-btn-full {
+  width: 100%;
+  padding: 0.85rem;
+  font-size: 1.05rem;
+  min-height: 52px;
+  border-radius: 12px;
+}
+
+/* Success alert at bottom of payment page */
+.payment-success-note {
+  margin-top: 1.5rem;
+  text-align: center;
+  padding: 1rem;
+  background: rgba(74, 222, 128, 0.06);
+  border: 1px solid rgba(74, 222, 128, 0.15);
+  border-radius: 12px;
+}
+
+.payment-success-note strong {
+  color: var(--success);
+}
+
+/* --- 24. Error Boundary & Fallback Pages --- */
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  text-align: center;
+  gap: 1rem;
+}
+
+.error-boundary h2 {
+  font-size: 1.5rem;
+  color: var(--danger);
+  margin: 0;
+}
+
+.error-boundary p {
+  color: var(--muted);
+  max-width: 400px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.error-boundary button {
+  margin-top: 0.5rem;
+}
+
+/* --- 25. Performance Optimizations for Mobile --- */
+
+/* GPU acceleration for smooth animations */
+.admin-sidebar,
+.modal-modern,
+.card-modern,
+.stat-card-modern,
+.toast {
+  will-change: transform;
+}
+
+/* Reduce canvas operations on mobile for battery life */
+@media (max-width: 768px) {
+  canvas {
+    image-rendering: auto;
+  }
+}
+
+/* Prevent layout shifts with content-visibility */
+.admin-content-inner > * {
+  content-visibility: auto;
+  contain-intrinsic-size: 200px;
+}
+
+@media (max-width: 480px) {
+  .admin-content-inner > * {
+    contain-intrinsic-size: 150px;
+  }
+}
+
+/* Optimize scroll performance */
+.admin-content,
+.modal-modern-body,
+.kanban-body,
+.admin-sidebar-nav {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Prevent text size adjustment on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* --- 26. Utility Classes for Inline Style Replacement --- */
+
+.flex-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.flex-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gap-sm { gap: 0.35rem; }
+.gap-md { gap: 0.75rem; }
+.gap-lg { gap: 1rem; }
+
+.mb-sm { margin-bottom: 0.5rem; }
+.mb-md { margin-bottom: 1rem; }
+.mb-lg { margin-bottom: 1.5rem; }
+
+.mt-sm { margin-top: 0.5rem; }
+.mt-md { margin-top: 1rem; }
+.mt-lg { margin-top: 1.5rem; }
+
+.text-sm { font-size: 0.85rem; }
+.text-xs { font-size: 0.75rem; }
+.text-muted { color: var(--muted); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-warning { color: var(--warning); }
+.text-accent { color: var(--accent); }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+.font-mono { font-family: monospace; }
+.font-bold { font-weight: 700; }
+.font-semibold { font-weight: 600; }
+
+.w-full { width: 100%; }
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Surface background utility */
+.surface-card {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+}
+
+/* Inline code block */
+.code-inline {
+  background: rgba(96, 165, 250, 0.08);
+  color: var(--accent);
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+/* Status dot */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-dot.active { background: var(--success); box-shadow: 0 0 8px rgba(74, 222, 128, 0.4); }
+.status-dot.inactive { background: var(--danger); box-shadow: 0 0 8px rgba(251, 113, 133, 0.4); }
+.status-dot.pending { background: var(--warning); box-shadow: 0 0 8px rgba(251, 191, 36, 0.4); }
+
+/* Action button group */
+.action-group {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* --- 27. Smooth Entrance Animations --- */
+@keyframes fade-in-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-up {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-right {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s ease;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.25s ease;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease;
+}
+
+/* Staggered animation for children */
+.stagger-children > * {
+  opacity: 0;
+  animation: fade-in-up 0.4s ease forwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+
+/* --- 28. Referral Graph Page Mobile --- */
+@media (max-width: 480px) {
+  .referral-graph-node {
+    min-width: 140px !important;
+    padding: 0.75rem !important;
+    font-size: 0.85rem !important;
+  }
+
+  .referral-graph-connector {
+    height: 30px !important;
+  }
+
+  .referral-graph-container {
+    padding: 1rem 0.5rem !important;
+  }
+}
+
+/* --- 29. Zebra Striped Tables on Mobile --- */
+@media (max-width: 768px) {
+  .table-wrap-modern tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+  }
+}
+
+/* --- 30. Ensure dropdown selects have proper sizing on mobile */
+@media (max-width: 480px) {
+  select, .field select, .search-bar-modern select {
+    min-height: 50px;
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
+}
+
+/* --- End of Premium Mobile Design System v2 --- */
+
+/* --- Dashboard Specific Utilities --- */
+.ml-sm { margin-left: 0.5rem; }
+.text-sm { font-size: 0.85rem; }
+.text-xs { font-size: 0.75rem; }
+
+/* Progress bar for referral completion */
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.progress-bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--success));
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.progress-label {
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+@media (max-width: 480px) {
+  .progress-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .progress-bar-wrap {
+    width: 100%;
+    height: 10px;
+  }
+
+  .ml-sm { margin-left: 0.35rem; }
+}
+
+/* Topbar actions for mobile */
+@media (max-width: 480px) {
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* Referral card disabled state */
+.referral-locked {
+  opacity: 0.7;
+}
+
+/* UPI QR section in dashboard */
+.upi-qr-section {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.upi-qr-section .upi-id-box {
+  margin-top: 0.75rem;
+}
+
+/* Loading state inside dashboard */
+.dashboard-loading {
+  padding: 1rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+@media (max-width: 480px) {
+  .dashboard-loading {
+    padding: 0.5rem;
+  }
+}
+
+/* Horizontal scroll prevention for admin content */
+.admin-content {
+  overflow-x: hidden;
+}
+
+/* Smoother admin page header actions */
+.admin-page-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* --- 31. Admin Dashboard & Page Utilities --- */
+
+/* Priority overview responsive grid */
+.priority-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 480px) {
+  .priority-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+}
+
+/* Priority link text */
+.priority-link {
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  display: inline-block;
+  color: var(--accent);
+}
+
+/* Priority card accent borders */
+.priority-border-warning { border-left: 4px solid var(--warning); }
+.priority-border-accent { border-left: 4px solid var(--accent); }
+.priority-border-success { border-left: 4px solid var(--success); }
+.priority-border-muted { border-left: 4px solid var(--muted); }
+.priority-border-danger { border-left: 4px solid var(--danger); }
+
+/* Link/stat numbers in dashboard tables */
+.link-stat {
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+/* Compact badge variant */
+.badge-xs {
+  font-size: 0.7rem;
+}
+
+/* Whitespace helper */
+.whitespace-nowrap {
+  white-space: nowrap;
+}
+
+/* Detail grid in modals */
+.detail-grid-sm {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.detail-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+@media (max-width: 480px) {
+  .detail-grid-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Flex inline actions */
+.flex-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Card-modern consistent spacing */
+.card-section {
+  margin-bottom: 1.5rem;
+}
+
+.card-section-sm {
+  margin-bottom: 1rem;
+}
+
+/* Table section compact */
+.table-section {
+  margin-top: 0.5rem;
+}
+
+/* Validation pills row */
+.validation-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* Detail row in payments/topups modals */
+.detail-row-bordered {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 480px) {
+  .detail-row-bordered {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+}
+
+/* Horizontal scroll prevention for admin */
+.admin-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* --- 32. Admin Form & Modal Utilities --- */
+.modal-field-mb {
+  margin-bottom: 0.75rem;
+}
+
+.modal-alert-mb {
+  margin-bottom: 0.75rem;
+}
+
+/* Section labels in admin pages */
+.section-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Draggable row cursor */
+.draggable-row {
+  cursor: grab;
+  user-select: none;
+}
+
+/* Expandable row styling */
+.expandable-row {
+  padding: 0.75rem;
+  background: var(--bg);
+  border-top: 2px solid var(--accent);
+}
+
+/* Referral card in expandable rows */
+.referral-card-row {
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-2);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 480px) {
+  .referral-card-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+}
+
+/* Activation card in admin users page */
+.activation-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(245, 165, 36, 0.08);
+  border-radius: var(--radius);
+  border: 1px solid rgba(245, 165, 36, 0.2);
+}
+
+/* --- 33. Referral Graph Page --- */
+.graph-container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.graph-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.graph-node-primary {
+  padding: 1rem;
+  background: var(--primary);
+  color: white;
+  border-radius: 8px;
+  text-align: center;
+  min-width: 200px;
+}
+
+.graph-node-success {
+  padding: 1rem;
+  background: var(--success);
+  color: white;
+  border-radius: 8px;
+  text-align: center;
+  min-width: 200px;
+}
+
+.graph-node-child {
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+  min-width: 150px;
+}
+
+.graph-connector {
+  width: 2px;
+  height: 40px;
+  background: var(--border);
+  position: relative;
+}
+
+.graph-connector::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid var(--border);
+}
+
+.graph-children {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+@media (max-width: 480px) {
+  .graph-node-primary,
+  .graph-node-success {
+    min-width: 140px;
+    padding: 0.75rem;
+  }
+
+  .graph-node-child {
+    min-width: 120px;
+    padding: 0.75rem;
+  }
+
+  .graph-column {
+    gap: 1.5rem;
+  }
+
+  .graph-container {
+    padding: 0 0.5rem;
+  }
+}
+
+/* --- 34. Payment Page Two-Column Layout --- */
+
+.payment-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.payment-sidebar {
+  position: sticky;
+  top: 1rem;
+}
+
+.payment-main .divider {
+  margin: 0 0 1.25rem;
+  text-align: left;
+}
+
+.payment-main .divider::before {
+  display: none;
+}
+
+.payment-main .divider span {
+  background: none;
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.payment-main .field {
+  margin-bottom: 0.85rem;
+}
+
+.payment-main .field label {
+  display: block;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin-bottom: 0.3rem;
+  color: var(--text);
+}
+
+.payment-main .field .hint {
+  text-align: left;
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
+.payment-main .field .field-error {
+  text-align: left;
+}
+
+.payment-main input,
+.payment-main select,
+.payment-main textarea {
+  padding: 0.55rem 0.7rem;
+  font-size: 0.88rem;
+}
+
+.payment-main .submit-btn-full {
+  padding: 0.7rem;
+  font-size: 0.95rem;
+  min-height: 44px;
+}
+
+@media (max-width: 768px) {
+  .payment-layout {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .payment-sidebar {
+    position: static;
+  }
+
+  .payment-main .divider {
+    margin: 1rem 0;
+  }
+}
+
+/* --- 35. Payment Page Mobile Alignment Fixes --- */
+
+/* Reduce card padding on small screens for more content space */
+@media (max-width: 480px) {
+  .payment-card {
+    padding: 0;
+  }
+
+  .payment-card .card {
+    padding: 1rem;
+    border-radius: 12px;
+  }
+
+  .payment-card .payment-header {
+    margin-bottom: 1.25rem;
+  }
+
+  /* Stack UPI ID and copy button vertically */
+  .upi-id-box .value {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .upi-id-box code {
+    width: 100%;
+    text-align: center;
+    word-break: break-all;
+    font-size: 0.8rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .upi-id-box .copy-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Better form spacing */
+  .payment-card .field {
+    margin-bottom: 1rem;
+  }
+
+  .payment-card .field label {
+    font-size: 0.85rem;
+    margin-bottom: 0.35rem;
+  }
+
+  /* File input styling */
+  .payment-card input[type="file"] {
+    font-size: 0.82rem;
+    padding: 0.6rem 0.5rem;
+  }
+
+  /* Step numbers */
+  .step-number {
+    width: 26px;
+    height: 26px;
+    font-size: 0.75rem;
+    min-width: 26px;
+  }
+
+  /* QR container more compact */
+  .qr-container {
+    padding: 0.75rem;
+  }
+
+  .qr-label {
+    font-size: 0.78rem;
+  }
+
+  /* Hide extra bottom note initially - shown only on success */
+  .payment-success-note:empty {
+    display: none;
+  }
+}
+
+/* Smallest screens (320px) */
+@media (max-width: 360px) {
+  .payment-card .card {
+    padding: 0.75rem;
+    border-radius: 10px;
+  }
+
+  .amount-display .amount {
+    font-size: 1.75rem;
+  }
+
+  .qr-box {
+    max-width: 200px;
+    padding: 0.5rem;
+  }
+
+  .qr-box img {
+    max-width: 160px;
+  }
+}
+
+/* ===== Messaging System Styles ===== */
+
+.msg-center {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  min-height: 100vh;
+}
+
+.msg-center-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.msg-center-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.msg-unread-bar {
+  background: var(--accent-glow);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin-bottom: 1rem;
+}
+
+.msg-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.msg-empty-icon {
+  margin-bottom: 1rem;
+}
+
+.msg-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 1rem;
+  min-height: 400px;
+}
+
+@media (max-width: 640px) {
+  .msg-layout {
+    grid-template-columns: 1fr;
+  }
+  .msg-detail {
+    display: none;
+  }
+  .msg-detail.active {
+    display: block;
+  }
+}
+
+.msg-list {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  overflow-y: auto;
+  max-height: 70vh;
+  background: var(--surface);
+}
+
+.msg-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--glass-border);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.msg-item:last-child {
+  border-bottom: none;
+}
+
+.msg-item:hover {
+  background: var(--surface-2);
+}
+
+.msg-item.active {
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+}
+
+.msg-item.unread {
+  background: rgba(96, 165, 250, 0.04);
+}
+
+.msg-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.msg-unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.msg-item-preview {
+  font-size: 0.82rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.25rem;
+}
+
+.msg-item-date {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.msg-detail {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  background: var(--surface);
+  min-height: 300px;
+}
+
+.msg-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.msg-detail-from {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+.msg-detail-body {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+
+.msg-detail-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.msg-detail-meta code {
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+.msg-detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 250px;
+}
+
+.msg-detail-empty p {
+  margin: 0;
+}
+
+.msg-admin-filters {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.msg-admin-table td {
+  vertical-align: top;
+}
+
+.msg-admin-message-cell {
+  max-width: 300px;
+}
+
+.msg-admin-message {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  word-break: break-word;
+  max-height: 60px;
+  overflow-y: auto;
+}
+
+.msg-admin-message::-webkit-scrollbar {
+  width: 3px;
+}
+
+.msg-admin-message::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.msg-admin-message::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.msg-inbox-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-decoration: none;
+  color: var(--text);
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.msg-inbox-link:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.msg-inbox-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0 0.35rem;
+}
+
+.msg-inbox-link .msg-inbox-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+}
+
+/* ===== Password Section ===== */
+
+.password-section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.password-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.password-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  min-width: 80px;
+}
+
+.password-status {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.password-status.set {
+  color: var(--success);
+}
+
+.password-status.not-set {
+  color: var(--danger);
+}
+
+.password-form {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-top: 0.75rem;
+}
+
+.password-form-title {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+  color: var(--text);
+}
+
+.btn-sm {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+/* ===== Profile grid refinements ===== */
+
+.profile-grid {
+  gap: 0.85rem;
+}
+
+.detail-row .detail-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ===== Sponsor banner refinements ===== */
+
+.sponsor-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sponsor-banner .code-inline {
+  padding: 0.25rem 0.6rem;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+/* ===== Refined referral card spacing ===== */
+
+.referral-card {
+  margin-top: 1rem;
+}
+
+.referral-locked {
+  opacity: 0.7;
+}
+
+/* ===== Alert refinements within card ===== */
+
+.card .alert {
+  margin-top: 0.75rem;
+}
+
+/* ===== Consistent section labels ===== */
+
+.text-sm { font-size: 0.85rem; }
+.font-semibold { font-weight: 600; }
+.code-inline {
+  font-family: 'DM Sans', monospace;
+  font-size: 0.9rem;
+}
+
+/* ===== Referrals Card Refinements ===== */
+
+.refer-header {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.refer-header-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.referral-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 480px) {
+  .referral-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.card-dim {
+  opacity: 0.85;
+}
+
+/* ===== Topup stats grid refinement ===== */
+
+.stats-grid-modern {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.65rem;
+}
+
+.stat-card-modern {
+  padding: 1rem;
+}
+
+.stat-card-modern .stat-value {
+  font-size: 1.35rem;
+}
+
+.stat-card-modern .stat-label {
+  font-size: 0.72rem;
+}
+
+@media (max-width: 480px) {
+  .stats-grid-modern {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .stat-card-modern {
+    padding: 0.75rem;
+  }
+
+  .stat-card-modern .stat-value {
+    font-size: 1.15rem;
+  }
+
+  .stat-card-modern .stat-label {
+    font-size: 0.68rem;
+  }
+}
+
+/* ===== Notification Bell ===== */
+.notification-bell-wrapper {
+  position: relative;
+}
+.notification-bell-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--bg, #fff);
+}
+.notification-bell-dropdown {
+  scrollbar-width: thin;
+}
+.notification-bell-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+.notification-bell-dropdown::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+/* ===== WhatsApp-Style Chat ===== */
+.msg-chat .msg-bubble:hover {
+  border-color: #93c5fd !important;
+}
+.msg-chat .msg-bubble:active {
+  background: #dbeafe !important;
+}
+
+/* ===== Activity Feed ===== */
+.activity-feed .activity-item:last-child {
+  border-bottom: none !important;
+}
+
+/* ===== Timeline ===== */
+.timeline .timeline-item:last-child {
+  padding-bottom: 0 !important;
+}
+
+/* ===== Topbar Actions ===== */
+@media (max-width: 640px) {
+  .topbar .topbar-actions {
+    gap: 0.35rem !important;
+  }
+  .notification-bell-dropdown {
+    width: 300px !important;
+    right: -60px !important;
+  }
+}
+/* ===== Chat Layout (Admin + User) ===== */
+.chat-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chat-sidebar {
+  width: 340px;
+  min-width: 340px;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  background: #fafafa;
+  transition: width 0.2s, min-width 0.2s;
+}
+
+.chat-sidebar-hidden {
+  display: none;
+}
+
+.chat-sidebar-header {
+  padding: 1rem 1rem 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chat-sidebar-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.chat-search-box {
+  position: relative;
+  padding: 0.65rem 0.85rem;
+}
+
+.chat-search-icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.chat-search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.5rem 2rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  outline: none;
+  background: #fff;
+  box-sizing: border-box;
+}
+.chat-search-input:focus {
+  border-color: #2563eb;
+}
+
+.chat-user-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.25rem 0;
+}
+
+.chat-user-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.85rem;
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid #f3f4f6;
+}
+.chat-user-item:hover {
+  background: #eef2ff;
+}
+.chat-user-item.active {
+  background: #dbeafe;
+}
+
+.chat-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.chat-user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-user-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #111;
+}
+
+.chat-user-email {
+  font-size: 0.72rem;
+  color: #888;
+  margin-top: 0.1rem;
+}
+
+.chat-user-preview {
+  font-size: 0.75rem;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 0.1rem;
+}
+
+.chat-unread-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chat-empty-state {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #999;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+/* Chat Main Area */
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  min-width: 0;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.chat-back-btn {
+  display: none;
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  border-radius: 6px;
+  color: #555;
+  flex-shrink: 0;
+}
+.chat-back-btn:hover {
+  background: #f0f0f0;
+}
+
+.chat-header-info {
+  flex: 1;
+}
+
+.chat-header-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.chat-header-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.chat-header-status {
+  font-size: 0.72rem;
+  color: #22c55e;
+}
+
+/* Messages Area */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  background: #f9fafb;
+}
+
+.chat-messages-empty {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+  font-size: 0.85rem;
+}
+
+.chat-bubble {
+  max-width: 75%;
+  padding: 0.5rem 0.85rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.chat-bubble-sent {
+  align-self: flex-end;
+  background: #2563eb;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.chat-bubble-received {
+  align-self: flex-start;
+  background: #fff;
+  color: #333;
+  border: 1px solid #e5e7eb;
+  border-bottom-left-radius: 4px;
+}
+
+.chat-bubble-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+  font-size: 0.65rem;
+  opacity: 0.7;
+  justify-content: flex-end;
+}
+
+.chat-bubble-time {
+  white-space: nowrap;
+}
+
+.chat-bubble-status {
+  font-size: 0.7rem;
+}
+.chat-bubble-status.read {
+  color: #93c5fd;
+}
+
+/* Input Box */
+.chat-input-box {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.chat-input-field {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 24px;
+  font-size: 0.88rem;
+  outline: none;
+}
+.chat-input-field:focus {
+  border-color: #2563eb;
+}
+
+.chat-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.chat-send-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.chat-send-btn:disabled {
+  background: #d1d5db;
+  cursor: default;
+}
+
+.chat-attach-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px dashed #d1d5db;
+  background: transparent;
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  flex-shrink: 0;
+  opacity: 0.5;
+  align-self: center;
+}
+
+.fb-admin-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.admin-main-content {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  min-width: 0;
+}
+
+.chat-admin-main {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+.chat-no-selection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #bbb;
+  gap: 0.5rem;
+}
+.chat-no-selection p {
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* ===== User Chat ===== */
+.user-chat-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1rem;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.user-chat-header-center {
+  flex: 1;
+  text-align: center;
+}
+
+.user-chat-header-title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.user-chat-header-status {
+  font-size: 0.75rem;
+  color: #22c55e;
+}
+
+.user-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.user-chat-empty {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+  font-size: 0.88rem;
+}
+
+.user-chat-row {
+  display: flex;
+  margin-bottom: 0.15rem;
+}
+
+.user-chat-row-sent {
+  justify-content: flex-end;
+}
+
+.user-chat-row-received {
+  justify-content: flex-start;
+}
+
+.user-chat-bubble {
+  max-width: 75%;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.user-chat-bubble-sent {
+  border-radius: 16px 16px 4px 16px;
+  background: #2563eb;
+  color: #fff;
+}
+
+.user-chat-bubble-received {
+  border-radius: 16px 16px 16px 4px;
+  background: #f0f0f0;
+  color: #333;
+}
+
+.user-chat-bubble-text {
+  white-space: pre-wrap;
+}
+
+.user-chat-bubble-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
+.user-chat-row-sent .user-chat-bubble-meta {
+  justify-content: flex-end;
+}
+
+.user-chat-row-received .user-chat-bubble-meta {
+  justify-content: flex-start;
+}
+
+.user-chat-bubble-status {
+  font-size: 0.7rem;
+}
+.user-chat-bubble-status.read {
+  color: #93c5fd;
+}
+
+.user-chat-input-box {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.user-chat-input-field {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  border-radius: 24px;
+  border: 1px solid #d1d5db;
+  font-size: 0.9rem;
+  outline: none;
+}
+.user-chat-input-field:focus {
+  border-color: #2563eb;
+}
+
+.user-chat-send-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.user-chat-send-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.user-chat-send-btn:disabled {
+  background: #d1d5db;
+  cursor: default;
+}
+
+.user-chat-attach-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px dashed #d1d5db;
+  background: transparent;
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  flex-shrink: 0;
+  opacity: 0.5;
+  align-self: center;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .chat-layout {
+    position: relative;
+  }
+  .chat-sidebar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    z-index: 10;
+  }
+  .chat-sidebar.chat-sidebar-hidden {
+    display: none;
+  }
+  .chat-main {
+    width: 100%;
+    height: 100%;
+  }
+  .chat-back-btn {
+    display: inline-flex;
+  }
+  .chat-bubble {
+    max-width: 85%;
+  }
+  .chat-messages {
+    padding: 0.5rem;
+  }
+  .chat-admin-main {
+    height: 100vh;
+  }
+  .user-chat-container {
+    padding: 0.5rem;
+  }
+  .user-chat-bubble {
+    max-width: 85%;
+  }
+}
+@media (max-width: 480px) {
+  .chat-sidebar-header h3 {
+    font-size: 0.9rem;
+  }
+  .chat-user-item {
+    padding: 0.5rem 0.65rem;
+  }
+  .chat-user-name {
+    font-size: 0.8rem;
+  }
+  .chat-input-box {
+    padding: 0.5rem 0.65rem;
+  }
+  .chat-header {
+    padding: 0.5rem 0.65rem;
+  }
+  .chat-bubble {
+    max-width: 90%;
+    font-size: 0.85rem;
+  }
+}
+/* --- End of all CSS --- */

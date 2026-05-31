@@ -7,6 +7,8 @@ import {
   getDoc,
   query,
   where,
+  orderBy,
+  limit,
   updateDoc,
   deleteDoc,
   setDoc,
@@ -28,6 +30,9 @@ const COL_USERS = 'users_new';
 const COL_REFERRALS = 'referrals_new';
 const COL_TOPUPS = 'topups_new';
 const COL_TOPUP_INCOME = 'topup_referral_income';
+const COL_MESSAGES = 'notifications';
+const COL_CHAT_MESSAGES = 'chat_messages';
+const COL_CHAT_CONVOS = 'chat_conversations';
 const STORAGE_FOLDER = 'new_payments';
 const MAX_REFERRALS = 2;
 const REFERRAL_EXPIRY_DAYS = 7;
@@ -2224,6 +2229,267 @@ export const FirebaseNewReferral = {
     }, (error) => {
       console.error('subscribeToUserReferrals error:', error);
       callback([]);
+    });
+  },
+};
+
+function getNotificationTitle(type) {
+  const titles = {
+    user_activated: 'Account Approved',
+    user_rejected: 'Account Rejected',
+    payment_approved: 'Payment Approved',
+    payment_rejected: 'Payment Rejected',
+    topup_approved: 'Top-Up Approved',
+    topup_rejected: 'Top-Up Rejected',
+    admin_approval_approved: 'Admin Access Approved',
+    admin_approval_rejected: 'Admin Access Rejected',
+    general: 'Notification',
+  };
+  return titles[type] || 'Notification';
+}
+
+export const FirebaseNotification = {
+  async send({ receiverId, receiverName, title, message, type, senderId, senderName }) {
+    if (!receiverId || !message || !type) {
+      throw new Error('receiverId, message, and type are required');
+    }
+    const user = await FirebaseUser.findById(receiverId);
+    if (!user) {
+      throw new Error('Recipient user not found');
+    }
+    const db = getDb();
+    const doc = {
+      senderId: senderId || 'admin',
+      receiverId,
+      receiverName: receiverName || user.name || '',
+      senderName: senderName || 'Admin',
+      title: title || getNotificationTitle(type),
+      message,
+      type: type || 'general',
+      status: 'unread',
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    };
+    const ref = await addDoc(collection(db, COL_MESSAGES), doc);
+    return { id: ref.id, ...doc };
+  },
+
+  async getByUser(userId) {
+    const db = getDb();
+    const colRef = collection(db, COL_MESSAGES);
+    const q = query(colRef, where('receiverId', '==', userId), orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async getAll(limitCount = 200) {
+    const db = getDb();
+    const colRef = collection(db, COL_MESSAGES);
+    const q = query(colRef, orderBy('createdAt', 'desc'), limit(limitCount));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async markAsRead(notificationId) {
+    const db = getDb();
+    const ref = doc(db, COL_MESSAGES, notificationId);
+    await updateDoc(ref, {
+      status: 'read',
+      readAt: new Date().toISOString(),
+    });
+  },
+
+  async markAllAsRead(userId) {
+    const db = getDb();
+    const colRef = collection(db, COL_MESSAGES);
+    const q = query(colRef, where('receiverId', '==', userId), where('status', '==', 'unread'));
+    const snap = await getDocs(q);
+    const updates = snap.docs.map(d => updateDoc(d.ref, {
+      status: 'read',
+      readAt: new Date().toISOString(),
+    }));
+    await Promise.all(updates);
+  },
+
+  async getUnreadCount(userId) {
+    const db = getDb();
+    const colRef = collection(db, COL_MESSAGES);
+    const q = query(colRef, where('receiverId', '==', userId), where('status', '==', 'unread'));
+    const snap = await getDocs(q);
+    return snap.size;
+  },
+
+  subscribeToUserNotifications(userId, callback) {
+    const db = getDb();
+    const colRef = collection(db, COL_MESSAGES);
+    const q = query(colRef, where('receiverId', '==', userId), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snap) => {
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      callback(items);
+    }, (error) => {
+      console.error('subscribeToUserNotifications error:', error);
+      callback([]);
+    });
+  },
+
+  subscribeToAllNotifications(callback) {
+    const db = getDb();
+    const colRef = collection(db, COL_MESSAGES);
+    const q = query(colRef, orderBy('createdAt', 'desc'), limit(200));
+    return onSnapshot(q, (snap) => {
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      callback(items);
+    }, (error) => {
+      console.error('subscribeToAllNotifications error:', error);
+      callback([]);
+    });
+  },
+
+  async deleteNotification(notificationId) {
+    const db = getDb();
+    const ref = doc(db, COL_MESSAGES, notificationId);
+    await deleteDoc(ref);
+  },
+};
+
+export const FirebaseMessage = FirebaseNotification;
+
+export const FirebaseChat = {
+  getConvoId(userId) {
+    return `admin_${userId}`;
+  },
+
+  async ensureConvo(userId, userName, userEmail) {
+    const db = getDb();
+    const convoId = this.getConvoId(userId);
+    const ref = doc(db, COL_CHAT_CONVOS, convoId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      const now = new Date().toISOString();
+      await setDoc(ref, {
+        convoId,
+        userId,
+        userName: userName || '',
+        userEmail: userEmail || '',
+        createdAt: now,
+        updatedAt: now,
+        lastMessage: '',
+        lastSenderId: '',
+      });
+    }
+    return convoId;
+  },
+
+  async send({ senderId, receiverId, messageText }) {
+    if (!senderId || !receiverId || !messageText) {
+      throw new Error('senderId, receiverId, and messageText are required');
+    }
+    const db = getDb();
+    const userId = senderId === 'admin' ? receiverId : senderId;
+    const convoId = this.getConvoId(userId);
+    await this.ensureConvo(userId, '', '');
+    const msg = {
+      convoId,
+      senderId,
+      receiverId,
+      messageText,
+      createdAt: new Date().toISOString(),
+      isRead: false,
+      isDelivered: true,
+    };
+    const ref = await addDoc(collection(db, COL_CHAT_MESSAGES), msg);
+    await updateDoc(doc(db, COL_CHAT_CONVOS, convoId), {
+      lastMessage: messageText,
+      lastSenderId: senderId,
+      updatedAt: new Date().toISOString(),
+    });
+    return { id: ref.id, ...msg };
+  },
+
+  async getMessages(convoId) {
+    const db = getDb();
+    const colRef = collection(db, COL_CHAT_MESSAGES);
+    const q = query(colRef, where('convoId', '==', convoId));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  },
+
+  async getConvosForAdmin() {
+    const db = getDb();
+    const colRef = collection(db, COL_CHAT_CONVOS);
+    const snap = await getDocs(colRef);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => ((b.updatedAt || '') > (a.updatedAt || '') ? 1 : -1));
+  },
+
+  async getConvoForUser(userId) {
+    const db = getDb();
+    const convoId = this.getConvoId(userId);
+    const ref = doc(db, COL_CHAT_CONVOS, convoId);
+    const snap = await getDoc(ref);
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  },
+
+  async markAsRead(messageId) {
+    const db = getDb();
+    const ref = doc(db, COL_CHAT_MESSAGES, messageId);
+    await updateDoc(ref, { isRead: true });
+  },
+
+  async markConvoAsRead(convoId, userId) {
+    const db = getDb();
+    const colRef = collection(db, COL_CHAT_MESSAGES);
+    const q = query(colRef, where('convoId', '==', convoId), where('receiverId', '==', userId), where('isRead', '==', false));
+    const snap = await getDocs(q);
+    const updates = snap.docs.map(d => updateDoc(d.ref, { isRead: true }));
+    await Promise.all(updates);
+  },
+
+  async getUnreadCount(userId) {
+    const db = getDb();
+    const colRef = collection(db, COL_CHAT_MESSAGES);
+    const q = query(colRef, where('receiverId', '==', userId), where('isRead', '==', false));
+    const snap = await getDocs(q);
+    return snap.size;
+  },
+
+  subscribeToMessages(convoId, callback) {
+    const db = getDb();
+    const colRef = collection(db, COL_CHAT_MESSAGES);
+    const q = query(colRef, where('convoId', '==', convoId));
+    return onSnapshot(q, (snap) => {
+      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+      callback(msgs);
+    }, (error) => {
+      console.error('subscribeToMessages error:', error.message);
+      callback([]);
+    });
+  },
+
+  subscribeToAdminConvos(callback) {
+    const db = getDb();
+    const colRef = collection(db, COL_CHAT_CONVOS);
+    return onSnapshot(colRef, (snap) => {
+      const convos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => ((b.updatedAt || '') > (a.updatedAt || '') ? 1 : -1));
+      callback(convos);
+    }, (error) => {
+      console.error('subscribeToAdminConvos error:', error.message);
+      callback([]);
+    });
+  },
+
+  subscribeToUserConvo(userId, callback) {
+    const db = getDb();
+    const convoId = this.getConvoId(userId);
+    const ref = doc(db, COL_CHAT_CONVOS, convoId);
+    return onSnapshot(ref, (snap) => {
+      callback(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    }, (error) => {
+      console.error('subscribeToUserConvo error:', error.message);
+      callback(null);
     });
   },
 };

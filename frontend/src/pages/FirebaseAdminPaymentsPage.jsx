@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
 import { getDb } from '../firebase/config.js';
 import { doc, deleteDoc } from 'firebase/firestore';
 import AdminSidebar from '../components/AdminSidebar.jsx';
@@ -592,6 +592,7 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
   const [overrideReason, setOverrideReason] = useState('');
   const [forceApproving, setForceApproving] = useState(false);
   const [adminApproving, setAdminApproving] = useState(false);
+  const [adminMessage, setAdminMessage] = useState('');
 
   const currentAdminStatus = user.admin_approval_status || 'APPROVED';
 
@@ -730,6 +731,23 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
     setMsg('');
     try {
       await onVerify(user.id, status);
+      if (status !== 'pending') {
+        if (!adminMessage || !adminMessage.trim()) {
+          setMsg('Message to user is required');
+          setVerifying(false);
+          return;
+        }
+        const adminName = getAdminName();
+        await FirebaseNotification.send({
+          receiverId: user.id,
+          receiverName: user.name || '',
+          message: adminMessage,
+          type: status === 'approved' ? 'payment_approved' : 'payment_rejected',
+          senderId: adminName,
+          senderName: adminName,
+        });
+        setAdminMessage('');
+      }
       setMsg(status === 'approved' ? 'Approved!' : 'Rejected!');
       setTimeout(() => { onClose(); }, 800);
     } catch (err) {
@@ -743,7 +761,22 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
     setVerifying(true);
     setMsg('');
     try {
+      if (!adminMessage || !adminMessage.trim()) {
+        setMsg('Message to user is required');
+        setVerifying(false);
+        return;
+      }
       await onVerify(user.id, 'approved');
+      const adminName = getAdminName();
+      await FirebaseNotification.send({
+        receiverId: user.id,
+        receiverName: user.name || '',
+        message: adminMessage,
+        type: 'payment_approved',
+        senderId: adminName,
+        senderName: adminName,
+      });
+      setAdminMessage('');
       onClose();
       if (onVerifyAndNext) onVerifyAndNext();
     } catch (err) {
@@ -766,8 +799,24 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
     setMsg('');
     try {
       const adminName = getAdminName();
+      if (!adminMessage || !adminMessage.trim()) {
+        setMsg('Message to user is required');
+        setForceApproving(false);
+        return;
+      }
       await FirebaseUser.forceApprovePayment(user.id, adminName, overrideReason);
       await FirebaseUser.updateAdminApproval(user.id, 'APPROVED').catch(() => {});
+      await FirebaseNotification.send({
+        receiverId: user.id,
+        receiverName: user.name || '',
+        message: adminMessage,
+        type: 'payment_approved',
+        senderId: adminName,
+        senderName: adminName,
+        adminId: adminName,
+        adminName,
+      });
+      setAdminMessage('');
       setMsg('✓ Force Approved!');
       setShowOverrideConfirm(false);
       setOverrideReason('');
@@ -794,16 +843,16 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
           </div>
 
           {autoApprovalRes?.wasAutoApproved && (
-            <div className="alert alert-success" style={{ marginBottom: '0.75rem', textAlign: 'center', fontSize: '1rem' }}>
+            <div className="alert alert-success text-center modal-alert-mb">
               ✓ Auto Approved
             </div>
           )}
 
           {autoApprovalRes?.wasAutoRejected && (
-            <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>
+            <div className="alert alert-error modal-alert-mb">
               <strong>✗ Auto Rejected</strong>
               {autoApprovalRes.failureReasons?.length > 0 && (
-                <ul style={{ margin: '0.35rem 0 0 1.25rem', fontSize: '0.85rem' }}>
+                <ul className="text-sm" style={{ margin: '0.35rem 0 0 1.25rem' }}>
                   {autoApprovalRes.failureReasons.map((r, i) => <li key={i}>{r}</li>)}
                 </ul>
               )}
@@ -811,10 +860,10 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
           )}
 
           {autoApprovalRes?.autoPending && (
-            <div className="alert alert-warning" style={{ marginBottom: '0.75rem' }}>
+            <div className="alert alert-warning modal-alert-mb">
               <strong>⏳ Pending Review</strong> — UTR and UPI look valid, but some OCR details are incomplete. Review manually.
               {autoApprovalRes.details?.filter(d => d.passed === null).length > 0 && (
-                <ul style={{ margin: '0.35rem 0 0 1.25rem', fontSize: '0.85rem' }}>
+                <ul className="text-sm" style={{ margin: '0.35rem 0 0 1.25rem' }}>
                   {autoApprovalRes.details.filter(d => d.passed === null).map((d, i) => (
                     <li key={i}>{d.check}: {d.reason || 'Skipped'}</li>
                   ))}
@@ -826,12 +875,12 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
           {autoApproving && (
             <div className="verify-section">
               <h4>Running Auto-Approval Checks...</h4>
-              <div className="muted" style={{ fontSize: '0.8rem' }}>Validating payment data...</div>
+              <div className="muted text-xs">Validating payment data...</div>
             </div>
           )}
 
           {isQualified && (
-            <div className="alert alert-warning" style={{ marginBottom: '0.75rem' }}>
+            <div className="alert alert-warning modal-alert-mb">
               <strong>Cycle Payment Required</strong> — User has completed 2 referrals and needs reactivation.
             </div>
           )}
@@ -849,10 +898,10 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
           <div className="verify-section">
             <h4>
               Auto Validation
-              {allPassed && <span className="verification-badge valid" style={{ marginLeft: '0.5rem' }}>All Passed</span>}
-              {hasFailures && <span className="verification-badge invalid" style={{ marginLeft: '0.5rem' }}>Issues Found</span>}
+              {allPassed && <span className="verification-badge valid ml-sm">All Passed</span>}
+              {hasFailures && <span className="verification-badge invalid ml-sm">Issues Found</span>}
             </h4>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+            <div className="validation-pills">
               {validations.map((v, i) => {
                 let cls = '';
                 let icon = '○';
@@ -870,17 +919,17 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
           {autoApprovalRes?.details && (
             <div className="verify-section">
               <h4>Validation Details</h4>
-              <div style={{ fontSize: '0.85rem' }}>
+              <div className="text-sm">
                 {autoApprovalRes.details.map((d, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px solid var(--border)' }}>
+                  <div key={i} className="detail-row-bordered">
                     <span>{d.check}</span>
                     <span>
                       {d.passed === true ? (
-                        <span style={{ color: 'var(--success)' }}>✓ Pass</span>
+                        <span className="text-success">✓ Pass</span>
                       ) : d.passed === false ? (
-                        <span style={{ color: 'var(--danger)' }}>✗ {d.reason || 'Fail'}</span>
+                        <span className="text-danger">✗ {d.reason || 'Fail'}</span>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>○ Skipped — {d.reason || 'Not applicable'}</span>
+                        <span className="text-muted">○ Skipped — {d.reason || 'Not applicable'}</span>
                       )}
                     </span>
                   </div>
@@ -907,27 +956,27 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
           {ocrData && (
             <div className="verify-section">
               <h4>OCR vs User Input</h4>
-              <div style={{ fontSize: '0.85rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px solid var(--border)' }}>
+              <div className="text-sm">
+                <div className="detail-row-bordered">
                   <span>UTR</span>
                   <span>
-                    <span style={{ color: 'var(--text-muted)' }}>User: {displayUtr || '—'}</span>
+                    <span className="text-muted">User: {displayUtr || '—'}</span>
                     {' | '}
                     <span style={{ color: ocrData.utr ? 'var(--success)' : 'var(--danger)' }}>OCR: {ocrData.utr || 'Not detected'}</span>
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px solid var(--border)' }}>
+                <div className="detail-row-bordered">
                   <span>Amount</span>
                   <span>
-                    <span style={{ color: 'var(--text-muted)' }}>User: ₹{user.user_entered_amount || 120}</span>
+                    <span className="text-muted">User: ₹{user.user_entered_amount || 120}</span>
                     {' | '}
                     <span style={{ color: ocrData.amount ? 'var(--success)' : 'var(--danger)' }}>OCR: {ocrData.amount ? `₹${ocrData.amount}` : 'Not detected'}</span>
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px solid var(--border)' }}>
+                <div className="detail-row-bordered">
                   <span>Date</span>
                   <span>
-                    <span style={{ color: 'var(--text-muted)' }}>User: {user.user_entered_date || 'Today'}</span>
+                    <span className="text-muted">User: {user.user_entered_date || 'Today'}</span>
                     {' | '}
                     <span style={{ color: ocrData.date ? 'var(--success)' : 'var(--danger)' }}>OCR: {ocrData.date || 'Not detected'}</span>
                   </span>
@@ -947,55 +996,55 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
           {ocrLoading && (
             <div className="verify-section">
               <h4>OCR Processing...</h4>
-              <div className="muted" style={{ fontSize: '0.8rem' }}>Extracting text from screenshot...</div>
+              <div className="muted text-xs">Extracting text from screenshot...</div>
             </div>
           )}
 
           {ocrError && (
             <div className="verify-section">
               <h4>OCR Error</h4>
-              <div style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>{ocrError}</div>
+              <div className="text-xs text-danger">{ocrError}</div>
             </div>
           )}
 
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
+          <div className="detail-grid-sm">
             <div>
-              <div className="muted" style={{ fontSize: '0.85rem' }}>User</div>
-              <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{user.name}</div>
+              <div className="muted text-sm">User</div>
+              <div className="font-bold" style={{ fontSize: '1.05rem' }}>{user.name}</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div className="detail-grid-2col">
               <div>
-                <div className="muted" style={{ fontSize: '0.85rem' }}>Email</div>
+                <div className="muted text-sm">Email</div>
                 <div style={{ fontSize: '0.9rem' }}>{user.email}</div>
               </div>
               <div>
-                <div className="muted" style={{ fontSize: '0.85rem' }}>Phone</div>
+                <div className="muted text-sm">Phone</div>
                 <div style={{ fontSize: '0.9rem' }}>{user.phone || '—'}</div>
               </div>
             </div>
 
             <div>
-              <div className="muted" style={{ fontSize: '0.85rem' }}>UTR Number</div>
-              <div style={{ fontFamily: 'monospace', fontSize: '1.1rem', fontWeight: 'bold' }}>
+              <div className="muted text-sm">UTR Number</div>
+              <div className="font-mono font-bold" style={{ fontSize: '1.1rem' }}>
                 {displayUtr || '—'}
-                {dupLoading && <span className="muted" style={{ marginLeft: '0.5rem', fontSize: '0.75rem' }}>Checking...</span>}
-                {dupCheck && <span className="verification-badge invalid" style={{ marginLeft: '0.5rem' }}>Duplicate</span>}
-                {!dupLoading && !dupCheck && displayUtr && <span className="verification-badge valid" style={{ marginLeft: '0.5rem' }}>Unique</span>}
+                {dupLoading && <span className="muted ml-sm text-xs">Checking...</span>}
+                {dupCheck && <span className="verification-badge invalid ml-sm">Duplicate</span>}
+                {!dupLoading && !dupCheck && displayUtr && <span className="verification-badge valid ml-sm">Unique</span>}
               </div>
             </div>
 
             <div>
-              <div className="muted" style={{ fontSize: '0.85rem' }}>Current Status</div>
+              <div className="muted text-sm">Current Status</div>
               <span className={`badge ${(isCyclePayment ? user.cycle_payment_status : user.payment_status) === 'approved' ? 'badge-paid' : (isCyclePayment ? user.cycle_payment_status : user.payment_status) === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
                 {isCyclePayment ? (user.cycle_payment_status ? user.cycle_payment_status.charAt(0).toUpperCase() + user.cycle_payment_status.slice(1) : 'Pending') : (user.payment_status ? user.payment_status.charAt(0).toUpperCase() + user.payment_status.slice(1) : 'Pending')}
               </span>
               {isCyclePayment && user.cycle_payment_status === 'pending' && (
-                <span style={{ marginLeft: '0.5rem', color: 'var(--warning)', fontSize: '0.8rem' }}>(Cycle Payment)</span>
+                <span className="ml-sm text-warning text-xs">(Cycle Payment)</span>
               )}
             </div>
 
             <div>
-              <div className="muted" style={{ fontSize: '0.85rem' }}>Payment Screenshot</div>
+              <div className="muted text-sm">Payment Screenshot</div>
               {displayUrl ? (
                 <div>
                   <img src={getImageUrl(displayUrl)} alt="Payment Screenshot Thumbnail" className="screenshot-thumb" onClick={() => setZoomUrl(displayUrl)} loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
@@ -1008,7 +1057,7 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
 
             {user.created_at && (
               <div>
-                <div className="muted" style={{ fontSize: '0.85rem' }}>Payment Date</div>
+                <div className="muted text-sm">Payment Date</div>
                 <div style={{ fontSize: '0.9rem' }}>{formatDateTime(user.created_at)}</div>
                 <div className="relative-time">{getRelativeTime(user.created_at)}</div>
               </div>
@@ -1016,20 +1065,34 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
 
             {user.referred_by && (
               <div>
-                <div className="muted" style={{ fontSize: '0.85rem' }}>Referred By</div>
+                <div className="muted text-sm">Referred By</div>
                 <div>{user.referred_by}</div>
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div className="detail-grid-2col">
               <div>
-                <div className="muted" style={{ fontSize: '0.85rem' }}>Referral Code</div>
-                <div style={{ fontFamily: 'monospace' }}>{user.referral_code}</div>
+                <div className="muted text-sm">Referral Code</div>
+                <div className="font-mono">{user.referral_code}</div>
               </div>
               <div>
-                <div className="muted" style={{ fontSize: '0.85rem' }}>Total Referrals</div>
+                <div className="muted text-sm">Total Referrals</div>
                 <div>{user.total_referral_count || 0} (Cycle: {user.referrals_count || 0})</div>
               </div>
+            </div>
+          </div>
+
+          <div className="modal-modern-body" style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+            <div className="field">
+              <label>Message to User *</label>
+              <textarea
+                className="input w-full"
+                placeholder="Explain to the user why this action was taken (required)"
+                value={adminMessage}
+                onChange={e => setAdminMessage(e.target.value)}
+                rows={2}
+                style={{ resize: 'vertical' }}
+              />
             </div>
           </div>
 
@@ -1058,10 +1121,10 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
           {/* Admin Login Approval — independent from payment verification */}
           <div className="modal-modern-body" style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
             <h4 style={{ margin: '0 0 0.5rem' }}>Admin Login Approval</h4>
-            <div className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+            <div className="muted text-sm mb-sm">
               Current: <strong>{currentAdminStatus}</strong>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div className="flex-row">
               <button
                 className={`btn-modern btn-modern-success${adminApproving ? ' btn-loading' : ''}`}
                 onClick={() => handleAdminApproval('APPROVED')}
@@ -1083,19 +1146,19 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
 
           {showOverrideConfirm && (
             <div className="modal-modern-body" style={{ background: 'rgba(245, 165, 36, 0.06)', borderTop: '1px solid var(--border)' }}>
-              <h4 style={{ color: 'var(--warning)', margin: '0 0 0.5rem' }}>Force Approve Payment</h4>
-              <p className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+              <h4 className="text-warning" style={{ margin: '0 0 0.5rem' }}>Force Approve Payment</h4>
+              <p className="muted text-sm mb-sm">
                 This will bypass all validation checks. The user's account will be activated immediately.
               </p>
               <textarea
-                className="input"
+                className="input w-full mb-sm"
                 placeholder="Reason for override (optional)"
                 value={overrideReason}
                 onChange={e => setOverrideReason(e.target.value)}
                 rows={2}
-                style={{ width: '100%', marginBottom: '0.5rem', resize: 'vertical' }}
+                style={{ resize: 'vertical' }}
               />
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div className="flex-row">
                 <button className="btn-modern btn-modern-warning" onClick={handleForceApprove} disabled={forceApproving}>
                   {forceApproving ? '\u23F3' : '\u2713'} Confirm Force Approve
                 </button>
@@ -1284,7 +1347,7 @@ export default function FirebaseAdminPaymentsPage() {
               Payment Verification
             </h1>
             <div className="admin-page-actions">
-              <span className="badge badge-pending" style={{ fontSize: '0.8rem' }}>{stats.pending} pending</span>
+              <span className="badge badge-pending text-xs">{stats.pending} pending</span>
             </div>
           </div>
 
@@ -1321,7 +1384,7 @@ export default function FirebaseAdminPaymentsPage() {
             </div>
           </div>
 
-          <div className="card-modern" style={{ marginBottom: '1rem' }}>
+          <div className="card-modern mb-md">
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F50D}'} Search & Smart Filter</h2>
             </div>
@@ -1352,7 +1415,7 @@ export default function FirebaseAdminPaymentsPage() {
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F4CB}'} Payments ({filteredUsers.length})</h2>
             </div>
-            <p className="muted" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>
+            <p className="muted text-sm mb-md">
               Smart auto-approval enabled. Valid payments are auto-approved. Others require manual review.
             </p>
 
@@ -1379,20 +1442,20 @@ export default function FirebaseAdminPaymentsPage() {
                     const badge = getValidationBadge(u);
                     return (
                       <tr key={u.id} style={u.auto_approved || u.auto_rejected ? { opacity: 0.65 } : {}}>
-                        <td data-label="Date" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                        <td data-label="Date" className="text-xs whitespace-nowrap">
                           {u.created_at ? <><div>{new Date(u.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div><div className="relative-time">{getRelativeTime(u.created_at)}</div></> : '—'}
                         </td>
                         <td data-label="Name">
-                          <div style={{ fontWeight: 600 }}>{u.name}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{u.email}</div>
+                          <div className="font-semibold">{u.name}</div>
+                          <div className="text-xs" style={{ color: 'var(--muted)' }}>{u.email}</div>
                         </td>
                         <td data-label="Phone">{u.phone || '—'}</td>
-                        <td data-label="UTR" style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                        <td data-label="UTR" className="font-mono text-sm">
                           {displayUtr || '—'}
                           {isDup && <span className="verification-badge invalid" style={{ display: 'block', marginTop: '0.2rem' }}>Duplicate</span>}
                         </td>
                         <td data-label="Type">
-                          {isCycle ? <span className="badge badge-rejected" style={{ fontSize: '0.7rem' }}>Cycle</span> : <span className="muted" style={{ fontSize: '0.7rem' }}>Initial</span>}
+                          {isCycle ? <span className="badge badge-rejected badge-xs">Cycle</span> : <span className="muted badge-xs">Initial</span>}
                         </td>
                         <td data-label="Validation">
                           <div className="verification-summary">
@@ -1408,7 +1471,7 @@ export default function FirebaseAdminPaymentsPage() {
                           <span className={badge.className}>{badge.label}</span>
                         </td>
                         <td data-label="Actions">
-                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <div className="flex-actions">
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => openVerification(u)}>Verify</button>
                             {displayUrl && <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={() => window.open(getImageUrl(displayUrl), '_blank')} title="View Screenshot">{'\u{1F4F7}'}</button>}
                             <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => handleDeleteUser(u.id)}>Del</button>
@@ -1418,7 +1481,7 @@ export default function FirebaseAdminPaymentsPage() {
                     );
                   })}
                   {filteredUsers.length === 0 && (
-                    <tr><td colSpan={8} className="muted" style={{ textAlign: 'center', padding: '2rem' }}>No payments found.</td></tr>
+                    <tr><td colSpan={8} className="muted text-center" style={{ padding: '2rem' }}>No payments found.</td></tr>
                   )}
                 </tbody>
               </table>

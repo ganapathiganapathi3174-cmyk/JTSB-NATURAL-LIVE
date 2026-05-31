@@ -53,6 +53,25 @@ function IconStatus() {
   );
 }
 
+function IconMessages() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <polyline points="22,6 12,13 2,6" />
+    </svg>
+  );
+}
+
+function IconChat() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+
 function IconLogout() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -69,6 +88,8 @@ const navItems = [
   { path: '/fb-admin/topups', label: 'Topups', icon: IconTopups },
   { path: '/fb-admin/users', label: 'Users', icon: IconUsers },
   { path: '/fb-admin/status', label: 'Status Board', icon: IconStatus },
+  { path: '/fb-admin/messages', label: 'Messages', icon: IconMessages },
+  { path: '/fb-admin/chat', label: 'Chat', icon: IconChat },
 ];
 
 export default function AdminSidebar({ pendingCounts = {}, userName }) {

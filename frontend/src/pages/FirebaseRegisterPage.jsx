@@ -207,14 +207,14 @@ export default function FirebaseRegisterPage() {
         <div className="topbar">
           <div className="brand">Starlight Ascent</div>
         </div>
-        <div className="card" style={{ maxWidth: 440, margin: '2rem auto', textAlign: 'center' }}>
+        <div className="auth-card" style={{ textAlign: 'center' }}>
           <h1>Registration Successful!</h1>
           <div className="alert alert-success">
             <strong>Account created!</strong><br/>
             Please wait for admin approval.<br/>
             Then login with your email and password.
           </div>
-          <Link to="/fb/login" className="btn btn-primary" style={{ marginTop: '1rem' }}>
+          <Link to="/fb/login" className="btn btn-primary mt-md">
             Go to Login
           </Link>
         </div>
@@ -228,7 +228,7 @@ export default function FirebaseRegisterPage() {
         <div className="brand">Starlight Ascent</div>
         <Link to="/fb/login">Login</Link>
       </div>
-      <div className="card" style={{ maxWidth: 440, margin: '2rem auto' }}>
+      <div className="auth-card">
         <h1>Create Account</h1>
         
         {error && <div className="alert alert-error">{error}</div>}
@@ -253,7 +253,7 @@ export default function FirebaseRegisterPage() {
               onBlur={e => checkEmailDuplicate(e.target.value)}
               style={{ borderColor: emailExists ? 'var(--error)' : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'var(--success)' : '' }}
             />
-            {emailExists && <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginTop: '0.25rem' }}>This email is already registered</div>}
+            {emailExists && <div className="field-error">This email is already registered</div>}
           </div>
           <div className="field">
             <label>Phone *</label>
@@ -265,7 +265,7 @@ export default function FirebaseRegisterPage() {
               onBlur={e => checkPhoneDuplicate(e.target.value)}
               style={{ borderColor: phoneExists ? 'var(--error)' : phone.trim().length >= 10 ? 'var(--success)' : '' }}
             />
-            {phoneExists && <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginTop: '0.25rem' }}>This phone number is already registered</div>}
+            {phoneExists && <div className="field-error">This phone number is already registered</div>}
           </div>
           <div className="field">
             <label>UTR Number *</label>
@@ -278,35 +278,26 @@ export default function FirebaseRegisterPage() {
               }}
               className={utrExists ? 'input-error' : (utr.trim() && !utrExists ? 'input-valid' : '')}
             />
-            {checkingUtr && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking UTR...</div>}
+            {checkingUtr && <div className="hint">Checking UTR...</div>}
             {utrExists && <div className="field-error">This UTR number already exists.</div>}
-            {utr.trim() && !utrExists && !checkingUtr && <div className="hint" style={{ color: 'var(--success)', marginTop: '0.25rem' }}>UTR number is available</div>}
+            {utr.trim() && !utrExists && !checkingUtr && <div className="hint" style={{ color: 'var(--success)' }}>UTR number is available</div>}
           </div>
           <div className="field">
             <label>Password *</label>
-            <div style={{ position: 'relative' }}>
+            <div className="password-field-wrap">
               <input 
                 required 
                 type={showPassword ? 'text' : 'password'} 
                 value={password} 
                 minLength={6} 
                 onChange={e => setPassword(e.target.value)} 
-                style={{ width: '100%', paddingRight: '2.5rem', ...(password.length >= 6 ? {} : {}) }}
+                className="w-full"
+                style={{ paddingRight: '2.5rem' }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '0.5rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1.1rem',
-                  padding: '0.25rem'
-                }}
+                className="password-toggle-btn"
               >
                 {showPassword ? '👁' : '👁️'}
               </button>
@@ -323,20 +314,20 @@ export default function FirebaseRegisterPage() {
               onBlur={validateReferralCode}
               style={referralError ? { borderColor: 'var(--error)' } : !referralCode.trim() ? {} : { borderColor: 'var(--success)' }}
             />
-            {referralError && <div className="muted" style={{ color: 'var(--error)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{referralError}</div>}
-            {validatingReferral && <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>Validating...</div>}
+            {referralError && <div className="field-error">{referralError}</div>}
+            {validatingReferral && <div className="hint">Validating...</div>}
           </div>
           {(emailExists || phoneExists) && (
-            <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+            <div className="alert alert-error mb-md">
               {emailExists && <div>This email is already registered. Please use a different email.</div>}
               {phoneExists && <div>This phone number is already registered. Please use a different number.</div>}
             </div>
           )}
-          <button className={`btn btn-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={!canSubmit || emailExists || phoneExists} style={{ width: '100%' }}>
+          <button className={`btn btn-primary w-full${loading ? ' btn-loading' : ''}`} type="submit" disabled={!canSubmit || emailExists || phoneExists}>
             {loading ? 'Creating...' : 'Create Account'}
           </button>
         </form>
-        <p className="muted" style={{ marginTop: '1rem' }}>
+        <p className="muted mt-md">
           Already have account? <Link to="/fb/login">Login</Link>
         </p>
       </div>

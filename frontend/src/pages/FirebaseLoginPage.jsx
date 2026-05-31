@@ -130,39 +130,29 @@ export default function FirebaseLoginPage() {
       <div className="topbar">
         <div className="brand">Starlight Ascent</div>
       </div>
-      <div className="card" style={{ maxWidth: 440, margin: '2rem auto' }}>
+      <div className="card auth-card">
         <h1>Login</h1>
         
         {showSetPasswordField && setPasswordFor ? (
           <div className="alert alert-success">
             <strong>Your account is approved!</strong><br/>
             Set a password to login.
-            <form onSubmit={handleSetPassword} style={{ marginTop: '1rem' }}>
+            <form onSubmit={handleSetPassword} className="mt-md">
               <div className="field">
                 <label>New Password</label>
-                <div style={{ position: 'relative' }}>
+                <div className="password-field-wrap">
                   <input type={showPassword ? 'text' : 'password'} value={newPassword} minLength={6} 
-                    onChange={e => setNewPassword(e.target.value)} required style={{ width: '100%', paddingRight: '2.5rem' }} />
+                    onChange={e => setNewPassword(e.target.value)} required className="w-full" style={{ paddingRight: '2.5rem' }} />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    style={{
-                      position: 'absolute',
-                      right: '0.5rem',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '1.1rem',
-                      padding: '0.25rem'
-                    }}
+                    className="password-toggle-btn"
                   >
                     {showPassword ? '👁' : '👁️'}
                   </button>
                 </div>
               </div>
-              <button type="submit" className={`btn btn-primary${loading ? ' btn-loading' : ''}`} disabled={loading} style={{ width: '100%' }}>
+              <button type="submit" className={`btn btn-primary${loading ? ' btn-loading' : ''} w-full`} disabled={loading}>
                 {loading ? 'Setting...' : 'Set Password & Login'}
               </button>
             </form>
@@ -180,33 +170,23 @@ export default function FirebaseLoginPage() {
           </div>
           <div className="field">
             <label>Password</label>
-            <div style={{ position: 'relative' }}>
-              <input required type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{ width: '100%', paddingRight: '2.5rem' }} />
+            <div className="password-field-wrap">
+              <input required type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} className="w-full" style={{ paddingRight: '2.5rem' }} />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '0.5rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1.1rem',
-                  padding: '0.25rem'
-                }}
+                className="password-toggle-btn"
               >
                 {showPassword ? '👁' : '👁️'}
               </button>
             </div>
           </div>
-          <button className={`btn btn-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading} style={{ width: '100%' }}>
+          <button className={`btn btn-primary${loading ? ' btn-loading' : ''} w-full`} type="submit" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
         
-        <p className="muted" style={{ marginTop: '1rem' }}>
+        <p className="muted mt-md">
           New user? <Link to="/fb/register">Register here</Link>
         </p>
         <p className="muted">

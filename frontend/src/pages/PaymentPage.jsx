@@ -286,7 +286,7 @@ export default function PaymentPage() {
         </div>
       </div>
 
-      <div className="card" style={{ maxWidth: 600, margin: '0 auto' }}>
+      <div className="card payment-card">
         <div className="payment-header">
           <h1>Register - Starlight Ascent</h1>
           <p className="muted">
@@ -295,7 +295,7 @@ export default function PaymentPage() {
         </div>
 
         {referredBy && (
-          <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
+          <div className="alert alert-success mb-md">
             You were referred by someone! They will get credit for your signup.
           </div>
         )}
@@ -329,39 +329,40 @@ export default function PaymentPage() {
         </div>
 
         {qrDataUrl && (
-          <>
-            <div className="qr-container">
-              <div className="qr-box">
-                <img src={qrDataUrl} alt="UPI QR Code" />
+          <div className="payment-layout">
+            <div className="payment-sidebar">
+              <div className="qr-container">
+                <div className="qr-box">
+                  <img src={qrDataUrl} alt="UPI QR Code" />
+                </div>
+                <div className="qr-label">Scan with any UPI app</div>
               </div>
-              <div className="qr-label">Scan with any UPI app</div>
-            </div>
 
-            <div className="amount-display">
-              <div className="amount">₹{AMOUNT}</div>
-              <div className="label">Payment Amount</div>
-            </div>
+              <div className="amount-display">
+                <div className="amount">₹{AMOUNT}</div>
+                <div className="label">Payment Amount</div>
+              </div>
 
-            <div className="upi-id-box">
-              <div className="label">UPI ID / VPA</div>
-              <div className="value">
-                <code>{UPI_VPA}</code>
-                <button type="button" className={`copy-btn ${copied ? 'copied' : ''}`} onClick={copyUpiId}>
-                  {copied ? '✓ Copied!' : 'Copy'}
-                </button>
+              <div className="upi-id-box">
+                <div className="label">UPI ID / VPA</div>
+                <div className="value">
+                  <code>{UPI_VPA}</code>
+                  <button type="button" className={`copy-btn ${copied ? 'copied' : ''}`} onClick={copyUpiId}>
+                    {copied ? '✓ Copied!' : 'Copy'}
+                  </button>
+                </div>
               </div>
             </div>
-          </>
-        )}
 
-        <div className="divider">
-          <span>Submit Payment Details</span>
-        </div>
+            <div className="payment-main">
+              <div className="divider">
+                <span>Submit Payment Details</span>
+              </div>
 
-        {error && <div className="alert alert-error">{error}</div>}
-        {success && <div className="alert alert-success">{success}</div>}
+              {error && <div className="alert alert-error">{error}</div>}
+              {success && <div className="alert alert-success">{success}</div>}
 
-        <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit}>
           <div className="field">
             <label>Full Name *</label>
             <input
@@ -448,15 +449,15 @@ export default function PaymentPage() {
 
           <div className="field">
             <label>Payment Amount *</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0' }}>
-              <span style={{ fontSize: '1.3rem', fontWeight: 700 }}>₹{AMOUNT}</span>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
+            <div className="amount-confirm-row">
+              <span className="amount-value">₹{AMOUNT}</span>
+              <label className="amount-check-label">
                 <input
                   type="checkbox"
                   checked={confirmedAmount}
                   onChange={(e) => setConfirmedAmount(e.target.checked)}
                 />
-                <span style={{ fontSize: '0.9rem' }}>I confirm I paid exactly ₹{AMOUNT}</span>
+                <span>I confirm I paid exactly ₹{AMOUNT}</span>
               </label>
             </div>
           </div>
@@ -481,28 +482,32 @@ export default function PaymentPage() {
               onChange={handleScreenshotChange}
             />
             {screenshotPreview && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <img src={screenshotPreview} alt="Preview" style={{ maxWidth: '150px', borderRadius: '4px' }} />
+              <div className="screenshot-preview">
+                <img src={screenshotPreview} alt="Preview" />
               </div>
             )}
             <div className="hint">Upload a screenshot of your payment (optional, helps verification)</div>
           </div>
 
           <button
-            className={`btn btn-primary${loading ? ' btn-loading' : ''}`}
+            className={`btn btn-primary${loading ? ' btn-loading' : ''} submit-btn-full`}
             type="submit"
             disabled={loading}
-            style={{ width: '100%', padding: '0.85rem', fontSize: '1.05rem' }}
           >
             {loading ? 'Submitting...' : 'Submit Payment Details →'}
           </button>
         </form>
+            </div>
+          </div>
+        )}
 
-        <div className="alert alert-success" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-          <strong>Payment submitted!</strong><br />
-          Admin will verify and enable your account.<br />
-          Contact admin for login access after approval.
-        </div>
+        {success && (
+          <div className="payment-success-note">
+            <strong>Payment submitted!</strong><br />
+            Admin will verify and enable your account.<br />
+            Contact admin for login access after approval.
+          </div>
+        )}
       </div>
     </div>
   );

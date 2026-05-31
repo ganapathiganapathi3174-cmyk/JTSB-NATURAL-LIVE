@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
 import { getDb } from '../firebase/config.js';
 import { doc, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
 import AdminSidebar from '../components/AdminSidebar.jsx';
@@ -26,6 +26,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
   const [activating, setActivating] = useState(false);
   const [activateMsg, setActivateMsg] = useState('');
   const [adminApproving, setAdminApproving] = useState(false);
+  const [adminMessage, setAdminMessage] = useState('');
 
   const currentAdminStatus = user.admin_approval_status || 'APPROVED';
 
@@ -34,6 +35,15 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
     try {
       const adminName = getAdminName();
       await FirebaseUser.updateAdminApproval(user.id, status, adminName);
+      await FirebaseNotification.send({
+        receiverId: user.id,
+        receiverName: user.name || '',
+        message: adminMessage,
+        type: status === 'APPROVED' ? 'admin_approval_approved' : 'admin_approval_rejected',
+        senderId: adminName,
+        senderName: adminName,
+      });
+      setAdminMessage('');
       if (status === 'APPROVED' && onActivate) onActivate(user.id);
       console.log(`[ADMIN APPROVAL] User ${user.id} ${status} by ${adminName}`);
     } catch (err) {
@@ -115,6 +125,20 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
     try {
       const adminName = getAdminName();
       await FirebaseUser.activateUser(user.id, adminName, activateReason);
+      if (!adminMessage || !adminMessage.trim()) {
+        setActivating(false);
+        return;
+      }
+      await FirebaseUser.activateUser(user.id, adminName, activateReason);
+      await FirebaseNotification.send({
+        receiverId: user.id,
+        receiverName: user.name || '',
+        message: adminMessage,
+        type: 'user_activated',
+        senderId: adminName,
+        senderName: adminName,
+      });
+      setAdminMessage('');
       setActivateMsg('✓ User activated successfully!');
       setShowActivateConfirm(false);
       setActivateReason('');
@@ -149,7 +173,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           <button onClick={onClose} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
         </div>
         <div className="modal-modern-body">
-          <div className="detail-grid" style={{ marginBottom: '1rem' }}>
+          <div className="detail-grid mb-md">
             <div className="detail-row">
               <span className="detail-label">Name</span>
               <span className="detail-value">{user.name}</span>
@@ -184,15 +208,20 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
                 {currentAdminStatus}
               </span>
               {currentAdminStatus === 'PENDING' && (
-                <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.3rem' }}>
-                  <button className={`btn-modern btn-modern-success btn-modern-xs${adminApproving ? ' btn-loading' : ''}`}
-                    onClick={() => handleAdminApproval('APPROVED')} disabled={adminApproving}>
-                    Approve
-                  </button>
-                  <button className={`btn-modern btn-modern-danger btn-modern-xs${adminApproving ? ' btn-loading' : ''}`}
-                    onClick={() => handleAdminApproval('REJECTED')} disabled={adminApproving}>
-                    Reject
-                  </button>
+                <div style={{ marginTop: '0.3rem' }}>
+                  <textarea className="input w-full" placeholder="Message to user (required)"
+                    value={adminMessage} onChange={e => setAdminMessage(e.target.value)}
+                    rows={1} style={{ resize: 'vertical', fontSize: '0.78rem', marginBottom: '0.3rem' }} />
+                  <div className="flex-actions">
+                    <button className={`btn-modern btn-modern-success btn-modern-xs${adminApproving ? ' btn-loading' : ''}`}
+                      onClick={() => handleAdminApproval('APPROVED')} disabled={adminApproving}>
+                      Approve
+                    </button>
+                    <button className={`btn-modern btn-modern-danger btn-modern-xs${adminApproving ? ' btn-loading' : ''}`}
+                      onClick={() => handleAdminApproval('REJECTED')} disabled={adminApproving}>
+                      Reject
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -200,8 +229,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               <span className="detail-label">Referral Code</span>
               <div>
                 <code style={{ fontSize: '0.95rem' }}>{user.referral_code}</code>
-                <button className="btn-modern btn-modern-ghost btn-modern-xs"
-                  style={{ marginLeft: '0.5rem' }}
+                <button className="btn-modern btn-modern-ghost btn-modern-xs ml-sm"
                   onClick={() => navigator.clipboard.writeText(user.referral_code)}>
                   Copy
                 </button>
@@ -220,29 +248,29 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           </div>
 
           {loading ? (
-            <div className="muted" style={{ marginBottom: '1rem' }}>Loading referrals...</div>
+            <div className="muted mb-md">Loading referrals...</div>
           ) : referrals.length > 0 ? (
-            <div style={{ marginBottom: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <div className="mb-md">
+              <h4 className="section-label">
                 Referrals ({referrals.length})
               </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <div className="flex-col gap-sm">
                 {referrals.map((ref) => (
-                  <div key={ref.id} style={{ padding: '0.6rem 0.75rem', background: 'var(--surface-2)', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div key={ref.id} className="referral-card-row">
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{ref.name}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{ref.email}</div>
-                      <div style={{ fontSize: '0.75rem', marginTop: '0.15rem' }}>
+                      <div className="font-semibold" style={{ fontSize: '0.9rem' }}>{ref.name}</div>
+                      <div className="text-xs text-muted">{ref.email}</div>
+                      <div className="text-xs" style={{ marginTop: '0.15rem' }}>
                         {ref.referred_by_status === 'approved' ? (
-                          <span className="badge badge-paid" style={{ fontSize: '0.65rem' }}>Approved</span>
+                          <span className="badge badge-paid badge-xs">Approved</span>
                         ) : ref.referred_by_status === 'pending' || !ref.referred_by_status ? (
-                          <span className="badge badge-pending" style={{ fontSize: '0.65rem' }}>Pending</span>
+                          <span className="badge badge-pending badge-xs">Pending</span>
                         ) : (
-                          <span className="badge badge-rejected" style={{ fontSize: '0.65rem' }}>{ref.referred_by_status}</span>
+                          <span className="badge badge-rejected badge-xs">{ref.referred_by_status}</span>
                         )}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                    <div className="flex-actions">
                       {(ref.referred_by_status === 'pending' || !ref.referred_by_status) && (
                         <button className={`btn-modern btn-modern-primary btn-modern-xs${approving ? ' btn-loading' : ''}`}
                           onClick={() => handleApproveReferral(ref.id)}
@@ -267,15 +295,15 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               </div>
             </div>
           ) : (
-            <div className="muted" style={{ marginBottom: '1rem' }}>No referrals yet</div>
+            <div className="muted mb-md">No referrals yet</div>
           )}
 
-          <div style={{ marginBottom: '1rem' }}>
+          <div className="mb-md">
             <div className="detail-row">
               <span className="detail-label">Payment Screenshot</span>
               {user.upi_screenshot_url ? (
                 <div>
-                  <button className="btn-modern btn-modern-primary btn-modern-sm" style={{ marginBottom: '0.5rem' }}
+                  <button className="btn-modern btn-modern-primary btn-modern-sm mb-sm"
                     onClick={() => window.open(getImageUrl(user.upi_screenshot_url), '_blank')}>
                     Open Image
                   </button>
@@ -289,9 +317,9 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           </div>
 
           {user.activated_at && (
-            <div className="verify-section" style={{ marginBottom: '1rem' }}>
+            <div className="verify-section mb-md">
               <h4>Activation Info</h4>
-              <div style={{ fontSize: '0.85rem' }}>
+              <div className="text-sm">
                 <div><strong>Activated by:</strong> {user.activated_by || '—'}</div>
                 <div><strong>Activated at:</strong> {user.activated_at ? new Date(user.activated_at).toLocaleString() : '—'}</div>
                 {user.activation_reason && <div><strong>Reason:</strong> {user.activation_reason}</div>}
@@ -299,7 +327,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div className="flex-row-wrap">
             {(user.account_status === 'inactive' || user.account_status === 'pending') && !showActivateConfirm && (
               <button className="btn-modern btn-modern-warning" onClick={() => setShowActivateConfirm(true)}>
                 Activate User
@@ -312,19 +340,22 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           </div>
 
           {showActivateConfirm && (
-            <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(245, 165, 36, 0.08)', borderRadius: 'var(--radius)', border: '1px solid rgba(245, 165, 36, 0.2)' }}>
-              <h4 style={{ color: 'var(--warning)', margin: '0 0 0.5rem' }}>Activate User</h4>
-              <p className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+            <div className="activation-card">
+              <h4 className="text-warning" style={{ margin: '0 0 0.5rem' }}>Activate User</h4>
+              <p className="muted text-sm mb-sm">
                 Are you sure you want to activate this user?
               </p>
-              <textarea className="input" placeholder="Reason for activation (optional)"
+              <textarea className="input w-full mb-sm" placeholder="Reason for activation (optional)"
                 value={activateReason} onChange={e => setActivateReason(e.target.value)}
-                rows={2} style={{ width: '100%', marginBottom: '0.5rem', resize: 'vertical' }} />
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                rows={2} style={{ resize: 'vertical' }} />
+              <textarea className="input w-full mb-sm" placeholder="Message to user (required)"
+                value={adminMessage} onChange={e => setAdminMessage(e.target.value)}
+                rows={2} style={{ resize: 'vertical' }} />
+              <div className="flex-row">
                 <button className="btn-modern btn-modern-warning" onClick={handleActivateUser} disabled={activating}>
                   {activating ? '\u23F3' : '\u2713'} Confirm Activation
                 </button>
-                <button className="btn-modern btn-modern-ghost" onClick={() => { setShowActivateConfirm(false); setActivateReason(''); }} disabled={activating}>
+                <button className="btn-modern btn-modern-ghost" onClick={() => { setShowActivateConfirm(false); setActivateReason(''); setAdminMessage(''); }} disabled={activating}>
                   Cancel
                 </button>
               </div>
@@ -540,13 +571,13 @@ export default function FirebaseAdminUsersPage() {
               User Management
             </h1>
             <div className="admin-page-actions">
-              <span className="muted" style={{ fontSize: '0.85rem' }}>
+              <span className="muted text-sm">
                 {users.length} total &middot; {users.filter(u => u.payment_status === 'approved').length} approved &middot; {users.filter(u => u.account_status === 'active').length} active &middot; {pendingApprovalCount} pending approval
               </span>
             </div>
           </div>
 
-          <div className="card-modern" style={{ marginBottom: '1rem' }}>
+          <div className="card-modern mb-md">
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F50D}'} Search & Filter</h2>
             </div>
@@ -593,15 +624,14 @@ export default function FirebaseAdminUsersPage() {
                     const adminStatus = u.admin_approval_status || 'APPROVED';
                     return (
                     <React.Fragment key={u.id}>
-                      <tr
+                      <tr className="draggable-row"
                         onMouseDown={(e) => handleDragStart(e, u)}
                         onTouchStart={(e) => handleDragStart(e, u)}
-                        style={{ cursor: 'grab', userSelect: 'none' }}
                       >
                         <td data-label="Name">
-                          <div style={{ fontWeight: 600 }}>{u.name}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{u.email}</div>
-                          <div style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--accent)' }}>{u.referral_code || '—'}</div>
+                          <div className="font-semibold">{u.name}</div>
+                          <div className="text-xs text-muted">{u.email}</div>
+                          <div className="font-mono text-xs text-accent">{u.referral_code || '—'}</div>
                         </td>
                         <td data-label="Phone">{u.phone || '—'}</td>
                         <td data-label="Payment">
@@ -615,23 +645,22 @@ export default function FirebaseAdminUsersPage() {
                           </span>
                         </td>
                         <td data-label="Admin">
-                          <span className={`badge ${adminStatus === 'APPROVED' ? 'badge-paid' : adminStatus === 'REJECTED' ? 'badge-rejected' : 'badge-pending'}`}
-                            style={{ fontSize: '0.7rem' }}>
+                          <span className={`badge ${adminStatus === 'APPROVED' ? 'badge-paid' : adminStatus === 'REJECTED' ? 'badge-rejected' : 'badge-pending'} badge-xs`}>
                             {adminStatus}
                           </span>
                         </td>
                         <td data-label="Topup">
                           {u.sponsor_topup_completed ? (
-                            <span className="badge badge-paid" style={{ fontSize: '0.7rem' }}>Done</span>
+                            <span className="badge badge-paid badge-xs">Done</span>
                           ) : u.topup_referral_qualified ? (
-                            <span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>Qualified</span>
+                            <span className="badge badge-pending badge-xs">Qualified</span>
                           ) : (
-                            <span className="muted" style={{ fontSize: '0.7rem' }}>—</span>
+                            <span className="muted badge-xs">—</span>
                           )}
                         </td>
                         <td data-label="Referrals">
                           <div>
-                            <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{u.total_referral_count || 0}</div>
+                            <div className="font-semibold" style={{ fontSize: '0.9rem' }}>{u.total_referral_count || 0}</div>
                             <button className="btn-modern btn-modern-ghost btn-modern-xs"
                               onClick={(e) => { e.stopPropagation(); handleToggleUserExpand(u.id); }}>
                               {expandedUserId === u.id ? 'Hide' : `View${u.payment_status === 'approved' ? ` (${referralCounts[u.id] || 0})` : ''}`}
@@ -639,7 +668,7 @@ export default function FirebaseAdminUsersPage() {
                           </div>
                         </td>
                         <td data-label="Actions">
-                          <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '0.3rem' }}>
+                          <div className="flex-actions" onClick={(e) => e.stopPropagation()}>
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => setSelectedUser(u)}>View</button>
                             <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => { if (window.confirm(`Delete "${u.name}"?`)) { handleDelete(u.id); } }}>Del</button>
                           </div>
@@ -647,27 +676,27 @@ export default function FirebaseAdminUsersPage() {
                       </tr>
                       {expandedUserId === u.id && (
                         <tr>
-                          <td colSpan={8} style={{ padding: '0.75rem', background: 'var(--bg)', borderTop: '2px solid var(--accent)' }}>
+                          <td colSpan={8} className="expandable-row">
                             {loadingReferrals ? (
                               <div className="muted">Loading referrals...</div>
                             ) : expandedReferrals.length > 0 ? (
                               <>
-                                <div style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--muted)' }}>
+                                <div className="font-semibold mb-sm text-sm text-muted">
                                   Referred by {u.name}:
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                <div className="flex-col gap-sm">
                                   {expandedReferrals.map((ref) => (
-                                    <div key={ref.id} style={{ padding: '0.5rem 0.75rem', background: 'var(--surface-2)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div key={ref.id} className="referral-card-row">
                                       <div>
-                                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{ref.name}</div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{ref.phone || '—'}</div>
-                                        <div style={{ fontSize: '0.7rem', marginTop: '0.15rem' }}>
+                                        <div className="font-semibold text-sm">{ref.name}</div>
+                                        <div className="text-xs text-muted">{ref.phone || '—'}</div>
+                                        <div className="badge-xs" style={{ marginTop: '0.15rem' }}>
                                           {ref.referred_by_status === 'approved' ? (
-                                            <span className="badge badge-paid" style={{ fontSize: '0.65rem' }}>Approved</span>
+                                            <span className="badge badge-paid badge-xs">Approved</span>
                                           ) : ref.referred_by_status === 'pending' || !ref.referred_by_status ? (
-                                            <span className="badge badge-pending" style={{ fontSize: '0.65rem' }}>Pending</span>
+                                            <span className="badge badge-pending badge-xs">Pending</span>
                                           ) : (
-                                            <span className="badge badge-rejected" style={{ fontSize: '0.65rem' }}>{ref.referred_by_status}</span>
+                                            <span className="badge badge-rejected badge-xs">{ref.referred_by_status}</span>
                                           )}
                                         </div>
                                       </div>
@@ -676,7 +705,7 @@ export default function FirebaseAdminUsersPage() {
                                 </div>
                               </>
                             ) : (
-                              <div className="muted" style={{ fontSize: '0.85rem' }}>No referrals yet.</div>
+                              <div className="muted text-sm">No referrals yet.</div>
                             )}
                           </td>
                         </tr>

@@ -41,8 +41,9 @@ export default function FirebaseAdminLoginPage() {
       <div className="topbar">
         <div className="brand">Admin Login</div>
       </div>
-      <div className="card" style={{ maxWidth: 400, margin: '2rem auto' }}>
-        <h1>Admin Login</h1>
+      <div className="auth-card">
+        <div className="card">
+          <h1>Admin Login</h1>
         <p className="muted">Restricted access</p>
         {error && <div className="alert alert-error">{error}</div>}
         <form onSubmit={handleSubmit}>
@@ -64,14 +65,15 @@ export default function FirebaseAdminLoginPage() {
               onChange={e => setPassword(e.target.value)} 
             />
           </div>
-          <button className={`btn btn-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading}>
+          <button className={`btn btn-primary w-full${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading}>
             {loading ? 'Logging in...' : 'Log In'}
           </button>
         </form>
-        <p className="muted" style={{ marginTop: '1rem' }}>
+        <p className="muted mt-md">
           <a href="/fb/login">User Login</a>
         </p>
       </div>
     </div>
+  </div>
   );
 }

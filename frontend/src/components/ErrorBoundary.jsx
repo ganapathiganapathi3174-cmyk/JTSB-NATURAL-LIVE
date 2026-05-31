@@ -17,12 +17,12 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem', textAlign: 'center' }}>
+        <div className="error-boundary">
           <h2>Something went wrong</h2>
-          <p style={{ color: 'var(--muted)', marginTop: '0.5rem' }}>Please try refreshing the page.</p>
+          <p>Please try refreshing the page.</p>
           <button
             onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
-            style={{ marginTop: '1rem', padding: '0.75rem 1.5rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+            className="btn-modern btn-modern-primary"
           >
             Refresh Page
           </button>

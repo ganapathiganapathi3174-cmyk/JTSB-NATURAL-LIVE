@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FirebaseUser, FirebaseTopup } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseTopup, FirebaseNotification } from '../db/firebase-db.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
@@ -93,6 +93,7 @@ export default function FirebaseAdminDashboardPage() {
   const [actionUser, setActionUser] = useState(null);
   const [actionMode, setActionMode] = useState(null);
   const [actionReason, setActionReason] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
 
@@ -108,9 +109,23 @@ export default function FirebaseAdminDashboardPage() {
     setActionLoading(true);
     setActionMsg('');
     try {
+      if (!actionMessage || !actionMessage.trim()) {
+        setActionMsg('Error: Message to user is required');
+        setActionLoading(false);
+        return;
+      }
       await FirebaseUser.activateUser(userId, getAdminName(), reason);
+      await FirebaseNotification.send({
+        receiverId: userId,
+        receiverName: actionUser?.name || '',
+        message: actionMessage,
+        type: 'user_activated',
+        senderId: getAdminName(),
+        senderName: getAdminName(),
+      });
       setActionMsg('✓ User approved and activated!');
       setActionUser(null);
+      setActionMessage('');
       setTimeout(() => { setActionMsg(''); }, 2000);
     } catch (err) {
       setActionMsg('Error: ' + (err.message || 'Failed to approve'));
@@ -123,9 +138,23 @@ export default function FirebaseAdminDashboardPage() {
     setActionLoading(true);
     setActionMsg('');
     try {
+      if (!actionMessage || !actionMessage.trim()) {
+        setActionMsg('Error: Message to user is required');
+        setActionLoading(false);
+        return;
+      }
       await FirebaseUser.rejectUser(userId, getAdminName(), reason);
+      await FirebaseNotification.send({
+        receiverId: userId,
+        receiverName: actionUser?.name || '',
+        message: actionMessage,
+        type: 'user_rejected',
+        senderId: getAdminName(),
+        senderName: getAdminName(),
+      });
       setActionMsg('✓ User rejected!');
       setActionUser(null);
+      setActionMessage('');
       setTimeout(() => { setActionMsg(''); }, 2000);
     } catch (err) {
       setActionMsg('Error: ' + (err.message || 'Failed to reject'));
@@ -336,30 +365,30 @@ export default function FirebaseAdminDashboardPage() {
             </div>
           </div>
 
-          <div className="card-modern" style={{ marginBottom: '1.5rem' }}>
+          <div className="card-modern card-section">
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F4CA}'} Priority Overview</h2>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              <Link to="/fb-admin/payments?status=pending" className="priority-card" style={{ borderLeft: '4px solid var(--warning)', textDecoration: 'none' }}>
+            <div className="priority-grid">
+              <Link to="/fb-admin/payments?status=pending" className="priority-card priority-border-warning" style={{ textDecoration: 'none' }}>
                 <div className="card-icon">{'\u23F3'}</div>
                 <div className="card-value" style={{ color: 'var(--warning)' }}>{stats.totalPendingApprovals}</div>
                 <div className="card-label">Pending Approvals</div>
-                <span style={{ fontSize: '0.75rem', marginTop: '0.5rem', display: 'inline-block', color: 'var(--accent)' }}>Review Now {'\u2192'}</span>
+                <span className="priority-link">Review Now {'\u2192'}</span>
               </Link>
-              <Link to="/fb-admin/topups" className="priority-card" style={{ borderLeft: '4px solid var(--accent)', textDecoration: 'none' }}>
+              <Link to="/fb-admin/topups" className="priority-card priority-border-accent" style={{ textDecoration: 'none' }}>
                 <div className="card-icon">{'\u{1F4E4}'}</div>
                 <div className="card-value" style={{ color: 'var(--accent)' }}>{stats.pendingTopups}</div>
                 <div className="card-label">Pending Topups</div>
-                <span style={{ fontSize: '0.75rem', marginTop: '0.5rem', display: 'inline-block', color: 'var(--accent)' }}>View {'\u2192'}</span>
+                <span className="priority-link">View {'\u2192'}</span>
               </Link>
-              <Link to={dupAlertCount > 0 ? '/fb-admin/payments?status=duplicate_utr' : '#'} className="priority-card" style={{ borderLeft: `4px solid ${dupAlertCount > 0 ? 'var(--danger)' : 'var(--muted)'}`, textDecoration: 'none' }}>
+              <Link to={dupAlertCount > 0 ? '/fb-admin/payments?status=duplicate_utr' : '#'} className={`priority-card ${dupAlertCount > 0 ? 'priority-border-danger' : 'priority-border-muted'}`} style={{ textDecoration: 'none' }}>
                 <div className="card-icon">{'\u26A0\uFE0F'}</div>
                 <div className="card-value" style={{ color: dupAlertCount > 0 ? 'var(--danger)' : 'var(--muted)' }}>{dupAlertCount}</div>
                 <div className="card-label">Duplicate UTR</div>
-                {dupAlertCount > 0 && <span style={{ fontSize: '0.75rem', marginTop: '0.5rem', display: 'inline-block', color: 'var(--danger)' }}>Investigate {'\u2192'}</span>}
+                {dupAlertCount > 0 && <span className="priority-link" style={{ color: 'var(--danger)' }}>Investigate {'\u2192'}</span>}
               </Link>
-              <Link to="/fb-admin/payments?status=approved" className="priority-card" style={{ borderLeft: '4px solid var(--success)', textDecoration: 'none' }}>
+              <Link to="/fb-admin/payments?status=approved" className="priority-card priority-border-success" style={{ textDecoration: 'none' }}>
                 <div className="card-icon">{'\u{1F4B3}'}</div>
                 <div className="card-value" style={{ color: 'var(--success)' }}>{stats.approvedPayments}</div>
                 <div className="card-label">Approved Payments</div>
@@ -367,11 +396,11 @@ export default function FirebaseAdminDashboardPage() {
             </div>
           </div>
 
-          <div className="card-modern" style={{ marginBottom: '1.5rem' }}>
+          <div className="card-modern card-section">
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F4B3}'} Payments by Status</h2>
             </div>
-            <div className="table-wrap-modern" style={{ marginTop: '0.5rem' }}>
+            <div className="table-wrap-modern table-section">
               <table>
                 <thead>
                   <tr>
@@ -383,17 +412,17 @@ export default function FirebaseAdminDashboardPage() {
                 <tbody>
                   <tr>
                     <td>
-                      <Link to="/fb-admin/payments?status=pending" style={{ color: 'var(--warning)', fontWeight: 700, fontSize: '1.2rem' }}>
+                      <Link to="/fb-admin/payments?status=pending" className="link-stat" style={{ color: 'var(--warning)' }}>
                         {stats.pendingPayments}
                       </Link>
                     </td>
                     <td>
-                      <Link to="/fb-admin/payments?status=approved" style={{ color: 'var(--success)', fontWeight: 700, fontSize: '1.2rem' }}>
+                      <Link to="/fb-admin/payments?status=approved" className="link-stat" style={{ color: 'var(--success)' }}>
                         {stats.approvedPayments}
                       </Link>
                     </td>
                     <td>
-                      <Link to="/fb-admin/payments?status=rejected" style={{ color: 'var(--danger)', fontWeight: 700, fontSize: '1.2rem' }}>
+                      <Link to="/fb-admin/payments?status=rejected" className="link-stat" style={{ color: 'var(--danger)' }}>
                         {stats.rejectedPayments}
                       </Link>
                     </td>
@@ -408,11 +437,11 @@ export default function FirebaseAdminDashboardPage() {
           )}
 
           {eligibleSponsorsList.length > 0 && (
-            <div className="card-modern" style={{ marginBottom: '1.5rem' }}>
+            <div className="card-modern card-section">
               <div className="card-modern-header">
                 <h2 className="card-modern-title">{'\u{1F3C6}'} Sponsor Status & Topup Eligibility ({eligibleSponsorsList.length})</h2>
               </div>
-              <div className="table-wrap-modern" style={{ marginTop: '0.5rem' }}>
+              <div className="table-wrap-modern table-section">
                 <table>
                   <thead>
                     <tr>
@@ -433,42 +462,42 @@ export default function FirebaseAdminDashboardPage() {
                   <tbody>
                     {eligibleSponsorsList.map(s => (
                       <tr key={s.id}>
-                        <td><code>{s.referral_code || '—'}</code></td>
-                        <td style={{ fontWeight: 600 }}>{s.name}</td>
-                        <td style={{ fontSize: '0.85rem' }}>{s.email}</td>
-                        <td style={{ fontSize: '0.85rem' }}>{s.phone || '—'}</td>
-                        <td>{s.referrals_count}</td>
-                        <td>{s.topup_referrals_count}</td>
-                        <td style={{ fontWeight: 700 }}>{s.referrals_count + s.topup_referrals_count}</td>
-                        <td>
+                        <td data-label="Sponsor No"><code>{s.referral_code || '—'}</code></td>
+                        <td data-label="Name" className="font-semibold">{s.name}</td>
+                        <td data-label="Email" className="text-sm">{s.email}</td>
+                        <td data-label="Mobile" className="text-sm">{s.phone || '—'}</td>
+                        <td data-label="Refs">{s.referrals_count}</td>
+                        <td data-label="Topup Refs">{s.topup_referrals_count}</td>
+                        <td data-label="Total" className="font-bold">{s.referrals_count + s.topup_referrals_count}</td>
+                        <td data-label="Own Topup">
                           {s.sponsor_topup_completed ? (
-                            <span className="badge badge-paid" style={{ fontSize: '0.7rem' }}>Done</span>
+                            <span className="badge badge-paid badge-xs">Done</span>
                           ) : (
-                            <span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>Pending</span>
+                            <span className="badge badge-pending badge-xs">Pending</span>
                           )}
                         </td>
-                        <td>
+                        <td data-label="Account">
                           {s.account_status === 'inactive' ? (
-                            <span className="badge badge-rejected" style={{ fontSize: '0.7rem' }}>Inactive</span>
+                            <span className="badge badge-rejected badge-xs">Inactive</span>
                           ) : (
-                            <span className="badge badge-paid" style={{ fontSize: '0.7rem' }}>Active</span>
+                            <span className="badge badge-paid badge-xs">Active</span>
                           )}
                         </td>
-                        <td>
+                        <td data-label="Credit Status">
                           {s.sponsor_credited ? (
-                            <span className="badge badge-paid" style={{ fontSize: '0.7rem' }}>Credited</span>
+                            <span className="badge badge-paid badge-xs">Credited</span>
                           ) : s.sponsor_awaiting_credit ? (
-                            <span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>Awaiting</span>
+                            <span className="badge badge-pending badge-xs">Awaiting</span>
                           ) : (
-                            <span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>Not Yet</span>
+                            <span className="badge badge-pending badge-xs">Not Yet</span>
                           )}
                         </td>
-                        <td style={{ fontWeight: 700 }}>
+                        <td data-label="Amount" className="font-bold">
                           {s.sponsor_credited ? (
-                            <span style={{ color: 'var(--success)' }}>₹{Number(s.sponsor_credited_amount || 0).toFixed(2)}</span>
+                            <span className="text-success">₹{Number(s.sponsor_credited_amount || 0).toFixed(2)}</span>
                           ) : <span className="muted">—</span>}
                         </td>
-                        <td>
+                        <td data-label="Action">
                           {s.account_status === 'inactive' && (
                             <button className="btn-modern btn-modern-success btn-modern-xs"
                               onClick={() => handleReactivate(s.id)}
@@ -486,11 +515,11 @@ export default function FirebaseAdminDashboardPage() {
           )}
 
           {inactiveUsersList.length > 0 && (
-            <div className="card-modern" style={{ marginBottom: '1.5rem' }}>
+            <div className="card-modern card-section">
               <div className="card-modern-header">
                 <h2 className="card-modern-title">{'\u26A0\uFE0F'} Inactive Users & Reasons ({inactiveUsersList.length})</h2>
               </div>
-              <div className="table-wrap-modern" style={{ marginTop: '0.5rem' }}>
+              <div className="table-wrap-modern table-section">
                 <table>
                   <thead>
                     <tr>
@@ -507,19 +536,19 @@ export default function FirebaseAdminDashboardPage() {
                   <tbody>
                     {inactiveUsersList.map(u => (
                       <tr key={u.id}>
-                        <td><code>{u.referral_code || '—'}</code></td>
-                        <td style={{ fontWeight: 600 }}>{u.name}</td>
-                        <td style={{ fontSize: '0.85rem' }}>{u.email}</td>
-                        <td><span className="badge badge-rejected" style={{ fontSize: '0.7rem' }}>Inactive</span></td>
-                        <td>
-                          <span className={`badge ${u.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-rejected'}`} style={{ fontSize: '0.7rem' }}>
+                        <td data-label="Sponsor No"><code>{u.referral_code || '—'}</code></td>
+                        <td data-label="Name" className="font-semibold">{u.name}</td>
+                        <td data-label="Email" className="text-sm">{u.email}</td>
+                        <td data-label="Status"><span className="badge badge-rejected badge-xs">Inactive</span></td>
+                        <td data-label="Reason">
+                          <span className={`badge ${u.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-rejected'} badge-xs`}>
                             {u.inactiveReason}
                           </span>
                         </td>
-                        <td>{u.referrals_count}</td>
-                        <td>{u.topup_referrals_count}</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        <td data-label="Refs">{u.referrals_count}</td>
+                        <td data-label="Topup Refs">{u.topup_referrals_count}</td>
+                        <td data-label="Actions">
+                          <div className="action-group">
                             <button className="btn-modern btn-modern-success btn-modern-xs"
                               onClick={() => { setActionUser(u); setActionMode('approve'); setActionReason(''); }}>
                               {'\u2713'} Approve
@@ -543,10 +572,10 @@ export default function FirebaseAdminDashboardPage() {
               <div className="modal-modern" onClick={e => e.stopPropagation()}>
                 <div className="modal-modern-header">
                   <h2>{actionMode === 'approve' ? 'Approve User' : 'Delete User'}</h2>
-                  <button onClick={() => { setActionUser(null); setActionMsg(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+                  <button onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
                 </div>
                 <div className="modal-modern-body">
-                  <div className="detail-grid" style={{ marginBottom: '1rem' }}>
+                  <div className="detail-grid card-section-sm">
                     <div className="detail-row">
                       <span className="detail-label">User</span>
                       <span className="detail-value">{actionUser.name}</span>
@@ -558,15 +587,15 @@ export default function FirebaseAdminDashboardPage() {
                     <div className="detail-row">
                       <span className="detail-label">Status</span>
                       <div>
-                        <span className="badge badge-rejected" style={{ fontSize: '0.7rem' }}>Inactive</span>
-                        <span className={`badge ${actionUser.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-rejected'}`} style={{ fontSize: '0.7rem', marginLeft: '0.25rem' }}>
+                        <span className="badge badge-rejected badge-xs">Inactive</span>
+                        <span className={`badge ${actionUser.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-rejected'} badge-xs`} style={{ marginLeft: '0.25rem' }}>
                           {actionUser.inactiveReason}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="field" style={{ marginBottom: '0.75rem' }}>
+                  <div className="field modal-field-mb">
                     <label>Reason for {actionMode === 'approve' ? 'approval' : 'rejection'}</label>
                     <textarea
                       className="input"
@@ -577,8 +606,19 @@ export default function FirebaseAdminDashboardPage() {
                     />
                   </div>
 
+                  <div className="field modal-field-mb">
+                    <label>Message to User *</label>
+                    <textarea
+                      className="input"
+                      placeholder="Explain to the user why this action was taken (required)"
+                      value={actionMessage}
+                      onChange={e => setActionMessage(e.target.value)}
+                      rows={2}
+                    />
+                  </div>
+
                   {actionMsg && (
-                    <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: '0.75rem' }}>
+                    <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
                       {actionMsg}
                     </div>
                   )}
@@ -597,7 +637,7 @@ export default function FirebaseAdminDashboardPage() {
                       {actionLoading ? 'Deleting...' : '\u2715 Confirm Delete'}
                     </button>
                   )}
-                  <button className="btn-modern btn-modern-ghost" onClick={() => { setActionUser(null); setActionMsg(''); }} disabled={actionLoading}>
+                  <button className="btn-modern btn-modern-ghost" onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} disabled={actionLoading}>
                     Cancel
                   </button>
                 </div>

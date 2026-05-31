@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FirebaseTopup, FirebaseUser } from '../db/firebase-db.js';
+import { FirebaseTopup, FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
@@ -552,6 +552,7 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
   const [dupLoading, setDupLoading] = useState(false);
   const [autoApprovalRes, setAutoApprovalRes] = useState(null);
   const [autoApproving, setAutoApproving] = useState(false);
+  const [adminMessage, setAdminMessage] = useState('');
 
   const isInactive = userData?.account_status === 'inactive';
   const inactiveReason = userData ? getInactiveReasonLabel(userData.inactive_reason) : null;
@@ -671,7 +672,21 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
     setVerifying(true);
     setMsg('');
     try {
+      if (!adminMessage || !adminMessage.trim()) {
+        setMsg('Message to user is required');
+        setVerifying(false);
+        return;
+      }
       await onVerify(topup.id, status);
+      await FirebaseNotification.send({
+        receiverId: topup.userId,
+        receiverName: topup.userName || '',
+        message: adminMessage,
+        type: status === 'approved' ? 'topup_approved' : 'topup_rejected',
+        senderId: 'Admin',
+        senderName: 'Admin',
+      });
+      setAdminMessage('');
       setMsg(status === 'approved' ? 'Topup Approved!' : 'Topup Rejected!');
       setTimeout(onClose, 1000);
     } catch (err) {
@@ -705,16 +720,16 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
         </div>
 
         {autoApprovalRes?.wasAutoApproved && (
-          <div className="alert alert-success" style={{ marginBottom: '0.75rem', textAlign: 'center', fontSize: '1rem' }}>
+          <div className="alert alert-success modal-alert-mb text-center" style={{ fontSize: '1rem' }}>
             ✓ Auto Approved — All validations passed
           </div>
         )}
 
         {autoApprovalRes?.wasAutoRejected && (
-          <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>
+          <div className="alert alert-error modal-alert-mb">
             <strong>✗ Auto Rejected</strong> — Validation tests failed.
             {autoApprovalRes.failureReasons?.length > 0 && (
-              <ul style={{ margin: '0.35rem 0 0 1.25rem', fontSize: '0.85rem' }}>
+              <ul className="text-sm" style={{ margin: '0.35rem 0 0 1.25rem' }}>
                 {autoApprovalRes.failureReasons.map((r, i) => <li key={i}>{r}</li>)}
               </ul>
             )}
@@ -722,7 +737,7 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
         )}
 
         {autoApprovalRes && !autoApprovalRes.wasAutoApproved && !autoApprovalRes.wasAutoRejected && (
-          <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>
+          <div className="alert alert-error modal-alert-mb">
             <strong>Manual Review Required</strong> — Some checks are inconclusive.
           </div>
         )}
@@ -748,10 +763,10 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
           <div className="verify-section">
           <h4>
             Auto Validation
-            {allPassed && <span className="verification-badge valid" style={{ marginLeft: '0.5rem' }}>All Passed</span>}
-            {hasFailures && <span className="verification-badge invalid" style={{ marginLeft: '0.5rem' }}>Issues Found</span>}
+            {allPassed && <span className="verification-badge valid ml-sm">All Passed</span>}
+            {hasFailures && <span className="verification-badge invalid ml-sm">Issues Found</span>}
           </h4>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+          <div className="validation-pills">
             {validations.map((v, i) => {
               let cls = '';
               let icon = '○';
@@ -769,9 +784,9 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
         {autoApprovalRes?.details && (
           <div className="verify-section">
             <h4>Validation Details</h4>
-            <div style={{ fontSize: '0.85rem' }}>
+            <div className="text-sm">
               {autoApprovalRes.details.map((d, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
+                <div key={i} className="detail-row-bordered">
                   <span>{d.check}</span>
                   <span style={{ color: d.passed ? 'var(--success)' : d.passed === false ? 'var(--danger)' : 'var(--muted)' }}>
                     {d.passed === true ? '✓ Pass' : d.passed === false ? `✗ ${d.reason || 'Fail'}` : '○ Skip'}
@@ -811,44 +826,44 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
           </div>
         )}
 
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
+        <div className="detail-grid-sm">
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>User</div>
+            <div className="muted text-sm">User</div>
             <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{topup.userName}</div>
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Email</div>
+            <div className="muted text-sm">Email</div>
             <div style={{ fontSize: '0.9rem' }}>{topup.userEmail}</div>
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Phone</div>
+            <div className="muted text-sm">Phone</div>
             <div>{topup.userPhone || '—'}</div>
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Amount</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>₹{Number(topup.amount || 0).toFixed(2)}</div>
+            <div className="muted text-sm">Amount</div>
+            <div className="font-bold text-success" style={{ fontSize: '1.5rem' }}>₹{Number(topup.amount || 0).toFixed(2)}</div>
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Transaction ID</div>
-            <div style={{ fontFamily: 'monospace', fontSize: '1rem', fontWeight: 'bold' }}>
+            <div className="muted text-sm">Transaction ID</div>
+            <div className="font-mono" style={{ fontSize: '1rem', fontWeight: 'bold' }}>
               {topup.transactionId || '—'}
-              {dupLoading && <span className="muted" style={{ marginLeft: '0.5rem', fontSize: '0.75rem' }}>Checking...</span>}
-              {dupCheck && <span className="verification-badge invalid" style={{ marginLeft: '0.5rem' }}>Duplicate</span>}
-              {!dupLoading && !dupCheck && topup.transactionId && <span className="verification-badge valid" style={{ marginLeft: '0.5rem' }}>Unique</span>}
+              {dupLoading && <span className="muted ml-sm" style={{ fontSize: '0.75rem' }}>Checking...</span>}
+              {dupCheck && <span className="verification-badge invalid ml-sm">Duplicate</span>}
+              {!dupLoading && !dupCheck && topup.transactionId && <span className="verification-badge valid ml-sm">Unique</span>}
             </div>
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Referral Code</div>
-            <div style={{ fontFamily: 'monospace' }}>{topup.userReferralCode || '—'}</div>
+            <div className="muted text-sm">Referral Code</div>
+            <div className="font-mono">{topup.userReferralCode || '—'}</div>
           </div>
           {topup.referred_by && (
             <div>
-              <div className="muted" style={{ fontSize: '0.85rem' }}>Referred By</div>
+              <div className="muted text-sm">Referred By</div>
               <div>{topup.referred_by}</div>
             </div>
           )}
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Current Status</div>
+            <div className="muted text-sm">Current Status</div>
             <div>
               <span className={`badge ${topup.status === 'approved' ? 'badge-paid' : topup.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
                 {topup.status ? topup.status.charAt(0).toUpperCase() + topup.status.slice(1) : 'Pending'}
@@ -859,17 +874,17 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
           </div>
           {isInactive && (
             <div>
-              <div className="muted" style={{ fontSize: '0.85rem' }}>Account Status</div>
+              <div className="muted text-sm">Account Status</div>
               <div>
-                <span className="badge badge-rejected" style={{ fontSize: '0.7rem' }}>Inactive</span>
-                <span className="badge badge-pending" style={{ fontSize: '0.7rem', marginLeft: '0.25rem' }}>
+                <span className="badge badge-rejected badge-xs">Inactive</span>
+                <span className="badge badge-pending badge-xs" style={{ marginLeft: '0.25rem' }}>
                   {inactiveReason}
                 </span>
               </div>
             </div>
           )}
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Payment Screenshot</div>
+            <div className="muted text-sm">Payment Screenshot</div>
             {displayUrl ? (
               <div>
                 <button type="button" className="btn btn-primary" style={{ marginBottom: '0.5rem' }}
@@ -888,8 +903,22 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
             )}
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Submitted At</div>
+            <div className="muted text-sm">Submitted At</div>
             <div>{topup.createdAt ? new Date(topup.createdAt).toLocaleString() : '—'}</div>
+          </div>
+        </div>
+
+        <div className="modal-modern-body" style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+          <div className="field">
+              <label>Message to User *</label>
+              <textarea
+                className="input w-full"
+                placeholder="Explain to the user why this action was taken (required)"
+              value={adminMessage}
+              onChange={e => setAdminMessage(e.target.value)}
+              rows={2}
+              style={{ resize: 'vertical' }}
+            />
           </div>
         </div>
 
@@ -1051,7 +1080,7 @@ export default function FirebaseAdminTopupsPage() {
           </div>
 
           {sponsors.filter(s => !s.sponsor_credited).length > 0 && (
-            <div className="card-modern" style={{ marginBottom: '1rem', borderLeft: '4px solid var(--accent)' }}>
+            <div className="card-modern mb-md" style={{ borderLeft: '4px solid var(--accent)' }}>
               <div className="card-modern-header">
                 <h2 className="card-modern-title">{'\u{1F3C6}'} Sponsors Awaiting Credit ({sponsors.filter(s => !s.sponsor_credited).length})</h2>
               </div>
@@ -1071,13 +1100,13 @@ export default function FirebaseAdminTopupsPage() {
                   <tbody>
                     {sponsors.filter(s => !s.sponsor_credited).map(s => (
                       <tr key={s.id}>
-                        <td><code>{s.referral_code || '—'}</code></td>
-                        <td style={{ fontWeight: 600 }}>{s.name}</td>
-                        <td style={{ fontSize: '0.85rem' }}>{s.email}</td>
-                        <td>{s.topup_referrals_count}</td>
-                        <td style={{ fontWeight: 700, color: 'var(--success)' }}>₹{Number(s.sponsor_topup_amount || 0).toFixed(2)}</td>
-                        <td><span className="badge badge-pending">Awaiting Credit</span></td>
-                        <td>
+                        <td data-label="Sponsor No"><code>{s.referral_code || '—'}</code></td>
+                        <td data-label="Name" className="font-semibold">{s.name}</td>
+                        <td data-label="Email" className="text-sm">{s.email}</td>
+                        <td data-label="Topup Refs">{s.topup_referrals_count}</td>
+                        <td data-label="Amount" className="font-bold text-success">₹{Number(s.sponsor_topup_amount || 0).toFixed(2)}</td>
+                        <td data-label="Status"><span className="badge badge-pending">Awaiting Credit</span></td>
+                        <td data-label="Action">
                           <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => { setCreditModal(s); setCreditAmount(s.sponsor_topup_amount || ''); }}>
                             Credit Now
                           </button>
@@ -1091,7 +1120,7 @@ export default function FirebaseAdminTopupsPage() {
           )}
 
           {sponsors.filter(s => s.sponsor_credited).length > 0 && (
-            <div className="card-modern" style={{ marginBottom: '1rem' }}>
+            <div className="card-modern mb-md">
               <div className="card-modern-header">
                 <h2 className="card-modern-title">{'\u{1F4B5}'} Credit History</h2>
               </div>
@@ -1108,10 +1137,10 @@ export default function FirebaseAdminTopupsPage() {
                   <tbody>
                     {sponsors.filter(s => s.sponsor_credited).map(s => (
                       <tr key={s.id}>
-                        <td style={{ fontWeight: 600 }}>{s.name}</td>
-                        <td style={{ fontSize: '0.85rem' }}>{s.email}</td>
-                        <td style={{ fontWeight: 700, color: 'var(--success)' }}>₹{Number(s.sponsor_credited_amount || 0).toFixed(2)}</td>
-                        <td style={{ fontSize: '0.8rem' }}>{s.sponsor_credited_at ? new Date(s.sponsor_credited_at).toLocaleString() : '—'}</td>
+                        <td data-label="Name" className="font-semibold">{s.name}</td>
+                        <td data-label="Email" className="text-sm">{s.email}</td>
+                        <td data-label="Amount Credited" className="font-bold text-success">₹{Number(s.sponsor_credited_amount || 0).toFixed(2)}</td>
+                        <td data-label="Date" style={{ fontSize: '0.8rem' }}>{s.sponsor_credited_at ? new Date(s.sponsor_credited_at).toLocaleString() : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1153,7 +1182,7 @@ export default function FirebaseAdminTopupsPage() {
             </div>
           </div>
 
-          <div className="card-modern" style={{ marginBottom: '1rem' }}>
+          <div className="card-modern mb-md">
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F50D}'} Search & Filter</h2>
             </div>
@@ -1176,7 +1205,7 @@ export default function FirebaseAdminTopupsPage() {
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F4CB}'} Topup Requests ({filteredTopups.length})</h2>
             </div>
-            <p className="muted" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>
+            <p className="muted text-sm mb-md">
               Real-time updates enabled. Click "Review" to view details and approve/reject.
             </p>
 
@@ -1198,30 +1227,30 @@ export default function FirebaseAdminTopupsPage() {
                 <tbody>
                   {filteredTopups.map((t) => (
                     <tr key={t.id}>
-                      <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                      <td data-label="Date" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
                         {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '—'}
                       </td>
-                      <td style={{ fontWeight: 600 }}>{t.userName}</td>
-                      <td style={{ fontSize: '0.85rem' }}>{t.userEmail}</td>
-                      <td style={{ fontWeight: 700 }}>₹{Number(t.amount || 0).toFixed(2)}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{t.transactionId || '—'}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{t.referred_by || '—'}</td>
-                      <td>
+                      <td data-label="User" className="font-semibold">{t.userName}</td>
+                      <td data-label="Email" className="text-sm">{t.userEmail}</td>
+                      <td data-label="Amount" className="font-bold">₹{Number(t.amount || 0).toFixed(2)}</td>
+                      <td data-label="Transaction ID" className="font-mono text-sm">{t.transactionId || '—'}</td>
+                      <td data-label="Sponsor No" className="font-mono" style={{ fontSize: '0.8rem' }}>{t.referred_by || '—'}</td>
+                      <td data-label="Benefit">
                         {t.status === 'approved' ? (
-                          <span className="badge badge-paid" style={{ fontSize: '0.7rem' }}>Done</span>
+                          <span className="badge badge-paid badge-xs">Done</span>
                         ) : (
-                          <span className="muted" style={{ fontSize: '0.7rem' }}>—</span>
+                          <span className="muted badge-xs">—</span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <span className={`badge ${t.status === 'approved' ? 'badge-paid' : t.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
                           {t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : 'Pending'}
                         </span>
                         {t.auto_approved && <span className="verification-badge valid" style={{ marginLeft: '0.25rem' }}>Auto</span>}
                         {t.auto_rejected && <span className="verification-badge invalid" style={{ marginLeft: '0.25rem' }}>Auto</span>}
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.3rem' }}>
+                      <td data-label="Actions">
+                        <div className="action-group">
                           <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => handleReview(t)}>
                             Review
                           </button>
@@ -1261,7 +1290,7 @@ export default function FirebaseAdminTopupsPage() {
                   <button onClick={() => setCreditModal(null)} className="btn-modern btn-modern-ghost btn-modern-sm" disabled={crediting}>{'\u2715'}</button>
                 </div>
                 <div className="modal-modern-body">
-                  <div className="detail-grid" style={{ marginBottom: '1rem' }}>
+                  <div className="detail-grid mb-md">
                     <div className="detail-row">
                       <span className="detail-label">Sponsor</span>
                       <span className="detail-value">{creditModal.name}</span>

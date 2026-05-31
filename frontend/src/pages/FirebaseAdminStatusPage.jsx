@@ -35,7 +35,7 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
           <h2>Confirm Status Change</h2>
         </div>
         <div className="modal-modern-body">
-          <p style={{ color: 'var(--muted)', lineHeight: 1.5, margin: 0 }}>{message}</p>
+          <p className="text-muted" style={{ lineHeight: 1.5, margin: 0 }}>{message}</p>
         </div>
         <div className="modal-modern-footer" style={{ justifyContent: 'flex-end' }}>
           <button className="btn-modern btn-modern-ghost" onClick={onCancel}>Cancel</button>
@@ -295,13 +295,13 @@ export default function FirebaseAdminStatusPage() {
               Status Board
             </h1>
             <div className="admin-page-actions">
-              <span className="muted" style={{ fontSize: '0.85rem' }}>
+              <span className="muted text-sm">
                 Showing {filteredCount} of {totalCount} users
               </span>
             </div>
           </div>
 
-          <div className="card-modern" style={{ marginBottom: '1rem' }}>
+          <div className="card-modern mb-md">
             <div className="search-bar-modern" style={{ justifyContent: 'space-between' }}>
               <input
                 value={searchQuery}
