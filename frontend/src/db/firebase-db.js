@@ -708,6 +708,9 @@ export const FirebaseUser = {
       console.warn('Failed to delete referrals:', e);
     }
 
+    // Delete chat messages and conversation for this user
+    await FirebaseChat.deleteUserChatData(id);
+
     // Delete user document
     const userRef = doc(db, COL_USERS, id);
     await deleteDoc(userRef);
@@ -2491,5 +2494,42 @@ export const FirebaseChat = {
       console.error('subscribeToUserConvo error:', error.message);
       callback(null);
     });
+  },
+
+  // ---- Delete all chat data for a user (messages + conversation) ----
+  async deleteUserChatData(userId) {
+    const db = getDb();
+    const convoId = this.getConvoId(userId);
+    try {
+      const q = query(collection(db, COL_CHAT_MESSAGES), where('convoId', '==', convoId));
+      const snap = await getDocs(q);
+      const deletions = snap.docs.map(d => deleteDoc(doc(db, COL_CHAT_MESSAGES, d.id)));
+      await Promise.all(deletions);
+    } catch (e) {
+      console.warn('Failed to delete chat messages:', e);
+    }
+    try {
+      const convoRef = doc(db, COL_CHAT_CONVOS, convoId);
+      await deleteDoc(convoRef);
+    } catch (e) {
+      console.warn('Failed to delete conversation:', e);
+    }
+  },
+
+  // ---- Delete chat data for all deleted users (orphaned conversations) ----
+  async cleanupOrphanedConvos() {
+    const db = getDb();
+    const convosSnap = await getDocs(collection(db, COL_CHAT_CONVOS));
+    const convos = convosSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let deleted = 0;
+    for (const c of convos) {
+      const userRef = doc(db, COL_USERS, c.userId);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        await this.deleteUserChatData(c.userId);
+        deleted++;
+      }
+    }
+    return deleted;
   },
 };

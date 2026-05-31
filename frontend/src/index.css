@@ -6186,6 +6186,9 @@ html {
 }
 
 .chat-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 1rem 1rem 0.5rem;
   border-bottom: 1px solid #e5e7eb;
 }
@@ -6194,6 +6197,28 @@ html {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
+}
+
+.chat-cleanup-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.chat-cleanup-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #ef4444;
+}
+.chat-cleanup-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .chat-search-box {
@@ -6366,6 +6391,29 @@ html {
 .chat-header-status {
   font-size: 0.72rem;
   color: #22c55e;
+}
+
+.chat-delete-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.chat-delete-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #ef4444;
+}
+.chat-delete-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* Messages Area */

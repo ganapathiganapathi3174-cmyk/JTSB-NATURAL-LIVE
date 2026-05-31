@@ -18,6 +18,8 @@ export default function AdminChat() {
   const messagesEndRef = useRef(null);
   const unsubRef = useRef(null);
 
+  const [deleting, setDeleting] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
   const adminName = localStorage.getItem('fb_admin_name') || 'Admin';
 
   useEffect(() => {
@@ -83,6 +85,36 @@ export default function AdminChat() {
     setSending(false);
   }
 
+  async function handleDeleteChat() {
+    if (!selectedUser || deleting) return;
+    if (!window.confirm(`Delete entire chat with ${selectedUser.name}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await FirebaseChat.deleteUserChatData(selectedUser.id);
+      if (unsubRef.current) { unsubRef.current(); unsubRef.current = null; }
+      setSelectedUser(null);
+      setMessages([]);
+    } catch (err) {
+      console.error('Delete chat error:', err.message);
+      alert('Failed to delete chat: ' + err.message);
+    }
+    setDeleting(false);
+  }
+
+  async function handleCleanup() {
+    if (cleaning) return;
+    if (!window.confirm('Delete chat data for all deleted users? This cannot be undone.')) return;
+    setCleaning(true);
+    try {
+      const count = await FirebaseChat.cleanupOrphanedConvos();
+      alert(`Cleaned up ${count} conversation(s) from deleted users.`);
+    } catch (err) {
+      console.error('Cleanup error:', err.message);
+      alert('Cleanup failed: ' + err.message);
+    }
+    setCleaning(false);
+  }
+
   const filteredUsers = searchQuery.trim()
     ? allUsers.filter(u =>
         (u.name && u.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -104,6 +136,11 @@ export default function AdminChat() {
           <aside className={`chat-sidebar${!showSidebar ? ' chat-sidebar-hidden' : ''}`}>
             <div className="chat-sidebar-header">
               <h3>Messages</h3>
+              <button className="chat-cleanup-btn" onClick={handleCleanup} title="Remove chats of deleted users" disabled={cleaning}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </button>
             </div>
             <div className="chat-search-box">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="chat-search-icon">
@@ -175,6 +212,11 @@ export default function AdminChat() {
                       })()}
                     </div>
                   </div>
+                  <button className="chat-delete-btn" onClick={handleDeleteChat} title="Delete entire chat" disabled={deleting}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </button>
                 </div>
 
                 <div className="chat-messages">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseNotification, FirebaseChat } from '../db/firebase-db.js';
 import { getDb } from '../firebase/config.js';
 import { doc, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
 import AdminSidebar from '../components/AdminSidebar.jsx';
@@ -454,6 +454,7 @@ export default function FirebaseAdminUsersPage() {
   const handleDelete = async (userId) => {
     try {
       const db = getDb();
+      await FirebaseChat.deleteUserChatData(userId);
       await deleteDoc(doc(db, 'users_new', userId));
       setUsers(prev => prev.filter(u => u.id !== userId));
     } catch (err) {
