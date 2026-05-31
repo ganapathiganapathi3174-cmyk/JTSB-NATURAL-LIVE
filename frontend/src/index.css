@@ -1241,6 +1241,8 @@ tr:last-child td {
 /* Modal animations */
 .modal-overlay {
   animation: fade-in 0.15s ease;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .modal {
   animation: scale-in 0.2s ease;
@@ -2261,6 +2263,8 @@ select:focus {
   justify-content: center;
   padding: 1rem;
   animation: fade-in 0.15s ease;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-modern {
@@ -3413,6 +3417,16 @@ select:focus {
 /* Prevent horizontal scroll at all sizes */
 html {
   overflow-x: hidden;
+  overflow-y: auto;
+  width: 100%;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  width: 100%;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Better focus ring for keyboard navigation */
@@ -5218,9 +5232,9 @@ html {
   }
 }
 
-/* Horizontal scroll prevention for admin content */
+/* Admin content area - horizontal scroll prevention handled at html level */
 .admin-content {
-  overflow-x: hidden;
+  min-width: 0;
 }
 
 /* Smoother admin page header actions */
