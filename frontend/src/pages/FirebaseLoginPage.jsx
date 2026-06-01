@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FirebaseUser } from '../db/firebase-db.js';
+import { FirebaseUser, comparePassword } from '../db/firebase-db.js';
+import { checkRateLimit } from '../utils/rateLimiter.js';
 
 const LOGIN_TIMEOUT = 15000; // 15 seconds
 
@@ -46,6 +47,11 @@ export default function FirebaseLoginPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    const rl = checkRateLimit('login:' + email.toLowerCase());
+    if (!rl.allowed) {
+      setError(`Too many attempts. Try again in ${rl.retryAfter} seconds.`);
+      return;
+    }
     setLoading(true);
 
     const inputVal = loginInput.trim();
@@ -107,7 +113,8 @@ export default function FirebaseLoginPage() {
       }
 
       // Check password
-      if (user.password !== passVal) {
+      const pwMatch = await comparePassword(passVal, user.password);
+      if (!pwMatch) {
         setError('Invalid password. Please try again.');
         setLoading(false);
         return;

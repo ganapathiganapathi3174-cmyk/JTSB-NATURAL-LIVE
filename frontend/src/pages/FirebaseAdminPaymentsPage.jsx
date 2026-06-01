@@ -45,8 +45,8 @@ function isUpiValid(ocrUpi) {
 }
 
 const OCR_TIMEOUT = 45000;
-  const VALIDATION_TIMEOUT = 60000;
-  const VALIDATION_CALL_TIMEOUT = 120000;
+const VALIDATION_TIMEOUT = 60000;
+const VALIDATION_CALL_TIMEOUT = 120000;
 
 function withTimeout(promise, ms, fallback) {
   return Promise.race([
@@ -56,6 +56,46 @@ function withTimeout(promise, ms, fallback) {
     if (fallback !== undefined) return typeof fallback === 'function' ? fallback(err) : fallback;
     throw err;
   });
+}
+
+const OCR_FIX_MAP = { 'l': '1', 'I': '1', 'O': '0', 'o': '0', 'S': '5', 'B': '8' };
+const _ocrFixCache = new Map();
+function applyOcrFix(s) {
+  if (!s) return s;
+  const cached = _ocrFixCache.get(s);
+  if (cached !== undefined) return cached;
+  const result = s.split('').map(c => OCR_FIX_MAP[c] || c).join('');
+  if (_ocrFixCache.size > 100) _ocrFixCache.clear();
+  _ocrFixCache.set(s, result);
+  return result;
+}
+
+function removeUtrNumbers(t) {
+  if (!t) return t;
+  return t.replace(/\b\d{10,18}\b/g, '').replace(/\b\d{10,18}\b/g, '');
+}
+
+function extractAfter(text, keywords, { stopBefore, numericOnly, minLength, maxLength } = {}) {
+  for (const kw of keywords) {
+    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = text.match(new RegExp(`${escaped}[:\\s]+(.{1,80})`, 'i'));
+    if (!m) continue;
+    let val = m[1].trim();
+    if (stopBefore) {
+      const idx = val.search(stopBefore);
+      if (idx !== -1) val = val.substring(0, idx).trim();
+    }
+    if (numericOnly) {
+      const nums = val.match(/\d+/g);
+      if (nums) {
+        const combined = nums.join('');
+        if (combined.length >= (minLength || 1) && combined.length <= (maxLength || Infinity)) return combined;
+      }
+    } else {
+      if (val) return val;
+    }
+  }
+  return null;
 }
 
 const OCR_ENGINE_CONFIG = { useGoogleVision: false, visionApiKey: '' };
@@ -164,7 +204,6 @@ function preprocessImage(url) {
         const blackRatio = blackCount / total;
         // If binarization collapsed to nearly all-white or all-black, undo it
         if (blackRatio < 0.01 || blackRatio > 0.99) {
-          console.log('[PREPROCESS] OTSU collapsed (blackRatio=' + blackRatio.toFixed(4) + '), reverting to grayscale');
           for (let i = 0; i < d.length; i += 4) {
             d[i] = sharp[i]; d[i + 1] = sharp[i + 1]; d[i + 2] = sharp[i + 2];
           }
@@ -254,11 +293,6 @@ function useOcr(imageUrl) {
 
         const isGooglePay = /Google Pay/i.test(text) || /UPI transaction ID/i.test(text);
 
-        function applyOcrFix(s) {
-          const fixMap = { 'l': '1', 'I': '1', 'O': '0', 'o': '0', 'S': '5', 'B': '8' };
-          return s.split('').map(c => fixMap[c] || c).join('');
-        }
-
         function extractAfter(text, keywords, { stopBefore, numericOnly, minLength, maxLength } = {}) {
           for (const kw of keywords) {
             const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -289,47 +323,59 @@ function useOcr(imageUrl) {
           const ocrFixed = applyOcrFix(text);
           const compactedFixed = applyOcrFix(compacted);
 
-          // Log preview of text being scanned
-          const preview = text.substring(0, 300).replace(/\n/g, '\\n');
-          console.log('[AMOUNT] text preview:', preview);
-
-          // Deduplicated sources
           const sources = [...new Set([text, ocrFixed, compacted, compactedFixed])].filter(Boolean);
 
+          // Pass 1: Amount near "Amount" label — specific to payment app format
           for (const t of sources) {
-            // 1. Currency-prefixed (₹, Rs, INR) — simplest pattern, first match wins
-            const currMatch = t.match(/(?:₹|Rs\.?|INR)\s*(\d{1,6}(?:[.,]\d{1,2})?)/i);
-            if (currMatch) {
-              const val = parseFloat(currMatch[1].replace(/,/g, ''));
-              if (!isNaN(val) && val >= 1 && val <= 10000) {
-                const rounded = String(Math.round(val));
-                console.log('[AMOUNT] currency match:', currMatch[0], '→', rounded);
-                return rounded;
-              }
-            }
-
-            // 2. Standalone 120 (word boundary)
-            if (/\b120\b/.test(t)) {
-              console.log('[AMOUNT] standalone 120 match');
-              return '120';
-            }
-
-            // 3. Number ending with .00
-            const dotMatch = t.match(/\b(\d{2,5})\.00\b/);
-            if (dotMatch) {
-              const val = parseInt(dotMatch[1], 10);
-              if (val >= 50 && val <= 10000) {
-                console.log('[AMOUNT] .00 match:', dotMatch[1]);
-                return String(val);
-              }
+            const amtLabel = t.match(/(?:Amount|Total|Pay)[:\s]*₹?\s*(\d{1,6}(?:[.,]\d{1,2})?)/i);
+            if (amtLabel) {
+              const val = parseFloat(amtLabel[1].replace(/,/g, ''));
+              if (!isNaN(val) && val >= 50 && val <= 500) return String(Math.round(val));
             }
           }
 
-          // 4. Aggressive: find any number close to 120 in full text
-          console.log('[AMOUNT] trying aggressive number scan');
+          // Pass 2: Currency-prefixed amounts (₹, Rs, INR) — pick closest to EXPECTED
+          let bestCurrency = null;
+          let bestDist = Infinity;
           for (const t of sources) {
-            const numbers = t.match(/\b(\d{2,5})\b/g);
+            const allCurr = [...t.matchAll(/(?:₹|Rs\.?|INR)\s*(\d{1,6}(?:[.,]\d{1,2})?)/gi)];
+            for (const m of allCurr) {
+              const val = parseFloat(m[1].replace(/,/g, ''));
+              if (!isNaN(val) && val >= 1 && val <= 10000) {
+                const dist = Math.abs(val - 120);
+                if (dist < bestDist) { bestDist = dist; bestCurrency = String(Math.round(val)); }
+              }
+            }
+          }
+          if (bestCurrency) return bestCurrency;
+
+          // Pass 3: Standalone 120 (word boundary) in any source
+          for (const t of sources) {
+            if (/\b120\b/.test(t)) return '120';
+          }
+
+          // Pass 4: Number ending with .00 — pick closest to 120
+          let bestDot = null;
+          let bestDotDist = Infinity;
+          for (const t of sources) {
+            const allDot = [...t.matchAll(/\b(\d{2,5})\.00\b/g)];
+            for (const m of allDot) {
+              const val = parseInt(m[1], 10);
+              if (val >= 50 && val <= 10000) {
+                const dist = Math.abs(val - 120);
+                if (dist < bestDotDist) { bestDotDist = dist; bestDot = String(val); }
+              }
+            }
+          }
+          if (bestDot) return bestDot;
+
+          // Pass 5: Aggressive scan — first remove UTR-length numbers, then scan
+          for (const t of sources) {
+            const cleaned = removeUtrNumbers(t);
+            const numbers = cleaned.match(/\b(\d{2,5})\b/g);
             if (numbers) {
+              let bestAgg = null;
+              let bestAggDist = Infinity;
               for (const n of numbers) {
                 const parsed = parseInt(n, 10);
                 if (parsed >= 50 && parsed <= 500 && parsed !== 2024 && parsed !== 2025 && parsed !== 2026) {
@@ -338,30 +384,31 @@ function useOcr(imageUrl) {
                     const b = parseInt(n.substring(2, 4), 10);
                     if ((a >= 1 && a <= 31 && b >= 1 && b <= 12) || (a >= 1 && a <= 12 && b >= 1 && b <= 31)) continue;
                   }
-                  console.log('[AMOUNT] aggressive number match:', n);
-                  return n;
+                  const dist = Math.abs(parsed - 120);
+                  if (dist < bestAggDist) { bestAggDist = dist; bestAgg = n; }
                 }
-                // Also try swapping digits (92→29)
-                if (n.length >= 2) {
-                  const swapped = parseInt(n[1] + n[0] + n.substring(2), 10);
-                  if (swapped >= 50 && swapped <= 500) {
-                    console.log('[AMOUNT] swapped digit match:', n, '→', swapped);
-                    return String(swapped);
-                  }
-                }
+              }
+              if (bestAgg) return bestAgg;
+            }
+          }
+
+          // Pass 6: Substring "120" check
+          for (const t of sources) {
+            if (t && t.includes('120')) return '120';
+          }
+
+          // Pass 7: Swapped-digit fallback (e.g., 92→29)
+          for (const t of sources) {
+            const cleaned = removeUtrNumbers(t);
+            const numbers = cleaned.match(/\b(\d{2,5})\b/g) || [];
+            for (const n of numbers) {
+              if (n.length >= 2) {
+                const swapped = parseInt(n[1] + n[0] + n.substring(2), 10);
+                if (swapped >= 50 && swapped <= 500) return String(swapped);
               }
             }
           }
 
-          // 5. Nuclear: substring "120" check
-          for (const t of sources) {
-            if (t && t.includes('120')) {
-              console.log('[AMOUNT] substring 120 found');
-              return '120';
-            }
-          }
-
-          console.log('[AMOUNT] no amount found');
           return null;
         }
 
@@ -385,49 +432,62 @@ function useOcr(imageUrl) {
           return null;
         }
 
+        const MONTHS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+        const OCR_MONTH_FIX = { 'mar':'may','jur':'jun','jul':'jun','aug':'apr','jui':'jun','juu':'jun','juI':'jun','apt':'apr','aor':'apr','may':'may','mav':'may','sep':'sep','sept':'sep','oct':'oct','nov':'nov','dec':'dec' };
+
+        function guessMonth(word) {
+          if (!word) return null;
+          const w = word.toLowerCase().replace(/[^a-z]/g, '');
+          if (OCR_MONTH_FIX[w]) return OCR_MONTH_FIX[w];
+          const m = MONTHS.find(m => w.startsWith(m) || m.startsWith(w) || stringSimilarity(w, m) >= 40);
+          return m || null;
+        }
+
         function correctDate(rawDate) {
           if (!rawDate) return null;
-          const trimmed = rawDate.trim();
+          let trimmed = rawDate.trim().replace(/[,\s]+/g, ' ').replace(/^[^\d]+/, '').replace(/[^a-zA-Z\d\s/-]+$/, '').trim();
 
+          // DD-MM-YYYY or DD/MM/YYYY
           const numMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
           if (numMatch) {
-            let day = parseInt(numMatch[1]), mon = parseInt(numMatch[2]), yr = numMatch[3];
+            let day = parseInt(numMatch[1], 10), mon = parseInt(numMatch[2], 10), yr = numMatch[3];
             let ds = numMatch[1], ms = numMatch[2];
-
             if (day > 31 && ds.length === 2) {
-              const swapped = parseInt(ds[1] + ds[0]);
+              const swapped = parseInt(ds[1] + ds[0], 10);
               if (swapped >= 1 && swapped <= 31) { day = swapped; ds = String(swapped).padStart(2, '0'); }
             }
-
             if (mon > 12 && ms.length === 2) {
-              const swapped = parseInt(ms[1] + ms[0]);
+              const swapped = parseInt(ms[1] + ms[0], 10);
               if (swapped >= 1 && swapped <= 12) { mon = swapped; ms = String(swapped).padStart(2, '0'); }
             }
+            if (day >= 1 && day <= 31 && mon >= 1 && mon <= 12) {
+              const yr4 = yr.length === 2 ? '20' + yr : yr;
+              return `${String(day).padStart(2, '0')}/${String(mon).padStart(2, '0')}/${yr4}`;
+            }
+            return null;
+          }
 
+          // YYYY-MM-DD or YYYY/MM/DD
+          const ymdMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+          if (ymdMatch) {
+            const yr = ymdMatch[1], mon = parseInt(ymdMatch[2], 10), day = parseInt(ymdMatch[3], 10);
             if (day >= 1 && day <= 31 && mon >= 1 && mon <= 12) {
               return `${String(day).padStart(2, '0')}/${String(mon).padStart(2, '0')}/${yr}`;
             }
             return null;
           }
 
+          // "1 Jun 2026" or "1 June 2026" or "01 Jun 2026"
           const txtMatch = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
           if (txtMatch) {
-            const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-            let day = parseInt(txtMatch[1]), monWord = txtMatch[2].toLowerCase(), yr = txtMatch[3];
-            let ds = txtMatch[1];
-
-            if (day > 31 && ds.length === 2) {
-              const swapped = parseInt(ds[1] + ds[0]);
-              if (swapped >= 1 && swapped <= 31) { day = swapped; ds = String(swapped); }
-            }
-
-            // OCR month confusion map: correct common misreads (y↔r, n↔r, etc.)
-            const ocrMonthFix = { 'mar': 'may', 'jur': 'jun', 'jul': 'jun', 'aug': 'apr' };
-            if (ocrMonthFix[monWord]) monWord = ocrMonthFix[monWord];
-
-            const matchedMonth = months.find(m => monWord.startsWith(m) || stringSimilarity(monWord, m) >= 50);
+            let day = parseInt(txtMatch[1], 10);
+            const monWord = txtMatch[2].toLowerCase();
+            let yr = txtMatch[3];
+            if (day > 31) return null;
+            const matchedMonth = guessMonth(monWord);
             if (day >= 1 && day <= 31 && matchedMonth) {
-              return `${String(day).padStart(2, '0')} ${matchedMonth.charAt(0).toUpperCase() + matchedMonth.slice(1)} ${yr}`;
+              const yr4 = yr.length === 2 ? '20' + yr : yr;
+              return `${String(day).padStart(2, '0')} ${matchedMonth.charAt(0).toUpperCase() + matchedMonth.slice(1)} ${yr4}`;
             }
             return null;
           }
@@ -436,31 +496,53 @@ function useOcr(imageUrl) {
         }
 
         function extractDate(text) {
+          if (!text) return null;
+          const texts = [text, applyOcrFix(text)];
           const datePatterns = [
             /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/,
-            /(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i,
+            /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[,]?\s+(\d{4})/i,
             /(\d{4}[-/]\d{1,2}[-/]\d{1,2})/,
           ];
 
-          const texts = [text, applyOcrFix(text)];
-
           for (const t of texts) {
-            const keywords = ['Completed', 'UPI transaction ID', 'UTR'];
+            // Search near payment keywords first
+            const keywords = ['Completed', 'UPI transaction ID', 'UTR', 'Status', 'Paid', 'Payment'];
             for (const kw of keywords) {
               const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              const re = new RegExp(escaped + '[^\\n]*\\n([^\\n]*\\n?){0,3}', 'i');
+              const re = new RegExp(escaped + '[^\\n]*\\n([^\\n]*\\n?){0,4}', 'i');
               const m = t.match(re);
               if (m) {
                 for (const pattern of datePatterns) {
                   const dm = m[0].match(pattern);
-                  if (dm) return correctDate(dm[1]);
+                  if (dm) {
+                    const cd = correctDate(dm[1] || (dm[2] ? dm[1] + ' ' + dm[2] + ' ' + dm[3] : null));
+                    if (cd) return cd;
+                  }
                 }
               }
             }
 
+            // Full-text scan with all patterns
             for (const pattern of datePatterns) {
-              const dm = t.match(pattern);
-              if (dm) return correctDate(dm[1]);
+              const allDates = [...t.matchAll(pattern)];
+              for (const dm of allDates) {
+                const raw = dm[1] || (dm[2] ? dm[1] + ' ' + dm[2] + ' ' + dm[3] : null);
+                if (raw) {
+                  const cd = correctDate(raw);
+                  if (cd) return cd;
+                }
+              }
+            }
+
+            // Additional line-by-line scan for dates with full month names
+            const lines = t.split('\n');
+            for (const line of lines) {
+              // Match "DD Month YYYY" or "DD MonthName YYYY"
+              const lm = line.match(/(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})/);
+              if (lm) {
+                const cd = correctDate(lm[1] + ' ' + lm[2] + ' ' + lm[3]);
+                if (cd) return cd;
+              }
             }
           }
 
@@ -473,26 +555,67 @@ function useOcr(imageUrl) {
           // Fallback: any 10-18 digit number in text (generic UTR pattern)
           || ((m = text.match(/\b(\d{10,18})\b/)) && m[1]);
         let amount = extractAmount(text);
-        // UPI ID: try original text, then OCR-fixed text, with flexible patterns
-        let upiMatch = text.match(/([a-zA-Z0-9._-]+@(?:okicici|oksbi|okaxis|paytm|ibl))/i)
-          || text.match(/([a-zA-Z0-9._-]+)[@0](?:okicici|oksbi|okaxis|paytm|ibl)/i);
-        if (!upiMatch) {
-          const fixedUpi = applyOcrFix(text).match(/([a-zA-Z0-9._-]+)[@0](?:okicici|oksbi|okaxis|paytm|ibl)/i);
-          if (fixedUpi) upiMatch = fixedUpi;
+        // UPI ID extraction: find ALL UPI IDs, distinguish sender vs receiver
+        function findAllUpiIds(t) {
+          const results = [];
+          const patterns = [
+            /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+)/gi,
+          ];
+          for (const p of patterns) {
+            const matches = [...t.matchAll(p)];
+            for (const m of matches) {
+              const id = m[1].toLowerCase().replace(/[^a-z0-9@._-]/g, '');
+              if (id.includes('@') && !results.some(r => r.id === id)) {
+                results.push({ id, index: m.index, raw: m[1] });
+              }
+            }
+          }
+          return results;
         }
-        // Fallback: any @ pattern (generic UPI ID)
-        if (!upiMatch) {
-          const genericUpi = text.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+)/i)
-            || applyOcrFix(text).match(/([a-zA-Z0-9._-]+[@0][a-zA-Z0-9._-]+)/i);
-          if (genericUpi) upiMatch = genericUpi;
+
+        function categorizeUpi(text, allUpis) {
+          if (allUpis.length === 0) return { sender: null, receiver: null };
+          const lines = text.split('\n');
+          let fromLine = -1, toLine = -1;
+          for (let i = 0; i < lines.length; i++) {
+            if (/^From[:\s]/i.test(lines[i])) fromLine = i;
+            if (/^To[:\s]/i.test(lines[i])) toLine = i;
+          }
+          if (allUpis.length === 1) return { sender: allUpis[0], receiver: null };
+          // If we found both "From" and "To" lines, assign by proximity
+          if (fromLine >= 0 && toLine >= 0) {
+            for (const upi of allUpis) {
+              const lineIdx = text.substring(0, upi.index).split('\n').length - 1;
+              if (Math.abs(lineIdx - fromLine) <= Math.abs(lineIdx - toLine)) {
+                return { sender: upi, receiver: allUpis.find(u => u.id !== upi.id) };
+              }
+            }
+          }
+          // If expected UPI is among them, prefer it as sender
+          const expectedIdx = allUpis.findIndex(u => isUpiValid(u.id));
+          if (expectedIdx >= 0) {
+            const sender = allUpis[expectedIdx];
+            const receiver = allUpis.find((u, i) => i !== expectedIdx);
+            return { sender, receiver };
+          }
+          // Default: first is sender, second is receiver
+          return { sender: allUpis[0], receiver: allUpis.length > 1 ? allUpis[1] : null };
         }
+
+        const allUpis = [...findAllUpiIds(text), ...findAllUpiIds(applyOcrFix(text))];
+        const uniqueUpis = allUpis.filter((u, i, a) => a.findIndex(x => x.id === u.id) === i);
+        const { sender: senderUpi, receiver: receiverUpi } = categorizeUpi(text, uniqueUpis);
+        const upiMatch = senderUpi ? [senderUpi.raw] : null;
+
         const date = extractDate(text);
         const timeMatch = text.match(/(\d{1,2}:\d{2}\s?[APap][Mm])/);
-        const receiverNameMatch = text.match(/To[:\s]+([A-Za-z\s]+)/i);
         const paymentStatus = extractPaymentStatus(text);
-        let receiverName = null;
-        if (receiverNameMatch) {
-          let rn = receiverNameMatch[1].trim();
+
+        // Sender/Receiver name extraction
+        let receiverName = null, senderName = null;
+        const toMatch = text.match(/(?:^|\n)\s*To[:\s]+([A-Za-z\s]+)/i);
+        if (toMatch) {
+          let rn = toMatch[1].trim();
           const stopIdx = Math.min(
             rn.indexOf('Google Pay') !== -1 ? rn.indexOf('Google Pay') : Infinity,
             rn.indexOf('@') !== -1 ? rn.indexOf('@') : Infinity
@@ -500,23 +623,32 @@ function useOcr(imageUrl) {
           if (stopIdx !== Infinity) rn = rn.substring(0, stopIdx).trim();
           if (rn) receiverName = rn;
         }
+        const fromMatch = text.match(/(?:^|\n)\s*From[:\s]+([A-Za-z\s]+)/i);
+        if (fromMatch) {
+          let fn = fromMatch[1].trim();
+          const stopIdx = fn.indexOf('@');
+          if (stopIdx !== -1) fn = fn.substring(0, stopIdx).trim();
+          if (fn) senderName = fn;
+        }
+        // If no "From" found, look for a name near the sender's UPI
+        if (!senderName && senderUpi) {
+          const beforeText = text.substring(Math.max(0, senderUpi.index - 80), senderUpi.index);
+          const nameBefore = beforeText.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*$/);
+          if (nameBefore) senderName = nameBefore[1].trim();
+        }
 
         // === AMOUNT MERGE SCAN: if raw text scan missed it, merge all extracted field texts and re-scan ===
         if (!amount) {
           const extraSources = [receiverName, paymentStatus, utrMatch].filter(Boolean);
           if (extraSources.length > 0) {
             const merged = [text, applyOcrFix(text), ...extraSources].filter(Boolean).join('\n');
-            console.log('[AMOUNT MERGE] scanning', extraSources.length, 'extra source(s):', extraSources);
             amount = extractAmount(merged);
-            if (amount) console.log('[AMOUNT MERGE] found:', amount);
-            else console.log('[AMOUNT MERGE] still not found');
           }
         }
 
         // === FALLBACK: amount still missing → run Tesseract on original uncropped image ===
         if (!amount && processedUrl) {
           try {
-            console.log('[AMOUNT FALLBACK] Running Tesseract on original image...');
             const { createWorker } = await import('tesseract.js');
             const worker = await createWorker('eng');
             await worker.setParameters({ tessedit_pageseg_mode: '6' });
@@ -524,20 +656,16 @@ function useOcr(imageUrl) {
             await worker.terminate();
             if (data?.text) {
               const amount2 = extractAmount(data.text);
-              if (amount2) {
-                console.log('[AMOUNT FALLBACK] Found in original image:', amount2);
-                amount = amount2;
-              }
+              if (amount2) amount = amount2;
             }
           } catch (e) {
-            console.log('[AMOUNT FALLBACK] Failed:', e.message);
+            // fallback failed silently
           }
         }
 
         // === FALLBACK 2: number-only Tesseract pass (whitelist digits only) ===
         if (!amount) {
           try {
-            console.log('[AMOUNT NUM-ONLY] Running number-whitelist Tesseract...');
             const { createWorker } = await import('tesseract.js');
             const numWorker = await createWorker('eng');
             await numWorker.setParameters({ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '0123456789₹.,' });
@@ -545,15 +673,11 @@ function useOcr(imageUrl) {
             await numWorker.terminate();
             if (data?.text) {
               const nText = data.text.replace(/[^\d₹.,\s\n]/g, '');
-              console.log('[AMOUNT NUM-ONLY] raw output:', nText.substring(0, 200));
               const amount2 = extractAmount(nText);
-              if (amount2) {
-                console.log('[AMOUNT NUM-ONLY] Found:', amount2);
-                amount = amount2;
-              }
+              if (amount2) amount = amount2;
             }
           } catch (e) {
-            console.log('[AMOUNT NUM-ONLY] Failed:', e.message);
+            // fallback failed silently
           }
         }
 
@@ -563,10 +687,13 @@ function useOcr(imageUrl) {
           isGooglePay,
           utr: utrMatch || null,
           amount,
-          upi_id: upiMatch ? upiMatch[1] : null,
+          upi_id: upiMatch ? upiMatch[0] : null,
+          sender_upi: senderUpi ? senderUpi.id : null,
+          receiver_upi: receiverUpi ? receiverUpi.id : null,
+          sender_name: senderName,
+          receiver_name: receiverName,
           date,
           time: timeMatch ? timeMatch[1] : null,
-          receiver_name: receiverName,
           payment_status: paymentStatus,
         });
       } catch (err) {
@@ -622,11 +749,15 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
   }, [displayUtr, user.id]);
 
   useEffect(() => {
-    if (ocrData && !autoApprovalRes && !autoApproving && (user.payment_status === 'pending' || isCyclePayment)) {
+    let cancelled = false;
+    const isCycle = user.cycle_payment_status === 'pending' || user.cycle_payment_utr;
+    if (ocrData && !autoApprovalRes && !autoApproving && (user.payment_status === 'pending' || isCycle)) {
       setAutoApproving(true);
       const timeoutId = setTimeout(() => {
-        setAutoApproving(false);
-        setMsg('⏱ Processing Timeout');
+        if (!cancelled) {
+          setAutoApproving(false);
+          setMsg('⏱ Processing Timeout');
+        }
       }, VALIDATION_TIMEOUT);
       const userInputs = {
         utr: displayUtr,
@@ -634,17 +765,19 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
         date: user.user_entered_date || '',
       };
       withTimeout(FirebaseUser.processAutoApproval(user.id, { ocrData, userInputs }), VALIDATION_CALL_TIMEOUT, { autoApproved: false, autoRejected: true, wasAutoRejected: true, failureReasons: ['Validation timed out'] }).then(res => {
+        if (cancelled) return;
         clearTimeout(timeoutId);
         setAutoApprovalRes(res);
         if (res.wasAutoApproved) {
           setMsg('✓ Auto Approved!');
-          setTimeout(() => { onClose(); }, 1200);
+          setTimeout(() => { if (!cancelled) onClose(); }, 1200);
         } else if (res.wasAutoRejected) {
           setMsg('✗ Auto Rejected');
-          setTimeout(() => { onClose(); }, 2000);
+          setTimeout(() => { if (!cancelled) onClose(); }, 2000);
         }
-      }).catch(() => { clearTimeout(timeoutId); }).finally(() => { clearTimeout(timeoutId); setAutoApproving(false); });
+      }).catch(() => { if (!cancelled) clearTimeout(timeoutId); }).finally(() => { if (!cancelled) setAutoApproving(false); });
     }
+    return () => { cancelled = true; };
   }, [ocrData, user.id, user.payment_status, autoApprovalRes, autoApproving, onClose, displayUtr]);
 
   const validations = useMemo(() => {
@@ -670,9 +803,10 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
       v.push({ label: 'Amount (₹120)', passed: null, reason: 'No screenshot' });
     }
 
-    // UPI ID: PASS (valid) or FAIL (not detected — per spec fallback)
-    if (ocrData?.upi_id) {
-      v.push({ label: 'UPI ID', passed: isUpiValid(ocrData.upi_id), ocrValue: ocrData.upi_id });
+    // UPI ID: PASS (valid sender UPI) or FAIL (wrong) or SKIPPED (not detected)
+    const upiToCheck = ocrData?.sender_upi || ocrData?.upi_id;
+    if (upiToCheck) {
+      v.push({ label: 'UPI ID', passed: isUpiValid(upiToCheck), ocrValue: upiToCheck });
     } else {
       v.push({ label: 'UPI ID', passed: false, reason: 'Not detected' });
     }
@@ -724,7 +858,7 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
     return v;
   }, [dupCheck, displayUtr, displayUrl, ocrData, ocrError]);
 
-  const hasFailures = useMemo(() => validations.some(v => v.passed !== true), [validations]);
+  const hasFailures = useMemo(() => validations.some(v => v.passed === false), [validations]);
 
   async function handleVerify(status) {
     setVerifying(true);
@@ -946,8 +1080,11 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
               <div className="extracted-data-grid">
                 {ocrData.utr && <><span className="label">UTR:</span><span className="value">{ocrData.utr}</span></>}
                 {ocrData.amount && <><span className="label">Amount:</span><span className="value">₹{ocrData.amount}</span></>}
-                {ocrData.receiver_name && <><span className="label">Receiver:</span><span className="value">{ocrData.receiver_name}</span></>}
-                {ocrData.upi_id && <><span className="label">UPI ID:</span><span className="value">{ocrData.upi_id}</span></>}
+                {ocrData.receiver_name && <><span className="label">To:</span><span className="value">{ocrData.receiver_name}</span></>}
+                {ocrData.receiver_upi && <><span className="label">Receiver UPI:</span><span className="value">{ocrData.receiver_upi}</span></>}
+                {ocrData.sender_name && <><span className="label">From:</span><span className="value">{ocrData.sender_name}</span></>}
+                {ocrData.sender_upi && <><span className="label">Sender UPI:</span><span className="value">{ocrData.sender_upi}</span></>}
+                {ocrData.upi_id && !ocrData.sender_upi && <><span className="label">UPI ID:</span><span className="value">{ocrData.upi_id}</span></>}
                 {ocrData.payment_status && <><span className="label">Status:</span><span className="value">{ocrData.payment_status}</span></>}
                 {ocrData.date && <><span className="label">Date:</span><span className="value">{ocrData.date}</span></>}
                 {ocrData.time && <><span className="label">Time:</span><span className="value">{ocrData.time}</span></>}
@@ -984,13 +1121,19 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0' }}>
-                  <span>UPI ID</span>
+                  <span>Sender UPI</span>
                   <span>
-                    <span style={{ color: ocrData.upi_id ? (isUpiValid(ocrData.upi_id) ? 'var(--success)' : 'var(--danger)') : 'var(--danger)' }}>
-                      {ocrData.upi_id || 'Not detected'}
+                    <span style={{ color: (ocrData.sender_upi || ocrData.upi_id) ? (isUpiValid(ocrData.sender_upi || ocrData.upi_id) ? 'var(--success)' : 'var(--danger)') : 'var(--danger)' }}>
+                      {ocrData.sender_upi || ocrData.upi_id || 'Not detected'}
                     </span>
                   </span>
                 </div>
+                {ocrData.receiver_upi && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0' }}>
+                    <span>Receiver UPI</span>
+                    <span style={{ color: 'var(--muted)' }}>{ocrData.receiver_upi}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1299,18 +1442,21 @@ export default function FirebaseAdminPaymentsPage() {
     return filtered;
   }, [users, smartFilter, q, dupAlerts]);
 
-  const pendingUsers = useMemo(() => users.filter(u => { const c = u.cycle_payment_status === 'pending' || u.cycle_payment_utr; return c ? u.cycle_payment_status === 'pending' : u.payment_status === 'pending'; }), [users]);
-
-  const stats = useMemo(() => ({
-    pending: pendingUsers.length,
-    approved: users.filter(u => { const c = u.cycle_payment_status === 'pending' || u.cycle_payment_utr; const s = c ? u.cycle_payment_status : u.payment_status; return s === 'approved'; }).length,
-    rejected: users.filter(u => { const c = u.cycle_payment_status === 'pending' || u.cycle_payment_utr; const s = c ? u.cycle_payment_status : u.payment_status; return s === 'rejected'; }).length,
-    dupAlerts: dupAlerts.length,
-    autoApproved: users.filter(u => u.auto_approved).length,
-    autoRejected: users.filter(u => u.auto_rejected).length,
-    manualReview: users.filter(u => u.validation_status === 'failed' && !u.auto_approved && !u.auto_rejected).length,
-    pendingApproval: users.filter(u => (u.admin_approval_status || 'APPROVED') === 'PENDING').length,
-  }), [users, pendingUsers, dupAlerts]);
+  const stats = useMemo(() => {
+    let pending = 0, approved = 0, rejected = 0, autoApproved = 0, autoRejected = 0, manualReview = 0, pendingApproval = 0;
+    for (const u of users) {
+      const isCycle = u.cycle_payment_status === 'pending' || u.cycle_payment_utr;
+      const s = isCycle ? u.cycle_payment_status : u.payment_status;
+      if (s === 'pending') pending++;
+      else if (s === 'approved') approved++;
+      else if (s === 'rejected') rejected++;
+      if (u.auto_approved) autoApproved++;
+      if (u.auto_rejected) autoRejected++;
+      if (u.validation_status === 'failed' && !u.auto_approved && !u.auto_rejected) manualReview++;
+      if ((u.admin_approval_status || 'APPROVED') === 'PENDING') pendingApproval++;
+    }
+    return { pending, approved, rejected, dupAlerts: dupAlerts.length, autoApproved, autoRejected, manualReview, pendingApproval };
+  }, [users, dupAlerts]);
 
   const handleDeleteUser = async (userId) => {
     if (!window.confirm('Delete this user permanently?')) return;
@@ -1475,7 +1621,7 @@ export default function FirebaseAdminPaymentsPage() {
                         <td data-label="Actions">
                           <div className="flex-actions">
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => openVerification(u)}>Verify</button>
-                            {displayUrl && <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={() => window.open(getImageUrl(displayUrl), '_blank')} title="View Screenshot">{'\u{1F4F7}'}</button>}
+                            {displayUrl && <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={() => window.open(getImageUrl(displayUrl), '_blank', 'noopener,noreferrer')} title="View Screenshot">{'\u{1F4F7}'}</button>}
                             <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => handleDeleteUser(u.id)}>Del</button>
                           </div>
                         </td>

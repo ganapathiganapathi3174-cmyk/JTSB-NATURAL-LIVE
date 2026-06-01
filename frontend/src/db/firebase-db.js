@@ -42,6 +42,36 @@ const EXPECTED_RECEIVER_NAME = 'JEYARAJ ALAGAR';
 const REQUIRED_PAYMENT_STATUS = 'Completed';
 const UPI_SIMILARITY_THRESHOLD = 85;
 
+async function hashPassword(password) {
+  if (!password) return '';
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const _pwCache = new Map();
+async function hashPasswordCached(password) {
+  if (!password) return '';
+  const cached = _pwCache.get(password);
+  if (cached) return cached;
+  const hash = await hashPassword(password);
+  if (_pwCache.size > 50) _pwCache.clear();
+  _pwCache.set(password, hash);
+  return hash;
+}
+
+async function comparePassword(plaintext, storedHash) {
+  if (!storedHash) return false;
+  const hash = await hashPassword(plaintext);
+  if (hash === storedHash) return true;
+  if (plaintext === storedHash) return true;
+  const hashLen = storedHash.length;
+  if (hashLen === 64 && /^[0-9a-f]{64}$/i.test(storedHash)) return false;
+  return false;
+}
+
 function normalizeUpi(upi) {
   let s = upi.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9@._-]/g, '');
   const corrections = { '1': 'l', 'l': '1', '0': 'o', 'o': '0', '5': 's', 's': '5', '8': 'b', 'b': '8' };
@@ -150,6 +180,7 @@ export const FirebaseUser = {
     }
 
     console.log('Creating user document with password:', userData.password ? 'YES' : 'NO');
+    const hashedPw = await hashPasswordCached(userData.password || '');
     
     if (userData.referredBy) {
       const rc = userData.referredBy.toUpperCase();
@@ -165,7 +196,7 @@ export const FirebaseUser = {
       name: userData.name,
       email: userData.email.toLowerCase(),
       phone: userData.phone || '',
-      password: userData.password || '',
+      password: hashedPw,
       status: 'pending',
       payment_status: 'pending',
       upi_screenshot_url: null,
@@ -213,6 +244,7 @@ export const FirebaseUser = {
     const db = getDb();
     const now = new Date().toISOString();
     const pass = userData.password || '';
+    const hashedPass = await hashPasswordCached(pass);
     
     const existingEmail = await FirebaseUser.findByEmail(userData.email);
     if (existingEmail) {
@@ -243,7 +275,7 @@ export const FirebaseUser = {
       name: userData.name,
       email: userData.email.toLowerCase(),
       phone: userData.phone || '',
-      password: pass,
+      password: hashedPass,
       status: 'pending',
       payment_status: 'pending',
       upi_screenshot_url: null,
@@ -349,12 +381,14 @@ export const FirebaseUser = {
   async findByEmailAndPassword(email, password) {
     const db = getDb();
     const colRef = collection(db, COL_USERS);
-    const q = query(colRef, where('email', '==', email.toLowerCase()), where('password', '==', password));
+    const q = query(colRef, where('email', '==', email.toLowerCase()));
     const snap = await getDocs(q);
-    console.log('findByEmailAndPassword found:', snap.size);
     if (snap.empty) return null;
     const d = snap.docs[0];
-    return { id: d.id, ...d.data() };
+    const user = { id: d.id, ...d.data() };
+    const match = await comparePassword(password, user.password);
+    if (!match) return null;
+    return user;
   },
 
   async findById(id) {
@@ -495,20 +529,9 @@ export const FirebaseUser = {
   async updatePassword(id, newPassword) {
     const db = getDb();
     const ref = doc(db, COL_USERS, id);
-    console.log('=== UPDATE PASSWORD START ===');
-    console.log('User ID:', id);
-    console.log('Password to save:', newPassword);
-    console.log('Password length:', newPassword ? newPassword.length : 0);
-    
+    const hashed = await hashPasswordCached(newPassword);
     try {
-      await updateDoc(ref, { password: newPassword });
-      console.log('UpdateDoc completed');
-      
-      // Verify
-      const snap = await getDoc(ref);
-      const data = snap.data();
-      console.log('Password after update:', data.password);
-      console.log('=== UPDATE PASSWORD END ===');
+      await updateDoc(ref, { password: hashed });
       return true;
     } catch (err) {
       console.log('Update password error:', err);
@@ -551,11 +574,8 @@ export const FirebaseUser = {
   async setUserPassword(id, password) {
     const db = getDb();
     const ref = doc(db, COL_USERS, id);
-    console.log('Setting user password for:', id);
-    console.log('Password value:', password);
-    await updateDoc(ref, { password: password });
-    const updated = await getDoc(ref);
-    console.log('Password saved:', updated.data().password);
+    const hashed = await hashPasswordCached(password);
+    await updateDoc(ref, { password: hashed });
   },
 
   async updatePayment(id, screenshotData, utr, userEnteredAmount = '120', userEnteredDate = '') {
@@ -1213,12 +1233,13 @@ export const FirebaseUser = {
       fail('Unique UTR', 'No UTR Provided');
     }
 
-    // 2. UPI ID
-    if (ocrData?.upi_id) {
-      if (isUpiValid(ocrData.upi_id)) {
+    // 2. UPI ID — prefer sender_upi, fallback to upi_id
+    const upiToCheck = ocrData?.sender_upi || ocrData?.upi_id;
+    if (upiToCheck) {
+      if (isUpiValid(upiToCheck)) {
         pass('UPI ID');
       } else {
-        fail('UPI ID', `Wrong UPI ID: ${ocrData.upi_id}`);
+        fail('UPI ID', `Wrong UPI ID: ${upiToCheck}`);
       }
     } else {
       skip('UPI ID', 'Not detected by OCR');
@@ -2123,7 +2144,7 @@ export const FirebaseTopupReferral = {
   },
 };
 
-export { generateReferralCode, MAX_REFERRALS, REFERRAL_EXPIRY_DAYS, STORAGE_FOLDER };
+export { generateReferralCode, MAX_REFERRALS, REFERRAL_EXPIRY_DAYS, STORAGE_FOLDER, hashPassword, hashPasswordCached, comparePassword };
 
 export const FirebaseReferralAccess = {
   async check(userId) {

@@ -888,7 +888,7 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
             {displayUrl ? (
               <div>
                 <button type="button" className="btn btn-primary" style={{ marginBottom: '0.5rem' }}
-                  onClick={() => window.open(getImageUrlScreenshot(displayUrl), '_blank')}>
+                  onClick={() => window.open(getImageUrlScreenshot(displayUrl), '_blank', 'noopener,noreferrer')}>
                   Open Image
                 </button>
                 <br />

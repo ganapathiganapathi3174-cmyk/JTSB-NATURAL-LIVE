@@ -304,7 +304,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               {user.upi_screenshot_url ? (
                 <div>
                   <button className="btn-modern btn-modern-primary btn-modern-sm mb-sm"
-                    onClick={() => window.open(getImageUrl(user.upi_screenshot_url), '_blank')}>
+                    onClick={() => window.open(getImageUrl(user.upi_screenshot_url), '_blank', 'noopener,noreferrer')}>
                     Open Image
                   </button>
                   <img src={getImageUrl(user.upi_screenshot_url)} alt="Payment"

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const ADMIN_KEY = 'fb_admin_token';
-const ADMIN_EMAIL = 'jayaraj@gmail.com';
-const ADMIN_PASSWORD = 'jayaraj7523';
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || '';
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || '';
 
 export default function FirebaseAdminLoginPage() {
   const navigate = useNavigate();

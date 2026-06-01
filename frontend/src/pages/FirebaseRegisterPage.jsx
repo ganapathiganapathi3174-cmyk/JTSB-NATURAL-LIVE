@@ -272,10 +272,8 @@ export default function FirebaseRegisterPage() {
             <input
               required
               value={utr}
-              onChange={e => {
-                setUtr(e.target.value);
-                checkUtrDuplicate(e.target.value);
-              }}
+              onChange={e => setUtr(e.target.value)}
+              onBlur={e => checkUtrDuplicate(e.target.value)}
               className={utrExists ? 'input-error' : (utr.trim() && !utrExists ? 'input-valid' : '')}
             />
             {checkingUtr && <div className="hint">Checking UTR...</div>}

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { FirebaseUser } from '../db/firebase-db.js';
+import { checkRateLimit } from '../utils/rateLimiter.js';
 
 const AMOUNT = Number(import.meta.env.VITE_PAYMENT_AMOUNT) || 120;
 const UPI_VPA = import.meta.env.VITE_UPI_VPA || 'jayarajj126-3@okicici';
@@ -60,8 +61,14 @@ function enhanceImage(file) {
         resolve(canvas.toDataURL('image/jpeg', 0.8));
       } catch (e) { reject(e); }
     };
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(file);
+    const blobUrl = URL.createObjectURL(file);
+    const origOnload = img.onload;
+    img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
+      origOnload();
+    };
+    img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Failed to load image')); };
+    img.src = blobUrl;
   });
 }
 
@@ -191,6 +198,12 @@ export default function PaymentPage() {
     console.log('handleSubmit called');
     setError('');
     setSuccess('');
+
+    const rl = checkRateLimit('payment_submit');
+    if (!rl.allowed) {
+      setError(`Too many attempts. Try again in ${rl.retryAfter} seconds.`);
+      return;
+    }
 
     if (!validateForm()) {
       console.log('validateForm failed');
