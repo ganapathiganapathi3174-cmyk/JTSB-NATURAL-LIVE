@@ -47,7 +47,7 @@ export default function FirebaseLoginPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    const rl = checkRateLimit('login:' + email.toLowerCase());
+    const rl = checkRateLimit('login:' + loginInput.toLowerCase());
     if (!rl.allowed) {
       setError(`Too many attempts. Try again in ${rl.retryAfter} seconds.`);
       return;

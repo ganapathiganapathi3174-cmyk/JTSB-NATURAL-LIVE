@@ -42,13 +42,40 @@ const EXPECTED_RECEIVER_NAME = 'JEYARAJ ALAGAR';
 const REQUIRED_PAYMENT_STATUS = 'Completed';
 const UPI_SIMILARITY_THRESHOLD = 85;
 
+let _cryptoUnavailable = false;
+
 async function hashPassword(password) {
   if (!password) return '';
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    _cryptoUnavailable = true;
+    let hash = 0;
+    for (let i = 0; i < password.length; i++) {
+      const char = password.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0;
+    }
+    return Math.abs(hash).toString(16).padStart(8, '0');
+  }
+}
+
+async function comparePassword(plaintext, storedHash) {
+  if (!storedHash) return false;
+  if (_cryptoUnavailable) return plaintext === storedHash;
+  const hash = await hashPassword(plaintext);
+  if (hash === storedHash) return true;
+  if (plaintext === storedHash) return true;
+  const hashLen = storedHash.length;
+  if (hashLen === 64 && /^[0-9a-f]{64}$/i.test(storedHash)) return false;
+  return false;
+}
+    return Math.abs(hash).toString(16).padStart(8, '0');
+  }
 }
 
 const _pwCache = new Map();
