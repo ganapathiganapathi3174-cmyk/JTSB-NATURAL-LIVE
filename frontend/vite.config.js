@@ -10,8 +10,8 @@ export default defineConfig({
     target: 'esnext',
     minify: 'esbuild',
     esbuild: {
-      drop: ['console', 'debugger'],
-      pure: ['console.log', 'console.info', 'console.warn'],
+      drop: ['debugger'],
+      pure: ['console.log', 'console.info', 'console.warn', 'console.debug'],
     },
     rollupOptions: {
       output: {

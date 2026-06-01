@@ -44,9 +44,9 @@ function isUpiValid(ocrUpi) {
   return stringSimilarity(normalizeUpi(ocrUpi), normalizeUpi(EXPECTED_UPI)) >= UPI_SIMILARITY_THRESHOLD;
 }
 
-const OCR_TIMEOUT = 10000;
-  const VALIDATION_TIMEOUT = 15000;
-  const VALIDATION_CALL_TIMEOUT = 30000;
+const OCR_TIMEOUT = 45000;
+  const VALIDATION_TIMEOUT = 60000;
+  const VALIDATION_CALL_TIMEOUT = 120000;
 
 function withTimeout(promise, ms, fallback) {
   return Promise.race([
@@ -109,9 +109,9 @@ function preprocessImage(url) {
         const cropRatio = 0.85;
         const cropY = Math.floor(img.height * (1 - cropRatio));
         const cropH = img.height - cropY;
-        const scale = 4;
-        const w = cropH * scale;
-        const h = cropH * scale;
+        const scale = 3;
+        const w = Math.round(img.width * scale);
+        const h = Math.round(cropH * scale);
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
@@ -541,7 +541,7 @@ function useOcr(imageUrl) {
             const { createWorker } = await import('tesseract.js');
             const numWorker = await createWorker('eng');
             await numWorker.setParameters({ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '0123456789₹.,' });
-            const { data } = await numWorker.recognize(recognizeUrl);
+            const { data } = await numWorker.recognize(originalUrl);
             await numWorker.terminate();
             if (data?.text) {
               const nText = data.text.replace(/[^\d₹.,\s\n]/g, '');
@@ -730,13 +730,15 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
     setVerifying(true);
     setMsg('');
     try {
-      await onVerify(user.id, status);
       if (status !== 'pending') {
         if (!adminMessage || !adminMessage.trim()) {
           setMsg('Message to user is required');
           setVerifying(false);
           return;
         }
+      }
+      await onVerify(user.id, status);
+      if (status !== 'pending') {
         const adminName = getAdminName();
         await FirebaseNotification.send({
           receiverId: user.id,

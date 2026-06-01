@@ -567,17 +567,11 @@ export const FirebaseUser = {
       user_entered_amount: userEnteredAmount,
       user_entered_date: userEnteredDate || new Date().toISOString().split('T')[0],
     };
-    console.log('updatePayment: id:', id, 'utr:', utr);
+    console.log('updatePayment: id:', id, 'utr:', utr, 'screenshotSize:', screenshotData ? Math.round(screenshotData.length / 1024) + 'KB' : 'none');
     if (screenshotData) {
-      data.upi_screenshot_data = screenshotData;
       data.upi_screenshot_url = screenshotData;
     }
-    try {
-      await updateDoc(ref, data);
-      console.log('updatePayment: SUCCESS');
-    } catch (err) {
-      console.log('updatePayment: ERROR', err.message);
-    }
+    await updateDoc(ref, data);
   },
 
   async updateUpiScreenshot(id, value1, value2) {

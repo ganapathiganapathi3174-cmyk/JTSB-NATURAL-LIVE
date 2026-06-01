@@ -219,9 +219,17 @@ export default function PaymentPage() {
       let screenshotData = null;
       if (screenshot) {
         try {
-          const base64 = await enhanceImage(screenshot);
+          let base64 = await enhanceImage(screenshot);
+          if (base64.length > 350000) {
+            const img2 = new window.Image();
+            await new Promise((resolve, reject) => { img2.onload = resolve; img2.onerror = reject; img2.src = base64; });
+            const c2 = document.createElement('canvas');
+            c2.width = img2.width; c2.height = img2.height;
+            c2.getContext('2d').drawImage(img2, 0, 0);
+            base64 = c2.toDataURL('image/jpeg', 0.5);
+          }
           screenshotData = base64;
-          console.log('Screenshot enhanced and converted to base64');
+          console.log('Screenshot enhanced, size:', Math.round(base64.length / 1024), 'KB');
         } catch (err) {
           console.error('Failed to enhance screenshot:', err);
           try {
