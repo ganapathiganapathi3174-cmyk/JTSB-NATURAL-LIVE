@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm install --prefer-offline",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
