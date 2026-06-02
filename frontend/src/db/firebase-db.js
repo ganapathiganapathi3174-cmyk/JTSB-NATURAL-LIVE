@@ -16,6 +16,7 @@ import {
   serverTimestamp,
   arrayUnion,
   arrayRemove,
+  runTransaction,
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
@@ -185,6 +186,30 @@ export const FirebaseAuth = {
 };
 
 export const FirebaseUser = {
+  async _claimUnique(db, field, value) {
+    const docId = `${field}:${String(value).toLowerCase().trim()}`;
+    const ref = doc(db, '_uniques', docId);
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(ref);
+        if (snap.exists()) throw new Error(field === 'email'
+          ? 'This email is already registered. Please use another email or login.'
+          : 'This mobile number is already registered.');
+        transaction.set(ref, { field, value: String(value).toLowerCase().trim(), claimed_at: new Date().toISOString() });
+      });
+    } catch (e) {
+      if (e.message === 'This email is already registered. Please use another email or login.' ||
+          e.message === 'This mobile number is already registered.') throw e;
+      const existing = await getDoc(ref);
+      if (existing.exists()) {
+        throw new Error(field === 'email'
+          ? 'This email is already registered. Please use another email or login.'
+          : 'This mobile number is already registered.');
+      }
+      await setDoc(ref, { field, value: String(value).toLowerCase().trim(), claimed_at: new Date().toISOString() });
+    }
+  },
+
   async create(userData) {
     const db = getDb();
     const now = new Date().toISOString();
@@ -249,6 +274,9 @@ export const FirebaseUser = {
       referral_created_at: now,
       referral_expires_at: computeReferralExpiryDate(),
     };
+
+    await this._claimUnique(db, 'email', userData.email);
+    if (userData.phone) await this._claimUnique(db, 'phone', userData.phone);
 
     const ref = await addDoc(collection(db, COL_USERS), userDoc);
     console.log('User created in Firestore with password:', userDoc.password ? 'YES' : 'NO');
@@ -335,6 +363,9 @@ export const FirebaseUser = {
       referral_created_at: now,
       referral_expires_at: computeReferralExpiryDate(),
     };
+
+    await this._claimUnique(db, 'email', userData.email);
+    if (userData.phone) await this._claimUnique(db, 'phone', userData.phone);
 
     const ref = await addDoc(collection(db, COL_USERS), userDoc);
     const newId = ref.id;
