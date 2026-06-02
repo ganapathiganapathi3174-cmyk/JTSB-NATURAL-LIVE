@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FirebaseUser, comparePassword } from '../db/firebase-db.js';
 import { checkRateLimit } from '../utils/rateLimiter.js';
@@ -24,6 +24,15 @@ export default function FirebaseLoginPage() {
   const [newPassword, setNewPassword] = useState('');
   const [setPasswordFor, setSetPasswordFor] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
+
+  useEffect(() => {
+    if (rateLimitCountdown <= 0) return;
+    const id = setInterval(() => {
+      setRateLimitCountdown(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [rateLimitCountdown]);
 
   async function handleSetPassword(e) {
     e.preventDefault();
@@ -50,6 +59,7 @@ export default function FirebaseLoginPage() {
     const rl = checkRateLimit('login:' + loginInput.toLowerCase());
     if (!rl.allowed) {
       setError(`Too many attempts. Try again in ${rl.retryAfter} seconds.`);
+      setRateLimitCountdown(rl.retryAfter);
       return;
     }
     setLoading(true);
@@ -168,7 +178,7 @@ export default function FirebaseLoginPage() {
           <>
         <p className="muted">Login with email and password</p>
         
-        {error && <div className="alert alert-error">{error}</div>}
+        {error && <div className="alert alert-error">{error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}</div>}
         
         <form onSubmit={handleSubmit}>
           <div className="field">

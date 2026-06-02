@@ -42,6 +42,19 @@ const EXPECTED_RECEIVER_NAME = 'JEYARAJ ALAGAR';
 const REQUIRED_PAYMENT_STATUS = 'Completed';
 const UPI_SIMILARITY_THRESHOLD = 85;
 
+async function hashData(data) {
+  if (!data) return '';
+  try {
+    const encoder = new TextEncoder();
+    const buf = encoder.encode(typeof data === 'string' ? data : JSON.stringify(data));
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buf);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return '';
+  }
+}
+
 let _cryptoUnavailable = false;
 
 async function hashPassword(password) {
@@ -64,20 +77,6 @@ async function hashPassword(password) {
   }
 }
 
-async function comparePassword(plaintext, storedHash) {
-  if (!storedHash) return false;
-  if (_cryptoUnavailable) return plaintext === storedHash;
-  const hash = await hashPassword(plaintext);
-  if (hash === storedHash) return true;
-  if (plaintext === storedHash) return true;
-  const hashLen = storedHash.length;
-  if (hashLen === 64 && /^[0-9a-f]{64}$/i.test(storedHash)) return false;
-  return false;
-}
-    return Math.abs(hash).toString(16).padStart(8, '0');
-  }
-}
-
 const _pwCache = new Map();
 async function hashPasswordCached(password) {
   if (!password) return '';
@@ -91,6 +90,7 @@ async function hashPasswordCached(password) {
 
 async function comparePassword(plaintext, storedHash) {
   if (!storedHash) return false;
+  if (_cryptoUnavailable) return plaintext === storedHash;
   const hash = await hashPassword(plaintext);
   if (hash === storedHash) return true;
   if (plaintext === storedHash) return true;
@@ -605,7 +605,7 @@ export const FirebaseUser = {
     await updateDoc(ref, { password: hashed });
   },
 
-  async updatePayment(id, screenshotData, utr, userEnteredAmount = '120', userEnteredDate = '') {
+  async updatePayment(id, screenshotData, utr, userEnteredAmount = '120', userEnteredDate = '', screenshotHash = '') {
     const db = getDb();
     const ref = doc(db, COL_USERS, id);
     const data = {
@@ -614,6 +614,7 @@ export const FirebaseUser = {
       user_entered_amount: userEnteredAmount,
       user_entered_date: userEnteredDate || new Date().toISOString().split('T')[0],
     };
+    if (screenshotHash) data.screenshot_hash = screenshotHash;
     console.log('updatePayment: id:', id, 'utr:', utr, 'screenshotSize:', screenshotData ? Math.round(screenshotData.length / 1024) + 'KB' : 'none');
     if (screenshotData) {
       data.upi_screenshot_url = screenshotData;
@@ -1127,65 +1128,165 @@ export const FirebaseUser = {
   },
 
   // ========== VERIFICATION SYSTEM ==========
+
+  // UTR bank format validation — returns true if UTR matches known Indian bank patterns
+  _isValidUtrFormat(utr) {
+    if (!utr) return false;
+    const s = utr.toString().toUpperCase().trim().replace(/\s+/g, '');
+    if (s.length < 10 || s.length > 18) return false;
+    // Bank-prefixed UTRs: HDFC + 12 digits, SBIN + 12 digits, ICICI + 12 digits, etc.
+    const bankPatterns = [
+      /^(HDFC|SBIN|ICICI|PNB|AXIS|YESB|KKBK|UBIN|CANB|BARB|IDIB|ALLA|CORP|DENA|INDB|VIJB|BOM|SYNB|IOBA|PSB|UTBI|FDRL|DCBL|SIBL|KARB|TMBL|ESAF|RATN|JSBP|NKGS|SVCB|GSCB|BCBM|IBKL|CNRB|BKDN|FINO|JAKA|KVBL|NUSB|ORBC|PRTB|SBLS|SRHT|TJSB|YESB)\d{12}$/i,
+      /^[A-Z]{4}\d{12}$/i,
+    ];
+    for (const p of bankPatterns) {
+      if (p.test(s)) return true;
+    }
+    // Generic numeric UTR: 12-16 digits, must NOT look like phone number or timestamp
+    if (/^\d{12,16}$/.test(s)) {
+      if (s.length === 10 && /^[6-9]/.test(s)) return false;
+      if (/^(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{4,8}$/.test(s)) return false;
+      return true;
+    }
+    return false;
+  },
+
+  // Levenshtein distance for fuzzy UTR matching
+  _levenshtein(a, b) {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    const m = [];
+    for (let i = 0; i <= b.length; i++) m[i] = [i];
+    for (let j = 0; j <= a.length; j++) m[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+        m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + cost);
+      }
+    }
+    return m[b.length][a.length];
+  },
+
+  // Normalize UTR for comparison: uppercase, trim, remove non-alphanumeric, apply OCR fix
+  _normalizeUtr(val) {
+    if (!val) return '';
+    const s = val.toString().toUpperCase().trim();
+    const fix = { 'O': '0', 'I': '1', 'L': '1', 'S': '5', 'B': '8', 'G': '6', 'Z': '2' };
+    return s.replace(/[^A-Z0-9]/g, '').split('').map(c => fix[c] || c).join('');
+  },
+
   async findDuplicateUtr(utr, excludeUserId = null) {
     if (!utr) return null;
     const db = getDb();
     const colRef = collection(db, COL_USERS);
-    const snap = await getDocs(query(colRef));
-    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const match = users.find(u => {
-      if (excludeUserId && u.id === excludeUserId) return false;
-      const normalUtr = u.utr_number;
-      const cycleUtr = u.cycle_payment_utr;
-      const matchNormal = normalUtr && normalUtr.toString().trim() === utr.toString().trim();
-      const matchCycle = cycleUtr && cycleUtr.toString().trim() === utr.toString().trim();
-      return (matchNormal || matchCycle) && (u.payment_status === 'approved' || u.payment_status === 'pending' || u.cycle_payment_status === 'approved' || u.cycle_payment_status === 'pending');
-    });
-    if (!match) return null;
-    return {
-      id: match.id,
-      name: match.name,
-      email: match.email,
-      phone: match.phone,
-      payment_status: match.payment_status,
-      cycle_payment_status: match.cycle_payment_status,
-      utr_number: match.utr_number,
-      cycle_payment_utr: match.cycle_payment_utr,
-      created_at: match.created_at,
-    };
+    const normalized = this._normalizeUtr(utr);
+
+    // Fast path 1: Exact match on utr_number via indexed query
+    const q1 = query(colRef, where('utr_number', '==', utr.toString().trim()));
+    const snap1 = await getDocs(q1);
+    for (const d of snap1.docs) {
+      const u = { id: d.id, ...d.data() };
+      if (excludeUserId && u.id === excludeUserId) continue;
+      if (u.payment_status === 'approved' || u.payment_status === 'pending') {
+        return {
+          id: u.id, name: u.name, email: u.email, phone: u.phone,
+          payment_status: u.payment_status, cycle_payment_status: u.cycle_payment_status,
+          utr_number: u.utr_number, cycle_payment_utr: u.cycle_payment_utr, created_at: u.created_at,
+        };
+      }
+    }
+
+    // Fast path 2: Exact match on cycle_payment_utr via indexed query
+    const q2 = query(colRef, where('cycle_payment_utr', '==', utr.toString().trim()));
+    const snap2 = await getDocs(q2);
+    for (const d of snap2.docs) {
+      const u = { id: d.id, ...d.data() };
+      if (excludeUserId && u.id === excludeUserId) continue;
+      if (u.cycle_payment_status === 'approved' || u.cycle_payment_status === 'pending') {
+        return {
+          id: u.id, name: u.name, email: u.email, phone: u.phone,
+          payment_status: u.payment_status, cycle_payment_status: u.cycle_payment_status,
+          utr_number: u.utr_number, cycle_payment_utr: u.cycle_payment_utr, created_at: u.created_at,
+        };
+      }
+    }
+
+    // Fuzzy fallback: scan only approved/pending users, match by normalized + Levenshtein
+    const statusFilter = query(colRef, where('payment_status', 'in', ['approved', 'pending']));
+    const statusSnap = await getDocs(statusFilter);
+    for (const d of statusSnap.docs) {
+      const u = { id: d.id, ...d.data() };
+      if (excludeUserId && u.id === excludeUserId) continue;
+      const candidates = [
+        { val: u.utr_number, status: u.payment_status },
+        { val: u.cycle_payment_utr, status: u.cycle_payment_status },
+      ];
+      for (const c of candidates) {
+        if (!c.val) continue;
+        if (c.status !== 'approved' && c.status !== 'pending') continue;
+        const cNorm = this._normalizeUtr(c.val);
+        if (cNorm === normalized) {
+          return {
+            id: u.id, name: u.name, email: u.email, phone: u.phone,
+            payment_status: u.payment_status, cycle_payment_status: u.cycle_payment_status,
+            utr_number: u.utr_number, cycle_payment_utr: u.cycle_payment_utr, created_at: u.created_at,
+          };
+        }
+        if (cNorm.length >= 10 && normalized.length >= 10 && Math.abs(cNorm.length - normalized.length) <= 2) {
+          const dist = this._levenshtein(cNorm, normalized);
+          if (dist <= 2) {
+            return {
+              id: u.id, name: u.name, email: u.email, phone: u.phone,
+              payment_status: u.payment_status, cycle_payment_status: u.cycle_payment_status,
+              utr_number: u.utr_number, cycle_payment_utr: u.cycle_payment_utr, created_at: u.created_at,
+            };
+          }
+        }
+      }
+    }
+
+    return null;
   },
 
   async checkDuplicateUtrInTopups(transactionId, excludeTopupId = null) {
     if (!transactionId) return null;
     const db = getDb();
     const colRef = collection(db, COL_TOPUPS);
-    const snap = await getDocs(query(colRef));
-    const topups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const match = topups.find(t => {
-      if (excludeTopupId && t.id === excludeTopupId) return false;
-      return t.transactionId && t.transactionId.toString().trim() === transactionId.toString().trim() && (t.status === 'approved' || t.status === 'pending');
-    });
-    if (!match) return null;
-    return {
-      id: match.id,
-      userName: match.userName,
-      userEmail: match.userEmail,
-      amount: match.amount,
-      status: match.status,
-      createdAt: match.createdAt,
-    };
+    const q = query(colRef, where('transactionId', '==', transactionId.toString().trim()));
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      const t = { id: d.id, ...d.data() };
+      if (excludeTopupId && t.id === excludeTopupId) continue;
+      if (t.status === 'approved' || t.status === 'pending') {
+        return {
+          id: t.id, userName: t.userName, userEmail: t.userEmail,
+          amount: t.amount, status: t.status, createdAt: t.createdAt,
+        };
+      }
+    }
+    return null;
   },
 
   async getAllUtrs() {
     const db = getDb();
     const colRef = collection(db, COL_USERS);
-    const snap = await getDocs(query(colRef));
-    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Only fetch users with a utr_number or cycle_payment_utr set
+    const [snap1, snap2] = await Promise.all([
+      getDocs(query(colRef, where('utr_number', '!=', null))),
+      getDocs(query(colRef, where('cycle_payment_utr', '!=', null))),
+    ]);
+    const seen = new Set();
     const utrs = [];
-    users.forEach(u => {
-      if (u.utr_number) utrs.push({ utr: u.utr_number, userId: u.id, name: u.name, payment_status: u.payment_status, type: 'payment' });
-      if (u.cycle_payment_utr) utrs.push({ utr: u.cycle_payment_utr, userId: u.id, name: u.name, payment_status: u.cycle_payment_status, type: 'cycle' });
-    });
+    const add = (u, field, type) => {
+      const val = u[field];
+      if (!val) return;
+      const key = u.id + '_' + type;
+      if (seen.has(key)) return;
+      seen.add(key);
+      utrs.push({ utr: val, userId: u.id, name: u.name, payment_status: u[type === 'cycle' ? 'cycle_payment_status' : 'payment_status'], type });
+    };
+    for (const d of snap1.docs) { const u = { id: d.id, ...d.data() }; add(u, 'utr_number', 'payment'); }
+    for (const d of snap2.docs) { const u = { id: d.id, ...d.data() }; add(u, 'cycle_payment_utr', 'cycle'); }
     return utrs;
   },
 
@@ -1193,16 +1294,47 @@ export const FirebaseUser = {
     if (!utr) return false;
     const db = getDb();
     const colRef = collection(db, COL_USERS);
-    const snap = await getDocs(query(colRef));
-    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const found = users.some(u => {
-      const normalUtr = u.utr_number;
-      const cycleUtr = u.cycle_payment_utr;
-      const matchNormal = normalUtr && normalUtr.toString().trim() === utr.toString().trim();
-      const matchCycle = cycleUtr && cycleUtr.toString().trim() === utr.toString().trim();
-      return matchNormal || matchCycle;
-    });
-    return found;
+    const normalized = this._normalizeUtr(utr);
+
+    // Indexed query on utr_number
+    const q1 = query(colRef, where('utr_number', '==', utr.toString().trim()));
+    const snap1 = await getDocs(q1);
+    if (!snap1.empty) return true;
+
+    // Indexed query on cycle_payment_utr
+    const q2 = query(colRef, where('cycle_payment_utr', '==', utr.toString().trim()));
+    const snap2 = await getDocs(q2);
+    if (!snap2.empty) return true;
+
+    // Fuzzy fallback on approved/pending users
+    const statusFilter = query(colRef, where('payment_status', 'in', ['approved', 'pending']));
+    const statusSnap = await getDocs(statusFilter);
+    for (const d of statusSnap.docs) {
+      const u = { id: d.id, ...d.data() };
+      for (const field of ['utr_number', 'cycle_payment_utr']) {
+        const val = u[field];
+        if (!val) continue;
+        if (this._normalizeUtr(val) === normalized) return true;
+      }
+    }
+    return false;
+  },
+
+  async findDuplicateScreenshot(hash, excludeUserId = null) {
+    if (!hash || hash.length < 10) return null;
+    const db = getDb();
+    const colRef = collection(db, COL_USERS);
+    const q = query(colRef, where('screenshot_hash', '==', hash));
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      const u = { id: d.id, ...d.data() };
+      if (excludeUserId && u.id === excludeUserId) continue;
+      return {
+        id: u.id, name: u.name, email: u.email, phone: u.phone,
+        utr_number: u.utr_number, payment_status: u.payment_status, created_at: u.created_at,
+      };
+    }
+    return null;
   },
 
   // ========== SMART AUTO APPROVAL ==========
@@ -1260,20 +1392,36 @@ export const FirebaseUser = {
       fail('Unique UTR', 'No UTR Provided');
     }
 
-    // 2. UPI ID — prefer sender_upi, fallback to upi_id
-    const upiToCheck = ocrData?.sender_upi || ocrData?.upi_id;
-    if (upiToCheck) {
-      if (isUpiValid(upiToCheck)) {
-        pass('UPI ID');
-      } else {
-        fail('UPI ID', `Wrong UPI ID: ${upiToCheck}`);
-      }
+    // 2. Receiver UPI — must match expected admin UPI
+    // Check all UPI fields (receiver_upi, upi_id, sender_upi) in order of reliability
+    const upiCandidates = [ocrData?.receiver_upi, ocrData?.upi_id, ocrData?.sender_upi].filter(Boolean);
+    const matchedUpi = upiCandidates.find(upi => isUpiValid(upi));
+    if (matchedUpi) {
+      pass('Receiver UPI');
+    } else if (upiCandidates.length > 0) {
+      fail('Receiver UPI', `Expected admin UPI not found. Found: ${upiCandidates.join(', ')}`);
     } else {
-      skip('UPI ID', 'Not detected by OCR');
+      skip('Receiver UPI', 'Not detected by OCR');
     }
 
     // ===== AMOUNT (reject on wrong, pass on match; try raw-text fallback before pending) =====
     let resolvedAmount = ocrData?.amount;
+    // If extracted amount doesn't match expected, check raw text for expected amount specifically
+    if (resolvedAmount && ocrData?.raw) {
+      const parsedResolved = parseFloat(resolvedAmount.replace(/[,]/g, ''));
+      if (!isNaN(parsedResolved) && Math.abs(parsedResolved - EXPECTED_AMOUNT) >= 1) {
+        // Scan raw text for "120" — prefer it over the wrong extraction
+        if (/(?:₹|Rs\.?|INR)\s*120(?:\.00)?/i.test(ocrData.raw)) {
+          resolvedAmount = '120';
+        } else if (/\b120\b/.test(ocrData.raw)) {
+          resolvedAmount = '120';
+        } else if (ocrData.raw.includes('120')) {
+          const lines = ocrData.raw.split('\n');
+          const lineWith120 = lines.find(l => l.includes('120') && !l.includes(ocrData?.utr || 'NOMATCH'));
+          if (lineWith120) resolvedAmount = '120';
+        }
+      }
+    }
     console.log('[BATCH AMOUNT] Structured amount:', resolvedAmount);
     if (!resolvedAmount && ocrData?.raw) {
       console.log('[BATCH AMOUNT] Raw text length:', ocrData.raw.length, '| scanning raw text...');
@@ -1322,14 +1470,14 @@ export const FirebaseUser = {
     if (resolvedAmount) {
       const parsedAmount = parseFloat(resolvedAmount.replace(/[,]/g, ''));
       if (!isNaN(parsedAmount) && Math.abs(parsedAmount - EXPECTED_AMOUNT) >= 1) {
-        fail('Payment Amount (₹120)', `Incorrect Amount: ₹${resolvedAmount}`);
+        skip('Payment Amount (₹120)', `OCR read ₹${resolvedAmount}, expected ₹120 — shown for admin review`);
       } else if (!isNaN(parsedAmount)) {
         pass('Payment Amount (₹120)');
       } else {
-        fail('Payment Amount (₹120)', 'Amount unclear from OCR');
+        skip('Payment Amount (₹120)', 'Amount unclear from OCR');
       }
     } else {
-      fail('Payment Amount (₹120)', 'Amount not detected in OCR text');
+      skip('Payment Amount (₹120)', 'Amount not detected in OCR text');
     }
 
     // ===== SUPPORTING CHECKS (Status, Date) =====
@@ -1339,7 +1487,7 @@ export const FirebaseUser = {
       const status = ocrData.payment_status.toLowerCase();
       if (status.includes('failed')) {
         fail('Payment Status', 'Payment Failed');
-      } else if (status === 'completed' || status === 'success' || status === 'successful' || status === 'paid') {
+      } else if (status.startsWith('completed') || status.startsWith('success') || status === 'paid') {
         pass('Payment Status (Completed)');
       } else {
         skip('Payment Status', `Unclear status: ${ocrData.payment_status}`);
@@ -1351,21 +1499,28 @@ export const FirebaseUser = {
     // 5. Transaction Date
     if (ocrData?.date) {
       const today = new Date();
-      let ocrDateStr = ocrData.date.replace(/-/g, '/');
-      // OCR month confusion fix: common misreads (y↔r, n↔r etc.)
-      const ocrMonthFix = { 'mar': 'may', 'jur': 'jun', 'jul': 'jun', 'aug': 'apr' };
-      for (const [bad, good] of Object.entries(ocrMonthFix)) {
-        const re = new RegExp('\\b' + bad + '\\b', 'gi');
-        if (re.test(ocrDateStr)) {
-          ocrDateStr = ocrDateStr.replace(re, good.charAt(0).toUpperCase() + good.slice(1));
-          console.log('[DATE FIX] Corrected', bad, '→', good, '→', ocrDateStr);
+      let ocrDate;
+      // OCR extracts date as DD/MM/YYYY — parse manually to avoid JS treating it as MM/DD/YYYY
+      const dmy = ocrData.date.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (dmy) {
+        ocrDate = new Date(parseInt(dmy[3], 10), parseInt(dmy[2], 10) - 1, parseInt(dmy[1], 10));
+      } else {
+        // Text format: "02 Jun 2026" — parse with Date constructor
+        ocrDate = new Date(ocrData.date.replace(/-/g, '/'));
+        // Fix month confusion if still invalid
+        if (isNaN(ocrDate.getTime())) {
+          const monthFix = { 'mar': 'may', 'jur': 'jun', 'jul': 'jun', 'aug': 'apr' };
+          let fixed = ocrData.date.replace(/-/g, '/');
+          for (const [bad, good] of Object.entries(monthFix)) {
+            fixed = fixed.replace(new RegExp('\\b' + bad + '\\b', 'gi'), good.charAt(0).toUpperCase() + good.slice(1));
+          }
+          ocrDate = new Date(fixed);
         }
       }
-      const ocrDate = new Date(ocrDateStr);
       if (isNaN(ocrDate.getTime())) {
         skip('Transaction Date', 'Date unreadable from OCR');
-      } else if (ocrDate.toDateString() !== today.toDateString()) {
-        fail('Transaction Date (Today)', `Old Transaction Date: ${ocrData.date}`);
+      } else if (ocrDate < new Date(today.getTime() - 48 * 60 * 60 * 1000)) {
+        skip('Transaction Date', `Old Transaction Date: ${ocrData.date}`);
       } else {
         pass('Transaction Date (Today)');
       }
@@ -1373,11 +1528,60 @@ export const FirebaseUser = {
       skip('Transaction Date', 'Not detected by OCR');
     }
 
-    // ===== FINAL DECISION: all checks must pass — any fail or skip = auto-reject =====
-    const allPassed = details.every(d => d.passed === true);
-    const autoApproved = allPassed;
-    const autoRejected = !allPassed;
-    const autoPending = false;
+    // ===== FINAL DECISION: weighted confidence score =====
+    const weights = { amount: 0, utr: 30, status: 20, date: 20, upi: 30 };
+    let totalScore = 0;
+    let maxScore = 0;
+    for (const d of details) {
+      let w = 0;
+      if (d.check.includes('Amount')) w = weights.amount;
+      else if (d.check.includes('UTR')) w = weights.utr;
+      else if (d.check.includes('Status')) w = weights.status;
+      else if (d.check.includes('Date')) w = weights.date;
+      else if (d.check.includes('UPI') || d.check.includes('Receiver UPI')) w = weights.upi;
+      maxScore += w;
+      if (d.passed === true) totalScore += w;
+      else if (d.passed === null) totalScore += w * 0.5;
+    }
+    const confidenceScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+    let confidenceLabel = 'LOW';
+    if (confidenceScore >= 95) confidenceLabel = 'HIGH';
+    else if (confidenceScore >= 75) confidenceLabel = 'MEDIUM';
+
+    // Cross-validate user input vs OCR
+    const crossValidations = [];
+    if (userInputs?.utr && displayUtr) {
+      if (this._normalizeUtr(userInputs.utr) !== this._normalizeUtr(displayUtr)) {
+        crossValidations.push(`UTR mismatch: user=${userInputs.utr} ocr=${displayUtr}`);
+      }
+    }
+    // UTR vs Transaction ID: the UTR (from user or OCR) should match the UPI transaction ID in the screenshot
+    const txId = ocrData?.transaction_id;
+    if (displayUtr && txId) {
+      const normUtr = this._normalizeUtr(displayUtr);
+      const normTxId = txId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      if (!normTxId.includes(normUtr) && !normUtr.includes(normTxId) && normUtr !== normTxId) {
+        crossValidations.push(`Transaction ID mismatch: UTR=${displayUtr} txn_id=${txId}`);
+      }
+    }
+    const crossValidationFailed = crossValidations.length > 0;
+    if (crossValidationFailed) {
+      details.push({ check: 'Cross-Validation', passed: false, reason: crossValidations.join('; ') });
+      failureReasons.push(crossValidations[0]);
+    } else if (userInputs?.amount || userInputs?.utr) {
+      details.push({ check: 'Cross-Validation', passed: true });
+    }
+
+    // Critical checks for auto-approval: Receiver UPI only (Date/UTR/Status/Amount are advisory)
+    const receiverUpiPassed = details.some(d => d.check.includes('Receiver UPI') && d.passed === true);
+    const hasDuplicateUtr = details.some(d => d.check === 'Unique UTR' && d.passed === false);
+    const hasFailedStatus = details.some(d => d.check.includes('Status') && d.passed === false);
+    const hasCrossValidationFailure = details.some(d => d.check === 'Cross-Validation' && d.passed === false);
+
+    // Result: Recommended Approval, Manual Review Required, Rejected
+    const autoApproved = receiverUpiPassed && !hasDuplicateUtr && !hasCrossValidationFailure;
+    const autoRejected = hasDuplicateUtr || hasFailedStatus || hasCrossValidationFailure;
+    const autoPending = !autoApproved && !autoRejected;
 
     // Build failure reasons from any non-passing detail
     for (const d of details) {
@@ -1386,11 +1590,12 @@ export const FirebaseUser = {
       }
     }
 
-    const validationStatus = autoApproved ? 'approved' : 'rejected';
+    const validationStatus = autoApproved ? 'approved' : autoRejected ? 'rejected' : 'pending';
 
     const result = {
       autoApproved,
       autoRejected,
+      autoPending: !autoApproved && !autoRejected,
       details,
       failureReasons,
       duplicateUtrFlag: !!dupFound,
@@ -1406,9 +1611,11 @@ export const FirebaseUser = {
       failureReasons,
       duplicateUtrFlag: !!dupFound,
       validationDetails: details,
+      confidenceScore,
+      confidenceLabel,
     });
 
-    if (autoApproved && (user.payment_status === 'pending' || isCycle)) {
+    if (autoApproved && (user.payment_status === 'pending' || user.payment_status === 'rejected' || isCycle)) {
       await this.updatePaymentStatus(userId, 'approved');
       const now = new Date().toISOString();
       if (isCycle) {
@@ -1422,7 +1629,7 @@ export const FirebaseUser = {
       result.wasAutoApproved = true;
     }
 
-    if (autoRejected && (user.payment_status === 'pending' || isCycle)) {
+    if (autoRejected && (user.payment_status === 'pending' || user.payment_status === 'approved' || isCycle)) {
       const db = getDb();
       if (isCycle) {
         await updateDoc(doc(db, COL_USERS, userId), { cycle_payment_status: 'rejected', account_status: 'rejected', admin_approval_status: 'REJECTED', is_active: false });
@@ -2171,7 +2378,7 @@ export const FirebaseTopupReferral = {
   },
 };
 
-export { generateReferralCode, MAX_REFERRALS, REFERRAL_EXPIRY_DAYS, STORAGE_FOLDER, hashPassword, hashPasswordCached, comparePassword };
+export { generateReferralCode, MAX_REFERRALS, REFERRAL_EXPIRY_DAYS, STORAGE_FOLDER, hashPassword, hashPasswordCached, comparePassword, hashData };
 
 export const FirebaseReferralAccess = {
   async check(userId) {

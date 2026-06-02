@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
-import { FirebaseUser } from '../db/firebase-db.js';
+import { FirebaseUser, hashData } from '../db/firebase-db.js';
 import { checkRateLimit } from '../utils/rateLimiter.js';
 
 const AMOUNT = Number(import.meta.env.VITE_PAYMENT_AMOUNT) || 120;
@@ -72,6 +72,44 @@ function enhanceImage(file) {
   });
 }
 
+function checkImageQuality(file) {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    const blobUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        const d = imageData.data;
+        let lapSum = 0, lapCount = 0;
+        for (let y = 2; y < img.height - 2; y++) {
+          for (let x = 2; x < img.width - 2; x++) {
+            const idx = (y * img.width + x) * 4;
+            const lap = -d[((y-2)*img.width+x)*4] - d[((y-1)*img.width+x)*4] + 4*d[idx] - d[((y+1)*img.width+x)*4] - d[((y+2)*img.width+x)*4];
+            lapSum += lap * lap;
+            lapCount++;
+          }
+        }
+        const lapVariance = lapCount > 0 ? lapSum / lapCount : 0;
+        const minDim = Math.min(img.width, img.height);
+        const ratio = img.width / img.height;
+        const issues = [];
+        if (lapVariance < 50) issues.push('blurry');
+        if (minDim < 300) issues.push('too small');
+        if (ratio > 1.5 || ratio < 0.3) issues.push('cropped');
+        resolve(issues);
+      } catch { resolve([]); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve([]); };
+    img.src = blobUrl;
+  });
+}
+
 export default function PaymentPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -94,6 +132,15 @@ export default function PaymentPage() {
   const [copied, setCopied] = useState(false);
   const [utrExists, setUtrExists] = useState(false);
   const [checkingUtr, setCheckingUtr] = useState(false);
+  const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
+
+  useEffect(() => {
+    if (rateLimitCountdown <= 0) return;
+    const id = setInterval(() => {
+      setRateLimitCountdown(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [rateLimitCountdown]);
   const utrTimer = useRef(null);
 
   const MAX_FILE_SIZE = 500000; // 500KB limit for base64
@@ -202,6 +249,7 @@ export default function PaymentPage() {
     const rl = checkRateLimit('payment_submit');
     if (!rl.allowed) {
       setError(`Too many attempts. Try again in ${rl.retryAfter} seconds.`);
+      setRateLimitCountdown(rl.retryAfter);
       return;
     }
 
@@ -210,11 +258,35 @@ export default function PaymentPage() {
       return;
     }
 
+    // Image quality check before upload
+    if (screenshot) {
+      const issues = await checkImageQuality(screenshot);
+      if (issues.length > 0) {
+        setError(`Screenshot is ${issues.join(', ')}. Please upload a clearer screenshot.`);
+        return;
+      }
+    }
+
     setLoading(true);
     console.log('Loading started');
 
     try {
       const trimmedUtr = utr.trim();
+
+      // Screenshot hash dedup
+      let screenshotHash = '';
+      if (screenshot) {
+        try {
+          screenshotHash = await hashData(await toBase64(screenshot));
+          const dupScreenshot = await FirebaseUser.findDuplicateScreenshot(screenshotHash);
+          if (dupScreenshot) {
+            setError('This screenshot has already been used for a payment.');
+            setLoading(false);
+            return;
+          }
+        } catch {}
+      }
+
       const dupCheck = await FirebaseUser.checkUtrExists(trimmedUtr);
       if (dupCheck) {
         setError('This UTR number already exists.');
@@ -253,7 +325,7 @@ export default function PaymentPage() {
 
       if (user) {
         console.log('Updating existing user...');
-        await FirebaseUser.updatePayment(user.id, screenshotData, utr.trim(), String(AMOUNT), paymentDate);
+        await FirebaseUser.updatePayment(user.id, screenshotData, utr.trim(), String(AMOUNT), paymentDate, screenshotHash);
         // If no password, save it
         if (!user.password && password) {
           await FirebaseUser.updatePassword(user.id, password);
@@ -380,7 +452,7 @@ export default function PaymentPage() {
                 <span>Submit Payment Details</span>
               </div>
 
-              {error && <div className="alert alert-error">{error}</div>}
+              {error && <div className="alert alert-error">{error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}</div>}
               {success && <div className="alert alert-success">{success}</div>}
 
               <form onSubmit={handleSubmit}>

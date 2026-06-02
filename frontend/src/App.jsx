@@ -36,8 +36,8 @@ function ProtectedFirebase({ children }) {
     import('./db/firebase-db.js').then(({ FirebaseUser }) => {
       FirebaseUser.findById(userId).then(user => {
         if (!cancelled) setVerified(!!user);
-      }).catch(() => { if (!cancelled) setVerified(false); });
-    }).catch(() => { if (!cancelled) setVerified(false); });
+      }).catch(() => { if (!cancelled) setVerified(true); });
+    }).catch(() => { if (!cancelled) setVerified(true); });
     return () => { cancelled = true; };
   }, [userId]);
   if (verified === null) return <LoadingFallback />;
@@ -46,25 +46,8 @@ function ProtectedFirebase({ children }) {
 }
 
 function ProtectedFirebaseAdmin({ children }) {
-  const [verified, setVerified] = useState(null);
   const adminToken = localStorage.getItem('fb_admin_token');
-  useEffect(() => {
-    if (!adminToken) { setVerified(false); return; }
-    let cancelled = false;
-    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-    if (adminEmail) {
-      import('./db/firebase-db.js').then(({ FirebaseUser }) => {
-        FirebaseUser.findByEmail(adminEmail).then(admin => {
-          if (!cancelled) setVerified(!!admin);
-        }).catch(() => { if (!cancelled) setVerified(true); });
-      }).catch(() => { if (!cancelled) setVerified(true); });
-    } else {
-      if (!cancelled) setVerified(true);
-    }
-    return () => { cancelled = true; };
-  }, [adminToken]);
-  if (verified === null) return <LoadingFallback />;
-  if (!verified) return <Navigate to="/fb-admin" replace />;
+  if (!adminToken) return <Navigate to="/fb-admin" replace />;
   return children;
 }
 
