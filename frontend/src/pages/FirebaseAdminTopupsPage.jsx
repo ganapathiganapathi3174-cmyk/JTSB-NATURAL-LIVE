@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FirebaseTopup, FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
@@ -505,7 +505,7 @@ function useOcr(imageUrl) {
             const { createWorker } = await import('tesseract.js');
             const numWorker = await createWorker('eng');
             await numWorker.setParameters({ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '0123456789₹.,' });
-            const { data } = await numWorker.recognize(recognizeUrl);
+            const { data } = await numWorker.recognize(getImageUrlScreenshot(imageUrl));
             await numWorker.terminate();
             if (data?.text) {
               const nText = data.text.replace(/[^\d₹.,\s\n]/g, '');
@@ -561,33 +561,39 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
   const { ocrData, ocrLoading, ocrError } = useOcr(topup?.status === 'pending' ? displayUrl : null);
 
   useEffect(() => {
+    let cancelled = false;
     if (topup?.transactionId) {
       setDupLoading(true);
       FirebaseUser.checkDuplicateUtrInTopups(topup.transactionId, topup.id).then(result => {
-        setDupCheck(result);
-      }).catch(() => {}).finally(() => setDupLoading(false));
+        if (!cancelled) setDupCheck(result);
+      }).catch(() => {}).finally(() => { if (!cancelled) setDupLoading(false); });
     }
+    return () => { cancelled = true; };
   }, [topup?.transactionId, topup?.id]);
 
   useEffect(() => {
+    let cancelled = false;
     if (ocrData && !autoApprovalRes && !autoApproving && topup.status === 'pending') {
       setAutoApproving(true);
       const timeoutId = setTimeout(() => {
+        if (cancelled) return;
         setAutoApproving(false);
         setMsg('⏱ Processing Timeout');
       }, VALIDATION_TIMEOUT);
       withTimeout(FirebaseUser.processTopupAutoApproval(topup.id, topup, { ocrData }), VALIDATION_CALL_TIMEOUT, { autoApproved: false, autoRejected: true, wasAutoRejected: true, failureReasons: ['Validation timed out'] }).then(res => {
+        if (cancelled) return;
         clearTimeout(timeoutId);
         setAutoApprovalRes(res);
         if (res.wasAutoApproved) {
           setMsg('✓ Auto Approved!');
-          setTimeout(() => { onClose(); }, 1200);
+          setTimeout(() => { if (!cancelled) onClose(); }, 1200);
         } else if (res.wasAutoRejected) {
           setMsg('✗ Auto Rejected');
-          setTimeout(() => { onClose(); }, 2000);
+          setTimeout(() => { if (!cancelled) onClose(); }, 2000);
         }
-      }).catch(() => { clearTimeout(timeoutId); }).finally(() => { clearTimeout(timeoutId); setAutoApproving(false); });
+      }).catch(() => { clearTimeout(timeoutId); }).finally(() => { if (!cancelled) { clearTimeout(timeoutId); setAutoApproving(false); } });
     }
+    return () => { cancelled = true; };
   }, [ocrData, topup.id, topup.status, autoApprovalRes, autoApproving, onClose]);
 
   const validations = useMemo(() => {

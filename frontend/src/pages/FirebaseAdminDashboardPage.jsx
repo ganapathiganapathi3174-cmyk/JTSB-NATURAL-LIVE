@@ -27,6 +27,7 @@ function AddUserModal({ onClose, onAdded }) {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone: phone.trim(),
+        password: tempPassword,
         referredBy: null,
       });
 
@@ -196,6 +197,7 @@ export default function FirebaseAdminDashboardPage() {
         const seen = {};
         let dupCount = 0;
         allUtrs.forEach(u => {
+          if (!u.utr) return;
           if (seen[u.utr]) dupCount++;
           seen[u.utr] = u;
         });

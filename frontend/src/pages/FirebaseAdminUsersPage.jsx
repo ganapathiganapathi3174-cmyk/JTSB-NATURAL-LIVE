@@ -31,6 +31,10 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
   const currentAdminStatus = user.admin_approval_status || 'APPROVED';
 
   async function handleAdminApproval(status) {
+    if (!adminMessage || !adminMessage.trim()) {
+      setAdminApproving(false);
+      return;
+    }
     setAdminApproving(true);
     try {
       const adminName = getAdminName();
@@ -124,7 +128,6 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
     setActivateMsg('');
     try {
       const adminName = getAdminName();
-      await FirebaseUser.activateUser(user.id, adminName, activateReason);
       if (!adminMessage || !adminMessage.trim()) {
         setActivating(false);
         return;

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, memo } from 'react';
+import { useEffect, useState, useMemo, memo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess, FirebaseTopup, FirebaseTopupReferral, FirebaseNotification } from '../db/firebase-db.js';
@@ -72,6 +72,9 @@ export default function FirebaseUserDashboard() {
   const [cycleUtr, setCycleUtr] = useState('');
   const [cyclePaymentPreview, setCyclePaymentPreview] = useState(null);
   const [showCyclePaymentForm, setShowCyclePaymentForm] = useState(false);
+  const [cycleUtrExists, setCycleUtrExists] = useState(false);
+  const [checkingCycleUtr, setCheckingCycleUtr] = useState(false);
+  const cycleUtrTimer = useRef(null);
 
   // Topup state
   const [topups, setTopups] = useState([]);
@@ -81,6 +84,9 @@ export default function FirebaseUserDashboard() {
   const [topupPreview, setTopupPreview] = useState(null);
   const [showTopupForm, setShowTopupForm] = useState(false);
   const [submittingTopup, setSubmittingTopup] = useState(false);
+  const [topupUtrExists, setTopupUtrExists] = useState(false);
+  const [checkingTopupUtr, setCheckingTopupUtr] = useState(false);
+  const topupUtrTimer = useRef(null);
   const [topupIncome, setTopupIncome] = useState([]);
   const [claimingId, setClaimingId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -267,9 +273,35 @@ export default function FirebaseUserDashboard() {
     }
   }
 
+  function checkCycleUtrDuplicate(val) {
+    if (cycleUtrTimer.current) clearTimeout(cycleUtrTimer.current);
+    if (!val) {
+      setCycleUtrExists(false);
+      setCheckingCycleUtr(false);
+      return;
+    }
+    setCheckingCycleUtr(true);
+    cycleUtrTimer.current = setTimeout(async () => {
+      try {
+        const exists = await FirebaseUser.checkUtrExists(val.trim());
+        setCycleUtrExists(exists);
+      } catch {
+        setCycleUtrExists(false);
+      } finally {
+        setCheckingCycleUtr(false);
+      }
+    }, 500);
+  }
+
   async function handleUploadCyclePayment() {
     if (!cyclePaymentFile || !cycleUtr.trim()) {
       setError('Screenshot and UTR are required');
+      return;
+    }
+    const trimmedUtr = cycleUtr.trim();
+    const dupCheck = await FirebaseUser.checkUtrExists(trimmedUtr);
+    if (dupCheck) {
+      setError('This UTR ID has already been used.');
       return;
     }
     setUploading(true);
@@ -280,6 +312,7 @@ export default function FirebaseUserDashboard() {
       setCyclePaymentFile(null);
       setCyclePaymentPreview(null);
       setCycleUtr('');
+      setCycleUtrExists(false);
       setShowCyclePaymentForm(false);
     } catch (err) {
       console.error('Cycle payment error:', err);
@@ -287,6 +320,26 @@ export default function FirebaseUserDashboard() {
     } finally {
       setUploading(false);
     }
+  }
+
+  function checkTopupUtrDuplicate(val) {
+    if (topupUtrTimer.current) clearTimeout(topupUtrTimer.current);
+    if (!val) {
+      setTopupUtrExists(false);
+      setCheckingTopupUtr(false);
+      return;
+    }
+    setCheckingTopupUtr(true);
+    topupUtrTimer.current = setTimeout(async () => {
+      try {
+        const exists = await FirebaseUser.checkUtrExists(val.trim());
+        setTopupUtrExists(exists);
+      } catch {
+        setTopupUtrExists(false);
+      } finally {
+        setCheckingTopupUtr(false);
+      }
+    }, 500);
   }
 
   function handleTopupFileSelect(e) {
@@ -304,6 +357,12 @@ export default function FirebaseUserDashboard() {
       setError('Amount, transaction ID, and screenshot are required');
       return;
     }
+    const trimmedTxId = topupTransactionId.trim();
+    const dupCheck = await FirebaseUser.checkUtrExists(trimmedTxId);
+    if (dupCheck) {
+      setError('This UTR ID has already been used.');
+      return;
+    }
     setSubmittingTopup(true);
     setError('');
     try {
@@ -315,6 +374,7 @@ export default function FirebaseUserDashboard() {
       });
       setTopupAmount('');
       setTopupTransactionId('');
+      setTopupUtrExists(false);
       setTopupFile(null);
       setTopupPreview(null);
       setShowTopupForm(false);
@@ -893,9 +953,16 @@ return (
                     <input
                       type="text"
                       value={cycleUtr}
-                      onChange={e => setCycleUtr(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setCycleUtr(val);
+                        checkCycleUtrDuplicate(val);
+                      }}
+                      className={cycleUtrExists ? 'input-error' : ''}
                       placeholder="Enter UTR from payment confirmation"
                     />
+                    {checkingCycleUtr && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking UTR...</div>}
+                    {cycleUtrExists && <div className="field-error">This UTR ID has already been used.</div>}
                   </div>
                   <div className="field">
                     <label>Payment Screenshot *</label>
@@ -913,14 +980,14 @@ return (
                       type="button"
                       className={`btn btn-primary${uploading ? ' btn-loading' : ''}`}
                       onClick={() => handleUploadCyclePayment()}
-                      disabled={uploading || !cyclePaymentFile || !cycleUtr.trim()}
+                      disabled={uploading || !cyclePaymentFile || !cycleUtr.trim() || cycleUtrExists}
                     >
                       {uploading ? 'Submitting...' : 'Submit Payment'}
                     </button>
                     <button
                       type="button"
                       className="btn btn-ghost"
-                      onClick={() => setShowCyclePaymentForm(false)}
+                      onClick={() => { setShowCyclePaymentForm(false); setCycleUtrExists(false); }}
                     >
                       Cancel
                     </button>
@@ -984,7 +1051,13 @@ return (
               </div>
               <div className="field">
                 <label>Transaction ID / UTR *</label>
-                <input type="text" value={topupTransactionId} onChange={e => setTopupTransactionId(e.target.value)} placeholder="Enter transaction reference number" />
+                <input type="text" value={topupTransactionId} onChange={e => {
+                  const val = e.target.value;
+                  setTopupTransactionId(val);
+                  checkTopupUtrDuplicate(val);
+                }} className={topupUtrExists ? 'input-error' : ''} placeholder="Enter transaction reference number" />
+                {checkingTopupUtr && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking UTR...</div>}
+                {topupUtrExists && <div className="field-error">This UTR ID has already been used.</div>}
               </div>
               <div className="field">
                 <label>Payment Screenshot *</label>
@@ -994,10 +1067,10 @@ return (
                 )}
               </div>
               <div className="flex-row">
-                <button className={`btn btn-primary${submittingTopup ? ' btn-loading' : ''}`} onClick={handleSubmitTopup} disabled={submittingTopup || !topupAmount || !topupTransactionId.trim() || !topupFile}>
+                <button className={`btn btn-primary${submittingTopup ? ' btn-loading' : ''}`} onClick={handleSubmitTopup} disabled={submittingTopup || !topupAmount || !topupTransactionId.trim() || !topupFile || topupUtrExists}>
                   {submittingTopup ? 'Submitting...' : 'Submit Topup'}
                 </button>
-                <button className="btn btn-ghost" onClick={() => { setShowTopupForm(false); setTopupPreview(null); setTopupFile(null); }}>
+                <button className="btn btn-ghost" onClick={() => { setShowTopupForm(false); setTopupPreview(null); setTopupFile(null); setTopupUtrExists(false); }}>
                   Cancel
                 </button>
               </div>

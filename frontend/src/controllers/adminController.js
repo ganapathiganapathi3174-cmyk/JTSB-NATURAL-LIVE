@@ -180,7 +180,7 @@ export async function listPayments(req) {
       phoneNumber: u.phone,
       screenshot: u.upi_screenshot_url,
       status: u.payment_status,
-      amount: 99,
+      amount: Number(import.meta.env.VITE_PAYMENT_AMOUNT) || 120,
       createdAt: u.created_at,
     }));
 

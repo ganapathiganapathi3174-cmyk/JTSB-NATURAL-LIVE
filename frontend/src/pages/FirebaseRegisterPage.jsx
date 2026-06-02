@@ -173,7 +173,7 @@ export default function FirebaseRegisterPage() {
           return;
         }
         const referrer = expiryCheck.referrer;
-        if (!referrer || referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || referrer.admin_status === 'suspicious') {
+if (!referrer || referrer.payment_status !== 'approved' || referrer.account_status !== 'active' || referrer.admin_status === 'suspicious' || referrer.admin_approval_status === 'REJECTED') {
           setError('Referral code is no longer valid');
           setLoading(false);
           return;
@@ -189,7 +189,7 @@ export default function FirebaseRegisterPage() {
         referredBy: referredBy,
       });
 
-      await FirebaseUser.updatePayment(user.id, null, utrVal);
+      await FirebaseUser.updatePayment(user.id, null, utrVal, String(import.meta.env.VITE_PAYMENT_AMOUNT || 120), new Date().toISOString().split('T')[0], '');
 
       setSuccess(true);
       setTimeout(() => navigate('/fb/login'), 2000);

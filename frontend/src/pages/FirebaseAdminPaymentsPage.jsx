@@ -876,13 +876,32 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
   const currentAdminStatus = user.admin_approval_status || 'APPROVED';
 
   async function handleAdminApproval(status) {
+    if (!adminMessage || !adminMessage.trim()) {
+      setMsg('Message to user is required');
+      return;
+    }
     setAdminApproving(true);
     try {
       const adminName = getAdminName();
       await FirebaseUser.updateAdminApproval(user.id, status, adminName);
+      if (status === 'APPROVED') {
+        await FirebaseUser.updatePaymentStatus(user.id, 'approved');
+      }
+      await FirebaseNotification.send({
+        receiverId: user.id,
+        receiverName: user.name || '',
+        message: adminMessage,
+        type: status === 'APPROVED' ? 'admin_approval_approved' : 'admin_approval_rejected',
+        senderId: adminName,
+        senderName: adminName,
+      });
+      setAdminMessage('');
       console.log(`[ADMIN APPROVAL] PaymentModal: User ${user.id} ${status} by ${adminName}`);
+      setMsg(status === 'APPROVED' ? 'Login Approved!' : 'Login Rejected!');
+      setTimeout(() => { onClose(); }, 800);
     } catch (err) {
       console.error('Admin approval error:', err);
+      setMsg(err.message);
     }
     setAdminApproving(false);
   }
@@ -894,10 +913,15 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
   const { ocrData, ocrLoading, ocrError } = useOcr(displayUrl);
 
   useEffect(() => {
+    let cancelled = false;
     if (displayUtr) {
       setDupLoading(true);
-      FirebaseUser.findDuplicateUtr(displayUtr, user.id).then(setDupCheck).catch(() => {}).finally(() => setDupLoading(false));
+      FirebaseUser.findDuplicateUtr(displayUtr, user.id).then(r => { if (!cancelled) setDupCheck(r); }).catch(() => {}).finally(() => { if (!cancelled) setDupLoading(false); });
+    } else {
+      setDupLoading(false);
+      setDupCheck(null);
     }
+    return () => { cancelled = true; };
   }, [displayUtr, user.id]);
 
   useEffect(() => {
@@ -906,7 +930,6 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
       setAutoApproving(true);
       const timeoutId = setTimeout(() => {
         if (!cancelled) {
-          setAutoApproving(false);
           setMsg('⏱ Processing Timeout');
         }
       }, VALIDATION_TIMEOUT);
@@ -929,7 +952,7 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
       }).catch(() => { if (!cancelled) clearTimeout(timeoutId); }).finally(() => { if (!cancelled) setAutoApproving(false); });
     }
     return () => { cancelled = true; };
-  }, [ocrData, user.id, user.payment_status, autoApprovalRes, autoApproving, onClose, displayUtr]);
+  }, [ocrData, user.id, autoApprovalRes, onClose, displayUtr]);
 
   const validations = useMemo(() => {
     const v = [];
@@ -1707,7 +1730,6 @@ export default function FirebaseAdminPaymentsPage() {
                 <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>
                 <option value="recommended_approval">Recommended Approval</option>
                 <option value="manual_review">Manual Review Required</option>
-                <option value="rejected">Rejected</option>
                 <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>
                 <option value="duplicate_utr">Duplicate UTR</option>
                 <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>

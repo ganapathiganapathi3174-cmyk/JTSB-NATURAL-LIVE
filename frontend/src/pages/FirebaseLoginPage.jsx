@@ -73,7 +73,7 @@ export default function FirebaseLoginPage() {
       const [userByEmail, userByUtr] = await withTimeout(
         Promise.all([
           FirebaseUser.findByEmail(inputVal.toLowerCase()).catch(() => null),
-          inputVal.length >= 10 ? FirebaseUser.findByUtr(inputVal).catch(() => null) : Promise.resolve(null),
+          /^\d{10,20}$/.test(inputVal) ? FirebaseUser.findByUtr(inputVal).catch(() => null) : Promise.resolve(null),
         ]),
         LOGIN_TIMEOUT
       );

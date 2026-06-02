@@ -36,8 +36,8 @@ function ProtectedFirebase({ children }) {
     import('./db/firebase-db.js').then(({ FirebaseUser }) => {
       FirebaseUser.findById(userId).then(user => {
         if (!cancelled) setVerified(!!user);
-      }).catch(() => { if (!cancelled) setVerified(true); });
-    }).catch(() => { if (!cancelled) setVerified(true); });
+      }).catch(() => { if (!cancelled) setVerified(false); });
+    }).catch(() => { if (!cancelled) setVerified(false); });
     return () => { cancelled = true; };
   }, [userId]);
   if (verified === null) return <LoadingFallback />;

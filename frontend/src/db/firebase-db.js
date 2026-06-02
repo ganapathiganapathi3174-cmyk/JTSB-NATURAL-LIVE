@@ -242,6 +242,8 @@ export const FirebaseUser = {
       cycle_payment_utr: null,
       cycle_upi_screenshot_url: null,
       account_status: 'inactive',
+      admin_approval_status: 'PENDING',
+      is_active: false,
       is_first_payment_done: false,
       created_at: now,
       referral_created_at: now,
@@ -286,7 +288,12 @@ export const FirebaseUser = {
     console.log('createWithPassword: creating user with password:', pass.substring(0, 2) + '***');
     console.log('Collection name:', COL_USERS);
     
-    let referralCode = generateReferralCode();
+    let referralCode;
+    for (let i = 0; i < 10; i++) {
+      referralCode = generateReferralCode();
+      const existing = await FirebaseUser.findByReferralCode(referralCode);
+      if (!existing) break;
+    }
     
     if (userData.referredBy) {
       const rc = userData.referredBy.toUpperCase();
@@ -506,10 +513,10 @@ export const FirebaseUser = {
       updateData.referral_limit_reached = false;
       updateData.referral_active = true;
       updateData.is_qualified = false;
+      updateData.auto_rejected = false;
+      updateData.auto_approved = false;
+      updateData.validation_status = 'passed';
       
-      if (user.referred_by && user.referred_by_status === 'pending') {
-        updateData.referred_by_status = 'approved';
-      }
     }
     await updateDoc(ref, updateData);
     console.log('Payment status updated successfully');
@@ -543,6 +550,9 @@ export const FirebaseUser = {
               phone: user.phone || '',
               created_at: new Date().toISOString(),
             });
+            
+            // Only mark referred_by_status after all referrer updates succeed
+            await updateDoc(ref, { referred_by_status: 'approved' });
             
             console.log('Referral activated for referrer:', referrer.id, 'count:', newCount);
           }
@@ -1306,6 +1316,10 @@ export const FirebaseUser = {
     const snap2 = await getDocs(q2);
     if (!snap2.empty) return true;
 
+    // Check topup records for matching transaction ID
+    const topupDup = await this.checkDuplicateUtrInTopups(utr);
+    if (topupDup) return true;
+
     // Fuzzy fallback on approved/pending users
     const statusFilter = query(colRef, where('payment_status', 'in', ['approved', 'pending']));
     const statusSnap = await getDocs(statusFilter);
@@ -1359,7 +1373,7 @@ export const FirebaseUser = {
       const user = await this.findById(userId);
       if (!user) return { autoApproved: false, autoRejected: false, failureReasons: ['User not found'] };
 
-    const isCycle = user.cycle_payment_status === 'pending' || user.cycle_payment_utr;
+    const isCycle = user.cycle_payment_status === 'pending';
     const displayUtr = isCycle ? user.cycle_payment_utr : user.utr_number;
     const details = [];
     const failureReasons = [];
@@ -1379,10 +1393,13 @@ export const FirebaseUser = {
 
     // ===== CRITICAL CHECKS (UTR, UPI) =====
 
-    // 1. Unique UTR
+    // 1. Unique UTR — check both user records and topup records
     let dupFound = null;
     if (displayUtr) {
       dupFound = await this.findDuplicateUtr(displayUtr, userId);
+      if (!dupFound) {
+        dupFound = await this.checkDuplicateUtrInTopups(displayUtr);
+      }
       if (dupFound) {
         fail('Unique UTR', 'Duplicate UTR Detected');
       } else {
@@ -1579,7 +1596,7 @@ export const FirebaseUser = {
     const hasCrossValidationFailure = details.some(d => d.check === 'Cross-Validation' && d.passed === false);
 
     // Result: Recommended Approval, Manual Review Required, Rejected
-    const autoApproved = receiverUpiPassed && !hasDuplicateUtr && !hasCrossValidationFailure;
+    const autoApproved = receiverUpiPassed && !hasDuplicateUtr && !hasCrossValidationFailure && !hasFailedStatus;
     const autoRejected = hasDuplicateUtr || hasFailedStatus || hasCrossValidationFailure;
     const autoPending = !autoApproved && !autoRejected;
 
@@ -1653,6 +1670,7 @@ export const FirebaseUser = {
     const ref = doc(db, COL_USERS, userId);
     const updates = { admin_approval_status: status };
     if (status === 'APPROVED') {
+      updates.account_status = 'active';
       updates.approved_at = new Date().toISOString();
       updates.approved_by = adminName || 'Unknown Admin';
       updates.is_active = true;
@@ -1668,7 +1686,7 @@ export const FirebaseUser = {
     const user = await this.findById(userId);
     if (!user) throw new Error('User not found');
 
-    const isCycle = user.cycle_payment_status === 'pending' || user.cycle_payment_utr;
+    const isCycle = user.cycle_payment_status === 'pending';
 
     if (isCycle) {
       await this.reactivate(userId);
@@ -1719,7 +1737,7 @@ export const FirebaseUser = {
     if (!ocrData?.amount) {
       fail(`Payment Amount (₹${expectedAmount})`, 'Amount Not Detected');
     } else if (expectedAmount <= 0) {
-      pass(`Payment Amount`);
+      fail(`Payment Amount`, 'Invalid topup amount');
     } else {
       const parsedAmount = parseFloat(ocrData.amount.replace(/[,]/g, ''));
       if (isNaN(parsedAmount) || Math.abs(parsedAmount - expectedAmount) >= 10) {
@@ -1729,15 +1747,15 @@ export const FirebaseUser = {
       }
     }
 
-      // 3. UPI ID (fuzzy match with OCR typo correction)
-      if (!ocrData?.upi_id) {
-        fail('UPI ID', 'UPI ID Missing');
+      // 3. Receiver UPI — must match expected admin UPI
+      const upiCandidates = [ocrData?.receiver_upi, ocrData?.upi_id, ocrData?.sender_upi].filter(Boolean);
+      const matchedUpi = upiCandidates.find(upi => isUpiValid(upi));
+      if (matchedUpi) {
+        pass('Receiver UPI');
+      } else if (upiCandidates.length > 0) {
+        fail('Receiver UPI', `Expected admin UPI not found. Found: ${upiCandidates.join(', ')}`);
       } else {
-        if (isUpiValid(ocrData.upi_id)) {
-          pass('UPI ID');
-        } else {
-          fail('UPI ID', `Wrong UPI ID: ${ocrData.upi_id}`);
-        }
+        fail('Receiver UPI', 'UPI ID Missing');
       }
 
     // 4. Payment Status
@@ -1767,12 +1785,16 @@ export const FirebaseUser = {
       }
     }
 
-    // 6. Duplicate Transaction ID
+    // 6. Duplicate Transaction ID — check both topups and user records
     let dupFound = null;
     if (!topupData.transactionId) {
       fail('Unique Transaction ID', 'No Transaction ID Provided');
     } else {
-      dupFound = await this.checkDuplicateUtrInTopups(topupData.transactionId, topupId);
+      const trimmedTxId = topupData.transactionId.trim();
+      dupFound = await this.checkDuplicateUtrInTopups(trimmedTxId, topupId);
+      if (!dupFound) {
+        dupFound = await this.findDuplicateUtr(trimmedTxId, topupData.userId);
+      }
       if (dupFound) {
         fail('Unique Transaction ID', 'Duplicate Transaction ID Detected');
       } else {
@@ -2044,7 +2066,7 @@ export const FirebaseTopup = {
   async findByUserId(userId) {
     const db = getDb();
     const colRef = collection(db, COL_TOPUPS);
-    const q = query(colRef, where('userId', '==', userId), where('createdAt', '>=', '2000-01-01'));
+    const q = query(colRef, where('userId', '==', userId));
     const snap = await getDocs(q);
     const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
