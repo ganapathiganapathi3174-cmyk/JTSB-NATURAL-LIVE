@@ -7,3 +7,5 @@ uploads/
 frontend/dist/
 backend/dist/
 *.zip
+.vercel
+.env*.local
