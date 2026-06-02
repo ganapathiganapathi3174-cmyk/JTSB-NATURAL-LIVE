@@ -191,12 +191,12 @@ export const FirebaseUser = {
     
     const existingEmail = await FirebaseUser.findByEmail(userData.email);
     if (existingEmail) {
-      throw new Error('This email is already registered. Please use a different email.');
+      throw new Error('This email is already registered. Please use another email or login.');
     }
     
     const existingPhone = await FirebaseUser.findByPhone(userData.phone);
     if (existingPhone) {
-      throw new Error('This phone number is already registered. Please use a different number.');
+      throw new Error('This mobile number is already registered.');
     }
     
     let referralCode;
@@ -277,12 +277,12 @@ export const FirebaseUser = {
     
     const existingEmail = await FirebaseUser.findByEmail(userData.email);
     if (existingEmail) {
-      throw new Error('This email is already registered. Please use a different email.');
+      throw new Error('This email is already registered. Please use another email or login.');
     }
     
     const existingPhone = await FirebaseUser.findByPhone(userData.phone);
     if (existingPhone) {
-      throw new Error('This phone number is already registered. Please use a different number.');
+      throw new Error('This mobile number is already registered.');
     }
     
     console.log('createWithPassword: creating user with password:', pass.substring(0, 2) + '***');

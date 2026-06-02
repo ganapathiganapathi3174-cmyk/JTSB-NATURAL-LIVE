@@ -253,7 +253,7 @@ if (!referrer || referrer.payment_status !== 'approved' || referrer.account_stat
               onBlur={e => checkEmailDuplicate(e.target.value)}
               style={{ borderColor: emailExists ? 'var(--error)' : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'var(--success)' : '' }}
             />
-            {emailExists && <div className="field-error">This email is already registered</div>}
+            {emailExists && <div className="field-error">This email is already registered. Please use another email or login.</div>}
           </div>
           <div className="field">
             <label>Phone *</label>
@@ -265,7 +265,7 @@ if (!referrer || referrer.payment_status !== 'approved' || referrer.account_stat
               onBlur={e => checkPhoneDuplicate(e.target.value)}
               style={{ borderColor: phoneExists ? 'var(--error)' : phone.trim().length >= 10 ? 'var(--success)' : '' }}
             />
-            {phoneExists && <div className="field-error">This phone number is already registered</div>}
+            {phoneExists && <div className="field-error">This mobile number is already registered.</div>}
           </div>
           <div className="field">
             <label>UTR Number *</label>
@@ -317,8 +317,8 @@ if (!referrer || referrer.payment_status !== 'approved' || referrer.account_stat
           </div>
           {(emailExists || phoneExists) && (
             <div className="alert alert-error mb-md">
-              {emailExists && <div>This email is already registered. Please use a different email.</div>}
-              {phoneExists && <div>This phone number is already registered. Please use a different number.</div>}
+              {emailExists && <div>This email is already registered. Please use another email or login.</div>}
+              {phoneExists && <div>This mobile number is already registered.</div>}
             </div>
           )}
           <button className={`btn btn-primary w-full${loading ? ' btn-loading' : ''}`} type="submit" disabled={!canSubmit || emailExists || phoneExists}>

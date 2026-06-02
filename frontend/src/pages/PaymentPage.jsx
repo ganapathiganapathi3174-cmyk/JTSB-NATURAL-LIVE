@@ -132,6 +132,10 @@ export default function PaymentPage() {
   const [copied, setCopied] = useState(false);
   const [utrExists, setUtrExists] = useState(false);
   const [checkingUtr, setCheckingUtr] = useState(false);
+  const [emailExists, setEmailExists] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const [phoneExists, setPhoneExists] = useState(false);
+  const [checkingPhone, setCheckingPhone] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
 
   useEffect(() => {
@@ -142,6 +146,8 @@ export default function PaymentPage() {
     return () => clearInterval(id);
   }, [rateLimitCountdown]);
   const utrTimer = useRef(null);
+  const emailTimer = useRef(null);
+  const phoneTimer = useRef(null);
 
   const MAX_FILE_SIZE = 500000; // 500KB limit for base64
   const UPI_REF_REGEX = /^[0-9]{10,20}$/;
@@ -208,6 +214,48 @@ export default function PaymentPage() {
     }, 500);
   }
 
+  function checkEmailDuplicate(emailVal) {
+    if (emailTimer.current) clearTimeout(emailTimer.current);
+    const trimmed = emailVal.trim();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setEmailExists(false);
+      setCheckingEmail(false);
+      return;
+    }
+    setCheckingEmail(true);
+    emailTimer.current = setTimeout(async () => {
+      try {
+        const existing = await FirebaseUser.findByEmail(trimmed);
+        setEmailExists(!!existing);
+      } catch {
+        setEmailExists(false);
+      } finally {
+        setCheckingEmail(false);
+      }
+    }, 500);
+  }
+
+  function checkPhoneDuplicate(phoneVal) {
+    if (phoneTimer.current) clearTimeout(phoneTimer.current);
+    const trimmed = phoneVal.trim();
+    if (trimmed.length < 10) {
+      setPhoneExists(false);
+      setCheckingPhone(false);
+      return;
+    }
+    setCheckingPhone(true);
+    phoneTimer.current = setTimeout(async () => {
+      try {
+        const existing = await FirebaseUser.findByPhone(trimmed);
+        setPhoneExists(!!existing);
+      } catch {
+        setPhoneExists(false);
+      } finally {
+        setCheckingPhone(false);
+      }
+    }, 500);
+  }
+
   function validateForm() {
     if (!fullName.trim() || fullName.trim().length < 2) {
       setError('Full name must be at least 2 characters');
@@ -227,6 +275,10 @@ export default function PaymentPage() {
     }
     if (utrExists) {
       setError('This UTR number already exists.');
+      return false;
+    }
+    if (phoneExists) {
+      setError('This mobile number is already registered.');
       return false;
     }
     if (!confirmedAmount) {
@@ -473,9 +525,13 @@ export default function PaymentPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={(e) => checkEmailDuplicate(e.target.value)}
               placeholder="your.email@example.com"
               autoComplete="email"
+              className={emailExists ? 'input-error' : ''}
             />
+            {checkingEmail && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking email...</div>}
+            {emailExists && <div className="field-error">This email is already registered. Please use another email or login.</div>}
           </div>
 
           <div className="field">
@@ -484,10 +540,17 @@ export default function PaymentPage() {
               required
               inputMode="numeric"
               value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              onChange={(e) => {
+                setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10));
+                setPhoneExists(false);
+              }}
+              onBlur={(e) => checkPhoneDuplicate(e.target.value)}
               placeholder="10-digit mobile number"
               autoComplete="tel"
+              className={phoneExists ? 'input-error' : ''}
             />
+            {checkingPhone && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking mobile number...</div>}
+            {phoneExists && <div className="field-error">This mobile number is already registered.</div>}
             <div className="hint">Example: 9876543210</div>
           </div>
 
