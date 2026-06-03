@@ -791,6 +791,68 @@ export const FirebaseUser = {
       console.warn('Failed to delete referrals:', e);
     }
 
+    // Delete all topups for this user
+    try {
+      const topupsQuery = query(collection(db, COL_TOPUPS), where('userId', '==', id));
+      const topupsSnap = await getDocs(topupsQuery);
+      const topupDeletions = topupsSnap.docs.map(d => deleteDoc(doc(db, COL_TOPUPS, d.id)));
+      await Promise.all(topupDeletions);
+    } catch (e) {
+      console.warn('Failed to delete topups:', e);
+    }
+
+    // Delete topup referral income records for this user
+    try {
+      const incomeQuery1 = query(collection(db, COL_TOPUP_INCOME), where('userId', '==', id));
+      const incomeSnap1 = await getDocs(incomeQuery1);
+      const incomeQuery2 = query(collection(db, COL_TOPUP_INCOME), where('fromUserId', '==', id));
+      const incomeSnap2 = await getDocs(incomeQuery2);
+      const incomeDeletions = [...incomeSnap1.docs, ...incomeSnap2.docs].map(d => deleteDoc(doc(db, COL_TOPUP_INCOME, d.id)));
+      await Promise.all(incomeDeletions);
+    } catch (e) {
+      console.warn('Failed to delete topup income:', e);
+    }
+
+    // Delete all notifications for this user
+    try {
+      const notifQuery1 = query(collection(db, COL_MESSAGES), where('receiverId', '==', id));
+      const notifSnap1 = await getDocs(notifQuery1);
+      const notifQuery2 = query(collection(db, COL_MESSAGES), where('senderId', '==', id));
+      const notifSnap2 = await getDocs(notifQuery2);
+      const notifDeletions = [...notifSnap1.docs, ...notifSnap2.docs].map(d => deleteDoc(doc(db, COL_MESSAGES, d.id)));
+      await Promise.all(notifDeletions);
+    } catch (e) {
+      console.warn('Failed to delete notifications:', e);
+    }
+
+    // Delete payment images for this user
+    try {
+      const imagesQuery = query(collection(db, 'payment_images'), where('userId', '==', id));
+      const imagesSnap = await getDocs(imagesQuery);
+      const imageDeletions = imagesSnap.docs.map(d => deleteDoc(doc(db, 'payment_images', d.id)));
+      await Promise.all(imageDeletions);
+    } catch (e) {
+      console.warn('Failed to delete payment images:', e);
+    }
+
+    // Delete uniqueness claims
+    if (user.email) {
+      try {
+        const emailClaimRef = doc(db, '_uniques', `email:${user.email.toLowerCase().trim()}`);
+        await deleteDoc(emailClaimRef);
+      } catch (e) {
+        console.warn('Failed to delete email uniqueness claim:', e);
+      }
+    }
+    if (user.phone) {
+      try {
+        const phoneClaimRef = doc(db, '_uniques', `phone:${user.phone.trim()}`);
+        await deleteDoc(phoneClaimRef);
+      } catch (e) {
+        console.warn('Failed to delete phone uniqueness claim:', e);
+      }
+    }
+
     // Delete chat messages and conversation for this user
     await FirebaseChat.deleteUserChatData(id);
 

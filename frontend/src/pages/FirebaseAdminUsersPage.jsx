@@ -456,9 +456,7 @@ export default function FirebaseAdminUsersPage() {
 
   const handleDelete = async (userId) => {
     try {
-      const db = getDb();
-      await FirebaseChat.deleteUserChatData(userId);
-      await deleteDoc(doc(db, 'users_new', userId));
+      await FirebaseUser.deleteUser(userId);
       setUsers(prev => prev.filter(u => u.id !== userId));
     } catch (err) {
       console.error('Delete error:', err);
