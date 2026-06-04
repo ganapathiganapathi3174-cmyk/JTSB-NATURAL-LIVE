@@ -604,12 +604,14 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
     const v = [];
     const topupAmount = Number(topup?.amount || 0);
 
-    // OCR Confidence: PASS (≥70) or FAIL (<70 or missing)
+    // OCR Confidence: PASS (≥70) or warning (<70) — never causes rejection
     const conf = ocrData?.ocr_confidence;
-    if (conf !== undefined) {
-      v.push({ label: 'OCR Confidence', passed: conf >= 70, ocrValue: `${conf}%` });
+    if (conf !== undefined && conf >= 70) {
+      v.push({ label: 'OCR Confidence', passed: true, ocrValue: `${conf}%` });
+    } else if (conf !== undefined) {
+      v.push({ label: 'OCR Confidence', passed: null, ocrValue: `${conf}%`, reason: 'Low confidence — manual check advised' });
     } else {
-      v.push({ label: 'OCR Confidence', passed: false, reason: 'No OCR data' });
+      v.push({ label: 'OCR Confidence', passed: null, reason: 'No OCR data' });
     }
 
     // Amount: PASS (within tolerance) or FAIL (detected wrong) or SKIPPED (not detected)
@@ -854,6 +856,30 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {autoApprovalRes?.utrDebug && (
+          <div className="verify-section">
+            <h4>UTR Debug Info</h4>
+            <div className="extracted-data-grid">
+              <span className="label">User Entered UTR:</span>
+              <span className="value font-mono">{autoApprovalRes.utrDebug.userEntered || '—'}</span>
+              <span className="label">OCR Extracted UTR:</span>
+              <span className="value font-mono">{autoApprovalRes.utrDebug.ocrExtracted || '—'}</span>
+              <span className="label">Normalized UTR (User):</span>
+              <span className="value font-mono">{autoApprovalRes.utrDebug.normalizedUser || '—'}</span>
+              <span className="label">Normalized UTR (OCR):</span>
+              <span className="value font-mono">{autoApprovalRes.utrDebug.normalizedOcr || '—'}</span>
+              <span className="label">Raw Normalized (User):</span>
+              <span className="value font-mono">{autoApprovalRes.utrDebug.rawNormalizedUser || '—'}</span>
+              <span className="label">Raw Normalized (OCR):</span>
+              <span className="value font-mono">{autoApprovalRes.utrDebug.rawNormalizedOcr || '—'}</span>
+              <span className="label">UTR Match:</span>
+              <span className="value" style={{ color: autoApprovalRes.utrDebug.normalizedUser === autoApprovalRes.utrDebug.normalizedOcr ? 'var(--success)' : 'var(--danger)' }}>
+                {autoApprovalRes.utrDebug.normalizedUser === autoApprovalRes.utrDebug.normalizedOcr ? '✓ Match' : '✗ Mismatch'}
+              </span>
             </div>
           </div>
         )}

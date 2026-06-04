@@ -1996,9 +1996,33 @@ export const FirebaseUser = {
     // 7. Cross-validation — PRIMARY: user UTR must match OCR-extracted UTR
     const ocrUtr = ocrData?.utr || ocrData?.transaction_id;
     const userTxId = topupData.transactionId;
+
+    // Enhanced UTR normalization: digits-only comparison with prefix stripping
+    function _normalizeUtrDigits(val) {
+      if (!val) return '';
+      let s = this._normalizeUtr(val);
+      // Strip common OCR-added prefixes (TXN, REF, UTR, RRN, etc.)
+      const prefixes = ['TXN', 'UTR', 'REF', 'ID', 'NO', 'NUM', 'TRN', 'RRN', 'NEFT', 'UPI', 'PAY', 'BANK', 'SBIN', 'SBIBANK'];
+      for (const p of prefixes) {
+        if (s.startsWith(p)) { s = s.slice(p.length); break; }
+      }
+      // Strip to digits only for final comparison
+      return s.replace(/[^0-9]/g, '');
+    }
+
+    const normOcr = _normalizeUtrDigits.call(this, ocrUtr ? ocrUtr.toString() : '');
+    const normUser = _normalizeUtrDigits.call(this, userTxId ? userTxId.toString() : '');
+
+    const utrDebug = {
+      userEntered: (userTxId || '').toString(),
+      ocrExtracted: (ocrUtr || '').toString(),
+      normalizedUser: normUser,
+      normalizedOcr: normOcr,
+      rawNormalizedUser: this._normalizeUtr(userTxId || ''),
+      rawNormalizedOcr: this._normalizeUtr(ocrUtr || ''),
+    };
+
     if (ocrUtr && userTxId) {
-      const normOcr = this._normalizeUtr(ocrUtr.toString());
-      const normUser = this._normalizeUtr(userTxId.toString());
       if (normOcr !== normUser) {
         fail('Cross-Validation', `Transaction ID mismatch: entered=${userTxId} ocr=${ocrUtr}`);
       } else {
@@ -2037,6 +2061,7 @@ export const FirebaseUser = {
       duplicateUtrFlag: !!dupFound,
       validationStatus,
       ocrData: ocrData || null,
+      utrDebug,
     };
 
     const db = getDb();
