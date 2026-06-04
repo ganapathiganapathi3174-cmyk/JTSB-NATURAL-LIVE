@@ -1643,7 +1643,10 @@ export default function FirebaseAdminPaymentsPage() {
 
   const handleDeleteUser = async (userId, userEmail, userPhone) => {
     if (!window.confirm('Delete this user permanently?')) return;
-    try { await FirebaseUser.deleteUser(userId, { email: userEmail, phone: userPhone }); }
+    try {
+      await FirebaseUser.deleteUser(userId, { email: userEmail, phone: userPhone });
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    }
     catch (err) { console.error('Delete error:', err); alert('Delete failed: ' + (err.message || 'Unknown error')); }
   };
 

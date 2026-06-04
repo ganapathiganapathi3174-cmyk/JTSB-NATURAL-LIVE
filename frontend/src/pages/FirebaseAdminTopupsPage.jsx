@@ -1023,14 +1023,12 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
             </button>
           </div>
         )}
-        {topup.status !== 'pending' && (
-          <div className="modal-modern-footer" style={{ borderTop: 'none', paddingTop: '0.5rem' }}>
-            <button className={`btn-modern btn-modern-danger${deleting ? ' btn-loading' : ''}`}
-              onClick={handleDelete} disabled={deleting}>
-              {'\u{1F5D1}'} Delete Record
-            </button>
-          </div>
-        )}
+        <div className="modal-modern-footer" style={{ borderTop: 'none', paddingTop: '0.5rem' }}>
+          <button className={`btn-modern btn-modern-danger${deleting ? ' btn-loading' : ''}`}
+            onClick={handleDelete} disabled={deleting}>
+            {'\u{1F5D1}'} Delete Record
+          </button>
+        </div>
 
         {msg && (
           <div className="modal-modern-body" style={{ paddingTop: 0 }}>
@@ -1098,6 +1096,7 @@ export default function FirebaseAdminTopupsPage() {
 
   const handleDelete = async (topupId) => {
     await FirebaseTopup.delete(topupId);
+    setTopups(prev => prev.filter(t => t.id !== topupId));
   };
 
   const handleCreditSponsor = async () => {
@@ -1348,12 +1347,14 @@ export default function FirebaseAdminTopupsPage() {
                           <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => handleReview(t)}>
                             Review
                           </button>
-                          {t.status !== 'pending' && (
-                            <button className="btn-modern btn-modern-danger btn-modern-xs"
-                              onClick={() => { if (window.confirm('Delete topup for ' + t.userName + '?')) { handleDelete(t.id); } }}>
-                              Delete
-                            </button>
-                          )}
+                          <button className="btn-modern btn-modern-danger btn-modern-xs"
+                            onClick={() => {
+                              if (window.confirm('Delete topup for ' + t.userName + '?')) {
+                                handleDelete(t.id).catch(err => alert(err.message));
+                              }
+                            }}>
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
