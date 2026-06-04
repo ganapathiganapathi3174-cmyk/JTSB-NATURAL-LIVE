@@ -586,7 +586,6 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
       }, VALIDATION_TIMEOUT);
       withTimeout(FirebaseUser.processTopupAutoApproval(topup.id, topup, { ocrData }), VALIDATION_CALL_TIMEOUT, { autoApproved: false, autoRejected: true, wasAutoRejected: true, failureReasons: ['Validation timed out'] }).then(res => {
         if (cancelled) return;
-        clearTimeout(timeoutId);
         setAutoApprovalRes(res);
         if (res.wasAutoApproved) {
           setMsg('✓ Auto Approved!');
@@ -595,10 +594,10 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
           setMsg('✗ Auto Rejected');
           setTimeout(() => { if (!cancelled) onClose(); }, 2000);
         }
-      }).catch(() => { clearTimeout(timeoutId); }).finally(() => { if (!cancelled) { clearTimeout(timeoutId); setAutoApproving(false); } });
+      }).finally(() => { clearTimeout(timeoutId); setAutoApproving(false); });
     }
     return () => { cancelled = true; };
-  }, [ocrData, topup.id, topup.status, autoApprovalRes, autoApproving, onClose, dupCheck, dupLoading]);
+  }, [ocrData, topup.id, topup.status, autoApprovalRes, onClose, dupCheck, dupLoading]);
 
   const validations = useMemo(() => {
     const v = [];
