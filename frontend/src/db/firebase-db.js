@@ -2034,12 +2034,15 @@ export const FirebaseUser = {
 
     // Decision: primary validations (UTR match + UPI match) plus existing checks
     const receiverUpiPassed = details.some(d => d.check === 'Receiver UPI' && d.passed === true);
+    const receiverUpiSkipped = details.some(d => d.check === 'Receiver UPI' && d.passed === null);
     const utrMatchPassed = details.some(d => d.check === 'Cross-Validation' && d.passed === true);
     const hasDuplicateUtr = details.some(d => d.check === 'Unique Transaction ID' && d.passed === false);
     const hasFailedStatus = details.some(d => d.check.includes('Status') && d.passed === false);
     const primaryFailed = details.some(d => (d.check === 'Receiver UPI' || d.check === 'Cross-Validation') && d.passed === false);
 
-    const autoApproved = receiverUpiPassed && utrMatchPassed && !hasDuplicateUtr && !hasFailedStatus;
+    // UPI is OK if it passed, or if it was skipped (OCR didn't detect) and UTR matches
+    const upiOk = receiverUpiPassed || (receiverUpiSkipped && utrMatchPassed);
+    const autoApproved = upiOk && utrMatchPassed && !hasDuplicateUtr && !hasFailedStatus;
     const autoRejected = primaryFailed || hasDuplicateUtr || hasFailedStatus;
     const autoPending = !autoApproved && !autoRejected;
 
