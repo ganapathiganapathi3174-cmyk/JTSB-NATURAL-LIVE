@@ -37,6 +37,69 @@ const UpiQrDisplay = memo(function UpiQrDisplay() {
   );
 });
 
+const THEME_PRESETS = {
+  blue: {
+    accent: '#60A5FA',
+    accentDim: '#3B82F6',
+    glow: 'rgba(96,165,250,0.2)',
+    border: 'rgba(96,165,250,0.1)',
+    glassBorder: 'rgba(96,165,250,0.08)',
+  },
+  purple: {
+    accent: '#A78BFA',
+    accentDim: '#8B5CF6',
+    glow: 'rgba(167,139,250,0.2)',
+    border: 'rgba(167,139,250,0.1)',
+    glassBorder: 'rgba(167,139,250,0.08)',
+  },
+  green: {
+    accent: '#4ADE80',
+    accentDim: '#22C55E',
+    glow: 'rgba(74,222,128,0.2)',
+    border: 'rgba(74,222,128,0.1)',
+    glassBorder: 'rgba(74,222,128,0.08)',
+  },
+  orange: {
+    accent: '#FB923C',
+    accentDim: '#F97316',
+    glow: 'rgba(251,146,60,0.2)',
+    border: 'rgba(251,146,60,0.1)',
+    glassBorder: 'rgba(251,146,60,0.08)',
+  },
+  pink: {
+    accent: '#FB7185',
+    accentDim: '#F43F5E',
+    glow: 'rgba(251,113,133,0.2)',
+    border: 'rgba(251,113,133,0.1)',
+    glassBorder: 'rgba(251,113,133,0.08)',
+  },
+  teal: {
+    accent: '#2DD4BF',
+    accentDim: '#14B8A6',
+    glow: 'rgba(45,212,191,0.2)',
+    border: 'rgba(45,212,191,0.1)',
+    glassBorder: 'rgba(45,212,191,0.08)',
+  },
+  cyan: {
+    accent: '#22D3EE',
+    accentDim: '#06B6D4',
+    glow: 'rgba(34,211,238,0.2)',
+    border: 'rgba(34,211,238,0.1)',
+    glassBorder: 'rgba(34,211,238,0.08)',
+  },
+};
+
+function applyTheme(color) {
+  const t = THEME_PRESETS[color];
+  if (!t) return;
+  const root = document.documentElement;
+  root.style.setProperty('--accent', t.accent);
+  root.style.setProperty('--accent-dim', t.accentDim);
+  root.style.setProperty('--accent-glow', t.glow);
+  root.style.setProperty('--border', t.border);
+  root.style.setProperty('--glass-border', t.glassBorder);
+}
+
 export default function FirebaseUserDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -159,6 +222,13 @@ export default function FirebaseUserDashboard() {
       }).catch(err => console.error('View count error:', err));
     }
   }, [user?.id]);
+
+  // Apply saved theme when user data loads or theme_color changes
+  useEffect(() => {
+    if (user?.theme_color) {
+      applyTheme(user.theme_color);
+    }
+  }, [user?.theme_color]);
 
   // Load topups
   useEffect(() => {
@@ -593,11 +663,17 @@ return (
       {error && <div className="alert alert-error mb-md">{error}</div>}
 
       <div className="user-dashboard-wrap">
-        <div className="card mb-lg">
-          <div className="flex-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0 }}>My Profile</h2>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <Link to="/fb/messages" className="msg-inbox-link">
+        <div className="profile-card">
+          <div className="profile-header-row">
+            <div className="profile-header-left">
+              <div className="profile-avatar">{user?.name ? user.name.charAt(0).toUpperCase() : '?'}</div>
+              <div className="profile-header-info">
+                <h2 className="profile-name">{user?.name || 'User'}</h2>
+                <span className="profile-email">{user?.email || ''}</span>
+              </div>
+            </div>
+            <div className="profile-header-right">
+              <Link to="/fb/messages" className="profile-inbox-link">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                   <polyline points="22,6 12,13 2,6" />
@@ -605,234 +681,251 @@ return (
                 Inbox
                 {unreadCount > 0 && <span className="msg-inbox-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
               </Link>
-              <Link to="/fb/chat" className="msg-inbox-link" style={{ position: 'relative', padding: '0.3rem 0.6rem', borderRadius: '6px', background: '#f0f7ff', fontSize: '0.8rem', textDecoration: 'none', color: '#2563eb', fontWeight: 500 }}>
+              <Link to="/fb/chat" className="profile-chat-link">
                 Chat
               </Link>
             </div>
           </div>
-          <div className="profile-grid">
-            <div className="detail-row">
-              <span className="detail-label">Name</span>
-              <span className="detail-value">{user?.name}</span>
-            </div>
-            <div className="detail-row">
-              <span className="detail-label">Email</span>
-              <span className="detail-value">{user?.email}</span>
-            </div>
-            <div className="detail-row">
-              <span className="detail-label">Phone</span>
-              <span className="detail-value">{user?.phone || '—'}</span>
-            </div>
-            <div className="detail-row">
-              <span className="detail-label">Status</span>
-              <span className="detail-value">
-                <span className={`badge ${user?.status === 'approved' ? 'badge-paid' : user?.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-                  {user?.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Pending'}
+
+          <div className="profile-body">
+            <div className="profile-detail-grid">
+              <div className="profile-detail-item">
+                <span className="profile-detail-label">Email</span>
+                <span className="profile-detail-value">{user?.email}</span>
+              </div>
+              <div className="profile-detail-item">
+                <span className="profile-detail-label">Phone</span>
+                <span className="profile-detail-value">{user?.phone || '—'}</span>
+              </div>
+              <div className="profile-detail-item">
+                <span className="profile-detail-label">Status</span>
+                <span className="profile-detail-value">
+                  <span className={`badge ${user?.status === 'approved' ? 'badge-paid' : user?.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+                    {user?.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Pending'}
+                  </span>
+                  {user?.is_qualified && (
+                    <span className="badge badge-paid ml-sm">Qualified</span>
+                  )}
+                  {user?.account_status === 'inactive' && !user?.sponsor_awaiting_credit && (
+                    <span className="badge badge-rejected ml-sm">Inactive</span>
+                  )}
+                  {user?.topup_referral_qualified && !user?.sponsor_topup_completed && !user?.sponsor_cycle_completed && pendingTopups.length === 0 && (
+                    <span className="badge badge-paid ml-sm">Sponsor Eligible</span>
+                  )}
+                  {user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
+                    <span className="badge badge-rejected ml-sm">Sponsor Inactive</span>
+                  )}
+                  {user?.sponsor_credited && (
+                    <span className="badge badge-paid ml-sm">Credited</span>
+                  )}
                 </span>
-                {user?.is_qualified && (
-                  <span className="badge badge-paid ml-sm">Qualified</span>
-                )}
-                {user?.account_status === 'inactive' && !user?.sponsor_awaiting_credit && (
-                  <span className="badge badge-rejected ml-sm">Inactive</span>
-                )}
-                {user?.topup_referral_qualified && !user?.sponsor_topup_completed && !user?.sponsor_cycle_completed && pendingTopups.length === 0 && (
-                  <span className="badge badge-paid ml-sm">Sponsor Eligible</span>
-                )}
-                {user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
-                  <span className="badge badge-rejected ml-sm">Sponsor Inactive</span>
-                )}
-                {user?.sponsor_credited && (
-                  <span className="badge badge-paid ml-sm">Credited</span>
-                )}
-              </span>
+              </div>
+              {user?.referred_by && (
+                <div className="profile-detail-item">
+                  <span className="profile-detail-label">Referred By</span>
+                  <span className="profile-detail-value">{referrerInfo ? `${referrerInfo.name} (${referrerInfo.email})` : user.referred_by}</span>
+                </div>
+              )}
             </div>
-            {user?.referred_by && (
-              <div className="detail-row">
-                <span className="detail-label">Referred By</span>
-                <span className="detail-value">{referrerInfo ? `${referrerInfo.name} (${referrerInfo.email})` : user.referred_by}</span>
+
+            {user?.topup_referral_qualified && (
+              <div className="sponsor-banner">
+                <span className="text-sm font-semibold" style={{ color: 'var(--warning)' }}>Sponsor No:</span>
+                <span className="code-inline ml-sm">{user?.referral_code || '—'}</span>
               </div>
             )}
-          </div>
-
-          {user?.topup_referral_qualified && (
-            <div className="sponsor-banner">
-              <span className="text-sm font-semibold" style={{ color: 'var(--warning)' }}>Sponsor No:</span>
-              <span className="code-inline ml-sm">{user?.referral_code || '—'}</span>
-            </div>
-          )}
-          {user?.topup_referral_qualified && !user?.sponsor_topup_completed && !user?.sponsor_cycle_completed && pendingTopups.length === 0 && (
-            <div className="alert alert-success text-sm mt-sm">
-              ✅ Referral topup condition met! Complete your own topup to receive sponsor benefits.
-            </div>
-          )}
-          {user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
-            <div className="alert alert-warning text-sm mt-sm">
-              ⏳ Your own topup is approved. Account set to Inactive. Awaiting admin credit of <strong>₹{Number(user?.sponsor_topup_amount || 0).toFixed(2)}</strong>.
-            </div>
-          )}
-          {user?.sponsor_credited && (
-            <div className="alert alert-success text-sm mt-sm">
-              ✅ Admin credited <strong>₹{Number(user?.sponsor_credited_amount || 0).toFixed(2)}</strong> to your account.
-            </div>
-          )}
-
-          {user?.referral_code && (
-            isActive ? (
-            <div className="referral-card">
-              <h3>Refer & Earn</h3>
-              <p className="subtitle">Invite friends to earn rewards</p>
-
-              <div className="referral-row">
-                <span className="referral-label">Your Code</span>
-                <span className="referral-code-value">{user?.referral_code}</span>
-                <button
-                  className={`btn-copy-primary ${copied ? 'copied' : ''}`}
-                  onClick={copyReferralCode}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
+            {user?.topup_referral_qualified && !user?.sponsor_topup_completed && !user?.sponsor_cycle_completed && pendingTopups.length === 0 && (
+              <div className="alert alert-success text-sm mt-sm">
+                ✅ Referral topup condition met! Complete your own topup to receive sponsor benefits.
               </div>
+            )}
+            {user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
+              <div className="alert alert-warning text-sm mt-sm">
+                ⏳ Your own topup is approved. Account set to Inactive. Awaiting admin credit of <strong>₹{Number(user?.sponsor_topup_amount || 0).toFixed(2)}</strong>.
+              </div>
+            )}
+            {user?.sponsor_credited && (
+              <div className="alert alert-success text-sm mt-sm">
+                ✅ Admin credited <strong>₹{Number(user?.sponsor_credited_amount || 0).toFixed(2)}</strong> to your account.
+              </div>
+            )}
 
-              <div className="referral-row">
-                <span className="referral-label">Share Link</span>
-                <span className="referral-link-value">
-                  {typeof window !== 'undefined' ? window.location.origin + '/fb/register?ref=' + user?.referral_code : ''}
-                </span>
-                <div className="referral-actions">
+            {user?.referral_code && (
+              isActive ? (
+              <div className="referral-card">
+                <h3>Refer & Earn</h3>
+                <p className="subtitle">Invite friends to earn rewards</p>
+
+                <div className="referral-row">
+                  <span className="referral-label">Your Code</span>
+                  <span className="referral-code-value">{user?.referral_code}</span>
                   <button
-                    className={`btn-copy-primary ${copiedLink ? 'copied' : ''}`}
-                    onClick={copyReferralLink}
+                    className={`btn-copy-primary ${copied ? 'copied' : ''}`}
+                    onClick={copyReferralCode}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
-                    {copiedLink ? 'Copied!' : 'Copy'}
+                    {copied ? 'Copied!' : 'Copy'}
                   </button>
-                  {navigator.share && (
-                    <button className="btn-share-modern" onClick={shareReferralLink}>
+                </div>
+
+                <div className="referral-row">
+                  <span className="referral-label">Share Link</span>
+                  <span className="referral-link-value">
+                    {typeof window !== 'undefined' ? window.location.origin + '/fb/register?ref=' + user?.referral_code : ''}
+                  </span>
+                  <div className="referral-actions">
+                    <button
+                      className={`btn-copy-primary ${copiedLink ? 'copied' : ''}`}
+                      onClick={copyReferralLink}
+                    >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="18" cy="5" r="3"></circle>
-                        <circle cx="6" cy="12" r="3"></circle>
-                        <circle cx="18" cy="19" r="3"></circle>
-                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                       </svg>
-                      Share
+                      {copiedLink ? 'Copied!' : 'Copy'}
                     </button>
+                    {navigator.share && (
+                      <button className="btn-share-modern" onClick={shareReferralLink}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="18" cy="5" r="3"></circle>
+                          <circle cx="6" cy="12" r="3"></circle>
+                          <circle cx="18" cy="19" r="3"></circle>
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
+                        Share
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="referral-stats-bar">
+                  <div className="referral-stat-item">
+                    <span className={`referral-stat-value ${approvedReferralCount >= MAX_REFERRALS ? 'danger' : 'success'}`}>
+                      {approvedReferralCount}
+                    </span>
+                    <span className="referral-stat-label">/ {MAX_REFERRALS} Approved</span>
+                  </div>
+                  {pendingReferralCount > 0 && (
+                    <div className="referral-stat-item">
+                      <span className="referral-stat-value warning">{pendingReferralCount}</span>
+                      <span className="referral-stat-label">Pending</span>
+                    </div>
+                  )}
+                  {approvedReferralCount >= 2 && (
+                    <span className="qualified-pill">&#10003; Qualified</span>
                   )}
                 </div>
               </div>
-
-              <div className="referral-stats-bar">
-                <div className="referral-stat-item">
-                  <span className={`referral-stat-value ${approvedReferralCount >= MAX_REFERRALS ? 'danger' : 'success'}`}>
-                    {approvedReferralCount}
-                  </span>
-                  <span className="referral-stat-label">/ {MAX_REFERRALS} Approved</span>
-                </div>
-                {pendingReferralCount > 0 && (
-                  <div className="referral-stat-item">
-                    <span className="referral-stat-value warning">{pendingReferralCount}</span>
-                    <span className="referral-stat-label">Pending</span>
-                  </div>
-                )}
-                {approvedReferralCount >= 2 && (
-                  <span className="qualified-pill">&#10003; Qualified</span>
+              ) : (
+              <div className="referral-card referral-locked">
+                <h3>Refer & Earn</h3>
+                {isSuspicious ? (
+                  <p className="muted">Your account is currently suspended.</p>
+                ) : pendingReferralCount > 0 ? (
+                  <>
+                    <p className="muted">Waiting for admin approval of {pendingReferralCount} referral(s).</p>
+                    <p className="muted">Payment cycle will unlock after 2 admin-approved referrals.</p>
+                  </>
+                ) : user?.account_status === 'inactive' ? (
+                  <p className="muted">Your account is currently inactive.</p>
+                ) : (
+                  <p className="muted">Referral access will be enabled after admin approval.</p>
                 )}
               </div>
-            </div>
-            ) : (
-            <div className="referral-card referral-locked">
-              <h3>Refer & Earn</h3>
-              {isSuspicious ? (
-                <p className="muted">Your account is currently suspended.</p>
-              ) : pendingReferralCount > 0 ? (
-                <>
-                  <p className="muted">Waiting for admin approval of {pendingReferralCount} referral(s).</p>
-                  <p className="muted">Payment cycle will unlock after 2 admin-approved referrals.</p>
-                </>
-              ) : user?.account_status === 'inactive' ? (
-                <p className="muted">Your account is currently inactive.</p>
-              ) : (
-                <p className="muted">Referral access will be enabled after admin approval.</p>
-              )}
-            </div>
-            )
-          )}
+              )
+            )}
 
-          <div className="password-section">
-            <div className="password-status-row">
-              <span className="password-label">Password</span>
-              <span className={`password-status ${user?.password ? 'set' : 'not-set'}`}>
-                {user?.password ? 'Set' : 'Not Set'}
-              </span>
-              {!user?.password && (
-                <button className="btn btn-primary btn-sm" onClick={() => setShowPasswordForm(true)}>
-                  Set Password
-                </button>
-              )}
-              {user?.password && (
-                <button className="btn btn-ghost btn-sm" onClick={() => setShowPasswordForm(!showPasswordForm)}>
-                  {showPasswordForm ? 'Cancel' : 'Change'}
-                </button>
-              )}
-            </div>
+            <div className="password-section">
+              <div className="password-status-row">
+                <span className="password-label">Password</span>
+                <span className={`password-status ${user?.password ? 'set' : 'not-set'}`}>
+                  {user?.password ? 'Set' : 'Not Set'}
+                </span>
+                {!user?.password && (
+                  <button className="btn btn-primary btn-sm" onClick={() => setShowPasswordForm(true)}>
+                    Set Password
+                  </button>
+                )}
+                {user?.password && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => setShowPasswordForm(!showPasswordForm)}>
+                    {showPasswordForm ? 'Cancel' : 'Change'}
+                  </button>
+                )}
+              </div>
 
-            {showPasswordForm && (
-              <div className="password-form">
-                <h3 className="password-form-title">Set Your Password</h3>
-                <form onSubmit={handleUpdatePassword}>
-                  <div className="field">
-                    <label>New Password</label>
-                    <div className="password-field-wrap">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                        minLength={6}
-                        required
-                        placeholder="At least 6 characters"
-                        className="w-full"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="password-toggle-btn"
-                      >
-                        {showPassword ? '👁' : '👁️'}
+              {showPasswordForm && (
+                <div className="password-form">
+                  <h3 className="password-form-title">Set Your Password</h3>
+                  <form onSubmit={handleUpdatePassword}>
+                    <div className="field">
+                      <label>New Password</label>
+                      <div className="password-field-wrap">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          minLength={6}
+                          required
+                          placeholder="At least 6 characters"
+                          className="w-full"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="password-toggle-btn"
+                        >
+                          {showPassword ? '👁' : '👁️'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label>Confirm Password</label>
+                      <div className="password-field-wrap">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={confirmPassword}
+                          onChange={e => setConfirmPassword(e.target.value)}
+                          minLength={6}
+                          required
+                          placeholder="Re-enter password"
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-row mt-sm">
+                      <button type="submit" className={`btn btn-primary${updatingPassword ? ' btn-loading' : ''}`} disabled={updatingPassword}>
+                        {updatingPassword ? 'Saving...' : 'Save Password'}
+                      </button>
+                      <button type="button" className="btn btn-ghost" onClick={() => setShowPasswordForm(false)}>
+                        Cancel
                       </button>
                     </div>
-                  </div>
-                  <div className="field">
-                    <label>Confirm Password</label>
-                    <div className="password-field-wrap">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={confirmPassword}
-                        onChange={e => setConfirmPassword(e.target.value)}
-                        minLength={6}
-                        required
-                        placeholder="Re-enter password"
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex-row mt-sm">
-                    <button type="submit" className={`btn btn-primary${updatingPassword ? ' btn-loading' : ''}`} disabled={updatingPassword}>
-                      {updatingPassword ? 'Saving...' : 'Save Password'}
-                    </button>
-                    <button type="button" className="btn btn-ghost" onClick={() => setShowPasswordForm(false)}>
-                      Cancel
-                    </button>
-                  </div>
-                </form>
+                  </form>
+                </div>
+              )}
+            </div>
+
+            <div className="theme-section">
+              <h3 className="theme-heading">Theme Color</h3>
+              <div className="theme-options">
+                {Object.entries(THEME_PRESETS).map(([name, colors]) => (
+                  <button
+                    key={name}
+                    className={`theme-swatch ${user?.theme_color === name ? 'active' : ''}`}
+                    style={{ background: colors.accent }}
+                    onClick={() => {
+                      FirebaseUser.updateTheme(user?.id, name);
+                      applyTheme(name);
+                    }}
+                    title={name.charAt(0).toUpperCase() + name.slice(1)}
+                  />
+                ))}
               </div>
-            )}
+            </div>
           </div>
         </div>
 

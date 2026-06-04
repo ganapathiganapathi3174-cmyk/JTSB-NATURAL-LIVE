@@ -2153,6 +2153,12 @@ export const FirebaseUser = {
 
     return { success: true, userId, rejected: true };
   },
+
+  async updateTheme(id, themeColor) {
+    const db = getDb();
+    const ref = doc(db, COL_USERS, id);
+    await updateDoc(ref, { theme_color: themeColor });
+  },
 };
 
 export const FirebaseStorage = {

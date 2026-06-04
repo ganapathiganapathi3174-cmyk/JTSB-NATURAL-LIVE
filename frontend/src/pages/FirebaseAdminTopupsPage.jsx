@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FirebaseTopup, FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
@@ -554,6 +554,9 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
   const [autoApproving, setAutoApproving] = useState(false);
   const [adminMessage, setAdminMessage] = useState('');
 
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   const isInactive = userData?.account_status === 'inactive';
   const inactiveReason = userData ? getInactiveReasonLabel(userData.inactive_reason) : null;
 
@@ -589,15 +592,15 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
         setAutoApprovalRes(res);
         if (res.wasAutoApproved) {
           setMsg('✓ Auto Approved!');
-          setTimeout(() => { if (!cancelled) onClose(); }, 1200);
+          setTimeout(() => { if (!cancelled) onCloseRef.current(); }, 1200);
         } else if (res.wasAutoRejected) {
           setMsg('✗ Auto Rejected');
-          setTimeout(() => { if (!cancelled) onClose(); }, 2000);
+          setTimeout(() => { if (!cancelled) onCloseRef.current(); }, 2000);
         }
       }).finally(() => { clearTimeout(timeoutId); setAutoApproving(false); });
     }
     return () => { cancelled = true; };
-  }, [ocrData, topup.id, topup.status, autoApprovalRes, onClose, dupCheck, dupLoading]);
+  }, [ocrData, topup.id, topup.status, autoApprovalRes, dupCheck, dupLoading]);
 
   const validations = useMemo(() => {
     const v = [];
@@ -1053,6 +1056,11 @@ export default function FirebaseAdminTopupsPage() {
   const [crediting, setCrediting] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
+  const handleCloseModal = useCallback(() => {
+    setSelectedTopup(null);
+    setSelectedUser(null);
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
     if (!token) {
@@ -1362,7 +1370,7 @@ export default function FirebaseAdminTopupsPage() {
             <TopupModal
               topup={selectedTopup}
               userData={selectedUser}
-              onClose={() => { setSelectedTopup(null); setSelectedUser(null); }}
+              onClose={handleCloseModal}
               onVerify={handleVerify}
               onDelete={handleDelete}
             />
