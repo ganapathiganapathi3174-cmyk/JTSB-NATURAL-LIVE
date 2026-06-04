@@ -157,7 +157,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
     if (!window.confirm(`Delete user "${user.name}"? This cannot be undone.`)) return;
     setDeleting(true);
     try {
-      await onDelete(user.id);
+      await onDelete(user.id, user.email, user.phone);
       onClose();
     } catch (err) {
       alert(err.message);
@@ -454,9 +454,9 @@ export default function FirebaseAdminUsersPage() {
     if (status) setStatusFilter(status);
   }, [searchParams]);
 
-  const handleDelete = async (userId) => {
+  const handleDelete = async (userId, userEmail, userPhone) => {
     try {
-      await FirebaseUser.deleteUser(userId);
+      await FirebaseUser.deleteUser(userId, { email: userEmail, phone: userPhone });
       setUsers(prev => prev.filter(u => u.id !== userId));
     } catch (err) {
       console.error('Delete error:', err);
@@ -672,7 +672,7 @@ export default function FirebaseAdminUsersPage() {
                         <td data-label="Actions">
                           <div className="flex-actions" onClick={(e) => e.stopPropagation()}>
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => setSelectedUser(u)}>View</button>
-                            <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => { if (window.confirm(`Delete "${u.name}"?`)) { handleDelete(u.id); } }}>Del</button>
+                            <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => { if (window.confirm(`Delete "${u.name}"?`)) { handleDelete(u.id, u.email, u.phone); } }}>Del</button>
                           </div>
                         </td>
                       </tr>

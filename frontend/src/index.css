@@ -6181,7 +6181,8 @@ html {
 /* ===== Chat Layout (Admin + User) ===== */
 .chat-layout {
   display: flex;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -6193,6 +6194,7 @@ html {
   flex-direction: column;
   background: #fafafa;
   transition: width 0.2s, min-width 0.2s;
+  min-height: 0;
 }
 
 .chat-sidebar-hidden {
@@ -6353,6 +6355,7 @@ html {
   flex-direction: column;
   background: #fff;
   min-width: 0;
+  min-height: 0;
 }
 
 .chat-header {
@@ -6439,6 +6442,7 @@ html {
   flex-direction: column;
   gap: 0.3rem;
   background: #f9fafb;
+  min-height: 0;
 }
 
 .chat-messages-empty {
@@ -6568,8 +6572,10 @@ html {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   padding: 0 !important;
+  min-height: 0;
 }
 
 .chat-no-selection {
@@ -6755,7 +6761,11 @@ html {
   align-self: center;
 }
 
-/* Mobile responsive */
+/* ============================================================
+   MOBILE RESPONSIVE — Chat & Message History (320px–768px)
+   ============================================================ */
+
+/* --- 768px and below --- */
 @media (max-width: 768px) {
   .chat-layout {
     position: relative;
@@ -6768,9 +6778,12 @@ html {
     min-width: 0;
     height: 100%;
     z-index: 10;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.25s;
   }
   .chat-sidebar.chat-sidebar-hidden {
-    display: none;
+    transform: translateX(-100%);
+    visibility: hidden;
+    pointer-events: none;
   }
   .chat-main {
     width: 100%;
@@ -6783,11 +6796,99 @@ html {
     max-width: 85%;
   }
   .chat-messages {
-    padding: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    gap: 0.35rem;
   }
   .chat-admin-main {
     height: 100vh;
+    height: 100dvh;
+    margin-left: 0;
   }
+  .admin-main-content {
+    margin-left: 0;
+  }
+  .chat-input-box {
+    padding: 0.5rem 0.6rem;
+    gap: 0.4rem;
+  }
+  .chat-header {
+    padding: 0.5rem 0.6rem;
+    gap: 0.5rem;
+    min-height: 52px;
+  }
+  .chat-no-selection svg {
+    width: 40px;
+    height: 40px;
+  }
+  .chat-no-selection p {
+    font-size: 0.85rem;
+  }
+
+  /* Chat sidebar refinements */
+  .chat-sidebar-header {
+    padding: 0.7rem 0.75rem 0.45rem;
+  }
+  .chat-sidebar-header h3 {
+    font-size: 0.92rem;
+  }
+  .chat-search-box {
+    padding: 0.5rem 0.75rem;
+  }
+  .chat-search-icon {
+    left: 20px;
+  }
+  .chat-search-input {
+    font-size: 0.85rem;
+    padding: 0.55rem 0.75rem 0.55rem 2rem;
+    min-height: 42px;
+  }
+  .chat-user-item {
+    padding: 0.65rem 0.75rem;
+    min-height: 52px;
+    gap: 0.7rem;
+  }
+  .chat-user-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 0.85rem;
+  }
+  .chat-user-name {
+    font-size: 0.83rem;
+  }
+  .chat-user-email {
+    display: none;
+  }
+  .chat-user-preview {
+    font-size: 0.75rem;
+    margin-top: 0.15rem;
+  }
+  .chat-unread-badge {
+    min-width: 22px;
+    height: 22px;
+    font-size: 0.68rem;
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .chat-user-item {
+    position: relative;
+  }
+  .chat-user-info {
+    padding-right: 2rem;
+  }
+
+  /* Message history filters */
+  .msg-admin-filters {
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .msg-admin-filters .input {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* User chat mobile */
   .user-chat-container {
     padding: 0.5rem;
   }
@@ -6795,25 +6896,431 @@ html {
     max-width: 85%;
   }
 }
-@media (max-width: 480px) {
+
+/* --- 430px and below (small phones) --- */
+@media (max-width: 430px) {
+  .chat-sidebar-header {
+    padding: 0.6rem 0.65rem 0.4rem;
+  }
   .chat-sidebar-header h3 {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
+  }
+  .chat-cleanup-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .chat-search-box {
+    padding: 0.4rem 0.65rem;
+  }
+  .chat-search-input {
+    font-size: 0.82rem;
+    min-height: 40px;
+    padding: 0.5rem 0.7rem 0.5rem 1.8rem;
+  }
+  .chat-search-icon {
+    left: 18px;
   }
   .chat-user-item {
-    padding: 0.5rem 0.65rem;
+    padding: 0.55rem 0.65rem;
+    min-height: 48px;
+    gap: 0.6rem;
+  }
+  .chat-user-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.8rem;
   }
   .chat-user-name {
     font-size: 0.8rem;
   }
-  .chat-input-box {
-    padding: 0.5rem 0.65rem;
+  .chat-user-preview {
+    font-size: 0.72rem;
   }
-  .chat-header {
-    padding: 0.5rem 0.65rem;
+  .chat-unread-badge {
+    min-width: 20px;
+    height: 20px;
+    font-size: 0.65rem;
+    right: 0.65rem;
+  }
+  .chat-user-info {
+    padding-right: 1.8rem;
+  }
+  .chat-messages {
+    padding: 0.4rem 0.5rem;
+    gap: 0.3rem;
   }
   .chat-bubble {
-    max-width: 90%;
+    max-width: 88%;
+    font-size: 0.85rem;
+    padding: 0.45rem 0.75rem;
+  }
+  .chat-bubble-meta {
+    font-size: 0.6rem;
+    gap: 0.25rem;
+  }
+  .chat-header {
+    padding: 0.4rem 0.5rem;
+    gap: 0.4rem;
+    min-height: 48px;
+  }
+  .chat-header-avatar {
+    width: 34px;
+    height: 34px;
     font-size: 0.85rem;
   }
+  .chat-header-name {
+    font-size: 0.88rem;
+  }
+  .chat-header-status {
+    font-size: 0.68rem;
+  }
+  .chat-delete-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .chat-input-box {
+    padding: 0.45rem 0.5rem;
+    gap: 0.35rem;
+  }
+  .chat-input-field {
+    padding: 0.55rem 0.85rem;
+    font-size: 0.85rem;
+    min-height: 42px;
+  }
+  .chat-send-btn {
+    width: 42px;
+    height: 42px;
+  }
+  .chat-send-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+  .chat-attach-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .chat-messages-empty {
+    padding: 1.5rem 1rem;
+    font-size: 0.82rem;
+  }
+  .chat-empty-state {
+    padding: 1.5rem 0.75rem;
+    font-size: 0.78rem;
+  }
 }
+
+/* --- 374px and below (smallest supported) --- */
+@media (max-width: 374px) {
+  .chat-user-item {
+    padding: 0.5rem 0.55rem;
+    min-height: 44px;
+    gap: 0.5rem;
+  }
+  .chat-user-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+  .chat-user-name {
+    font-size: 0.78rem;
+  }
+  .chat-user-preview {
+    font-size: 0.68rem;
+  }
+  .chat-bubble {
+    max-width: 92%;
+    font-size: 0.82rem;
+    padding: 0.4rem 0.65rem;
+  }
+  .chat-header {
+    padding: 0.35rem 0.45rem;
+    min-height: 44px;
+  }
+  .chat-header-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 0.8rem;
+  }
+  .chat-header-name {
+    font-size: 0.82rem;
+  }
+  .chat-input-box {
+    padding: 0.4rem 0.45rem;
+  }
+  .chat-input-field {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    min-height: 38px;
+  }
+  .chat-send-btn {
+    width: 38px;
+    height: 38px;
+  }
+  .chat-attach-btn {
+    display: none;
+  }
+
+  /* Message history tiny screen */
+  .table-modern-wrapper .msg-admin-table td::before {
+    min-width: 60px;
+    font-size: 0.6rem;
+  }
+  .msg-admin-message {
+    max-height: 40px;
+    font-size: 0.78rem;
+  }
+  .msg-admin-table td code {
+    font-size: 0.65rem !important;
+  }
+}
+
+/* ============================================================
+   CHAT & MESSAGE HISTORY — Dark Theme
+   ============================================================ */
+
+/* ---- Chat sidebar dark theme ---- */
+.fb-admin-layout .chat-sidebar {
+  background: var(--surface);
+  border-right-color: var(--border);
+}
+.fb-admin-layout .chat-sidebar-header {
+  border-bottom-color: var(--border);
+}
+.fb-admin-layout .chat-sidebar-header h3 {
+  color: var(--text);
+}
+.fb-admin-layout .chat-search-input {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+.fb-admin-layout .chat-search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+}
+.fb-admin-layout .chat-search-icon {
+  opacity: 0.4;
+  color: var(--muted);
+}
+.fb-admin-layout .chat-user-item {
+  border-bottom-color: var(--border);
+}
+.fb-admin-layout .chat-user-item:hover {
+  background: var(--surface-2);
+}
+.fb-admin-layout .chat-user-item.active {
+  background: rgba(96, 165, 250, 0.12);
+  border-left: 3px solid var(--accent);
+}
+.fb-admin-layout .chat-user-name {
+  color: var(--text);
+}
+.fb-admin-layout .chat-user-email,
+.fb-admin-layout .chat-user-preview {
+  color: var(--muted);
+}
+.fb-admin-layout .chat-empty-state {
+  color: var(--muted);
+}
+.fb-admin-layout .chat-cleanup-btn {
+  color: var(--muted);
+}
+.fb-admin-layout .chat-cleanup-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+/* ---- Chat main area dark theme ---- */
+.fb-admin-layout .chat-main {
+  background: var(--bg);
+}
+.fb-admin-layout .chat-header {
+  background: var(--surface);
+  border-bottom-color: var(--border);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.fb-admin-layout .chat-header-name {
+  color: var(--text);
+}
+.fb-admin-layout .chat-header-status {
+  color: #4ade80;
+}
+.fb-admin-layout .chat-back-btn {
+  color: var(--text);
+}
+.fb-admin-layout .chat-back-btn:hover {
+  background: var(--surface-2);
+}
+.fb-admin-layout .chat-delete-btn {
+  color: var(--muted);
+}
+.fb-admin-layout .chat-delete-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+/* ---- Messages area dark theme ---- */
+.fb-admin-layout .chat-messages {
+  background: var(--bg);
+}
+.fb-admin-layout .chat-messages-empty {
+  color: var(--muted);
+}
+.fb-admin-layout .chat-no-selection {
+  color: var(--muted);
+}
+.fb-admin-layout .chat-no-selection svg {
+  opacity: 0.3;
+}
+
+/* ---- Bubble styles dark theme ---- */
+.fb-admin-layout .chat-bubble-sent {
+  background: linear-gradient(135deg, var(--accent), #6366f1);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.2);
+}
+.fb-admin-layout .chat-bubble-received {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+.fb-admin-layout .chat-bubble-status.read {
+  color: #93c5fd;
+}
+
+/* ---- Input box dark theme ---- */
+.fb-admin-layout .chat-input-box {
+  background: var(--surface);
+  border-top-color: var(--border);
+  box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.1);
+}
+.fb-admin-layout .chat-input-field {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
+  border-radius: 24px;
+}
+.fb-admin-layout .chat-input-field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+}
+.fb-admin-layout .chat-input-field::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+.fb-admin-layout .chat-send-btn {
+  background: linear-gradient(135deg, var(--accent), #6366f1);
+  box-shadow: 0 2px 12px rgba(96, 165, 250, 0.3);
+}
+.fb-admin-layout .chat-send-btn:hover:not(:disabled) {
+  box-shadow: 0 4px 20px rgba(96, 165, 250, 0.4);
+  transform: scale(1.05);
+}
+.fb-admin-layout .chat-send-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+.fb-admin-layout .chat-send-btn:disabled {
+  background: var(--border);
+  box-shadow: none;
+  opacity: 0.5;
+}
+.fb-admin-layout .chat-attach-btn {
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+/* ---- Unread badge ---- */
+.fb-admin-layout .chat-unread-badge {
+  background: linear-gradient(135deg, #ef4444, #f43f5e);
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+/* ---- Message History dark theme ---- */
+.fb-admin-layout .msg-admin-table {
+  border-color: var(--border);
+}
+.fb-admin-layout .msg-admin-table th {
+  background: var(--surface);
+  color: var(--text);
+  border-bottom-color: var(--border);
+}
+.fb-admin-layout .msg-admin-table td {
+  border-bottom-color: var(--border);
+  color: var(--text);
+}
+
+/* Message history card-style on mobile */
+@media (max-width: 768px) {
+  .msg-admin-filters {
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .msg-admin-filters .input {
+    font-size: 0.85rem;
+    min-height: 44px;
+  }
+
+  .table-modern-wrapper {
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .table-modern-wrapper .msg-admin-table,
+  .table-modern-wrapper .msg-admin-table thead,
+  .table-modern-wrapper .msg-admin-table tbody,
+  .table-modern-wrapper .msg-admin-table tr,
+  .table-modern-wrapper .msg-admin-table td {
+    display: block;
+  }
+  .table-modern-wrapper .msg-admin-table thead {
+    display: none;
+  }
+  .table-modern-wrapper .msg-admin-table tbody tr {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 0.6rem;
+    padding: 0.7rem 0.85rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.15s;
+  }
+  .table-modern-wrapper .msg-admin-table tbody tr:active {
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  }
+  .table-modern-wrapper .msg-admin-table td {
+    padding: 0.3rem 0;
+    font-size: 0.82rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    border-bottom: none;
+  }
+  .table-modern-wrapper .msg-admin-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    min-width: 72px;
+  }
+  .table-modern-wrapper .msg-admin-table td:last-child {
+    border-bottom: none;
+  }
+  .msg-admin-message {
+    max-height: 44px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+  .msg-admin-table td code {
+    font-size: 0.7rem !important;
+    word-break: break-all;
+  }
+  .msg-admin-table .badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.45rem;
+  }
+}
+
 /* --- End of all CSS --- */

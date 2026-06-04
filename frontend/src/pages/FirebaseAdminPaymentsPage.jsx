@@ -1,8 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
-import { getDb } from '../firebase/config.js';
-import { doc, deleteDoc } from 'firebase/firestore';
+
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
@@ -1642,9 +1641,9 @@ export default function FirebaseAdminPaymentsPage() {
     return { pending, approved, rejected, dupAlerts: dupAlerts.length, autoApproved, autoRejected, manualReview, pendingApproval };
   }, [users, dupAlerts]);
 
-  const handleDeleteUser = async (userId) => {
+  const handleDeleteUser = async (userId, userEmail, userPhone) => {
     if (!window.confirm('Delete this user permanently?')) return;
-    try { const db = getDb(); await deleteDoc(doc(db, 'users_new', userId)); }
+    try { await FirebaseUser.deleteUser(userId, { email: userEmail, phone: userPhone }); }
     catch (err) { console.error('Delete error:', err); alert('Delete failed: ' + (err.message || 'Unknown error')); }
   };
 
@@ -1806,7 +1805,7 @@ export default function FirebaseAdminPaymentsPage() {
                           <div className="flex-actions">
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => openVerification(u)}>Verify</button>
                             {displayUrl && <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={() => window.open(getImageUrl(displayUrl), '_blank', 'noopener,noreferrer')} title="View Screenshot">{'\u{1F4F7}'}</button>}
-                            <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => handleDeleteUser(u.id)}>Del</button>
+                            <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => handleDeleteUser(u.id, u.email, u.phone)}>Del</button>
                           </div>
                         </td>
                       </tr>

@@ -564,16 +564,20 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
     let cancelled = false;
     if (topup?.transactionId) {
       setDupLoading(true);
-      FirebaseUser.checkDuplicateUtrInTopups(topup.transactionId, topup.id).then(result => {
-        if (!cancelled) setDupCheck(result);
+      FirebaseUser.findDuplicateTransactionId(topup.transactionId, topup.userId).then(r => {
+        if (!cancelled) setDupCheck(r);
       }).catch(() => {}).finally(() => { if (!cancelled) setDupLoading(false); });
+    } else {
+      setDupLoading(false);
+      setDupCheck(null);
     }
     return () => { cancelled = true; };
-  }, [topup?.transactionId, topup?.id]);
+  }, [topup?.transactionId, topup?.userId]);
 
   useEffect(() => {
     let cancelled = false;
-    if (ocrData && !autoApprovalRes && !autoApproving && topup.status === 'pending') {
+    // Wait for duplicate check to finish; skip auto-approval if duplicate found (admin must decide)
+    if (ocrData && !autoApprovalRes && !autoApproving && topup.status === 'pending' && !dupLoading && !dupCheck) {
       setAutoApproving(true);
       const timeoutId = setTimeout(() => {
         if (cancelled) return;
@@ -594,7 +598,7 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
       }).catch(() => { clearTimeout(timeoutId); }).finally(() => { if (!cancelled) { clearTimeout(timeoutId); setAutoApproving(false); } });
     }
     return () => { cancelled = true; };
-  }, [ocrData, topup.id, topup.status, autoApprovalRes, autoApproving, onClose]);
+  }, [ocrData, topup.id, topup.status, autoApprovalRes, autoApproving, onClose, dupCheck, dupLoading]);
 
   const validations = useMemo(() => {
     const v = [];
@@ -619,11 +623,27 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
       v.push({ label: `Amount (₹${topupAmount})`, passed: null, reason: 'No screenshot' });
     }
 
-    // UPI ID: PASS (valid) or FAIL (not detected — per spec fallback)
-    if (ocrData?.upi_id) {
-      v.push({ label: 'UPI ID', passed: isUpiValid(ocrData.upi_id), ocrValue: ocrData.upi_id });
+    // Receiver UPI Match: OCR receiver_upi must match admin UPI
+    const receiverUpi = ocrData?.receiver_upi;
+    if (receiverUpi) {
+      v.push({ label: 'Receiver UPI Match', passed: isUpiValid(receiverUpi), ocrValue: receiverUpi });
     } else {
-      v.push({ label: 'UPI ID', passed: false, reason: 'Not detected' });
+      v.push({ label: 'Receiver UPI Match', passed: false, reason: 'Not detected by OCR' });
+    }
+
+    // Dashboard UTR Match: user-entered transaction ID
+    if (topup?.transactionId) {
+      v.push({ label: 'Dashboard UTR Match', passed: true, ocrValue: topup.transactionId });
+    } else {
+      v.push({ label: 'Dashboard UTR Match', passed: false, reason: 'No transaction ID entered' });
+    }
+
+    // Screenshot UTR Match: OCR-extracted UTR from payment screenshot
+    const ocrUtr = ocrData?.utr || ocrData?.transaction_id;
+    if (ocrUtr) {
+      v.push({ label: 'Screenshot UTR Match', passed: true, ocrValue: ocrUtr });
+    } else {
+      v.push({ label: 'Screenshot UTR Match', passed: false, reason: 'Not detected by OCR' });
     }
 
     // Payment Status: derive from OCR or infer from transaction ID + amount
@@ -668,6 +688,25 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
     } else {
       v.push({ label: 'Unique Transaction ID', passed: false, reason: 'No ID to check' });
     }
+
+    // Cross-Validation: compare OCR UTR vs user-entered transaction ID
+    if (ocrUtr && topup?.transactionId) {
+      const normOcr = ('' + ocrUtr).replace(/\s+/g, '');
+      const normUser = ('' + topup.transactionId).replace(/\s+/g, '');
+      v.push({ label: 'Cross-Validation', passed: normOcr === normUser, ocrValue: ocrUtr });
+    } else {
+      v.push({ label: 'Cross-Validation', passed: null, reason: 'Skipped (no OCR UTR or transaction ID)' });
+    }
+
+    // OCR Extraction Status: whether OCR processed the screenshot successfully
+    if (ocrData) {
+      v.push({ label: 'OCR Extraction Status', passed: true, ocrValue: 'Processed' });
+    } else if (displayUrl) {
+      v.push({ label: 'OCR Extraction Status', passed: false, reason: 'Waiting for OCR processing' });
+    } else {
+      v.push({ label: 'OCR Extraction Status', passed: null, reason: 'No screenshot uploaded' });
+    }
+
     return v;
   }, [dupCheck, displayUrl, ocrData, ocrError, topup]);
 
@@ -758,11 +797,19 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
         {dupCheck && (
           <div className="dup-warning-card">
             <h4>⚠ Duplicate Transaction ID Detected</h4>
-            <div className="detail"><strong>Existing User:</strong> {dupCheck.userName}</div>
-            <div className="detail"><strong>Email:</strong> {dupCheck.userEmail}</div>
-            <div className="detail"><strong>Amount:</strong> ₹{Number(dupCheck.amount || 0).toFixed(2)}</div>
-            <div className="detail"><strong>Status:</strong> {dupCheck.status}</div>
-            {dupCheck.createdAt && <div className="detail"><strong>Date:</strong> {new Date(dupCheck.createdAt).toLocaleString()}</div>}
+            {dupCheck.source === 'user' ? (
+              <>
+                <div className="detail"><strong>Existing User:</strong> {dupCheck.name}</div>
+                <div className="detail"><strong>Email:</strong> {dupCheck.email}</div>
+              </>
+            ) : (
+              <>
+                <div className="detail"><strong>Existing Topup:</strong> {dupCheck.userName}</div>
+                <div className="detail"><strong>Email:</strong> {dupCheck.userEmail}</div>
+                <div className="detail"><strong>Amount:</strong> ₹{Number(dupCheck.amount || 0).toFixed(2)}</div>
+                <div className="detail"><strong>Status:</strong> {dupCheck.status}</div>
+              </>
+            )}
           </div>
         )}
 
@@ -785,6 +832,14 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
               );
             })}
           </div>
+          {autoApprovalRes && (
+            <div className="validation-pills" style={{ marginTop: '0.5rem' }}>
+              <span className={`validation-pill ${autoApprovalRes.wasAutoApproved ? 'pass' : autoApprovalRes.wasAutoRejected ? 'fail' : ''}`}>
+                {autoApprovalRes.wasAutoApproved ? '✓' : autoApprovalRes.wasAutoRejected ? '✗' : '○'} Final Verification:{' '}
+                {autoApprovalRes.wasAutoApproved ? 'Passed' : autoApprovalRes.wasAutoRejected ? 'Failed' : 'Manual Review Required'}
+              </span>
+            </div>
+          )}
         </div>
 
         {autoApprovalRes?.details && (

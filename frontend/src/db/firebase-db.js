@@ -199,7 +199,22 @@ export const FirebaseUser = {
       });
     } catch (e) {
       if (e.message === 'This email is already registered. Please use another email or login.' ||
-          e.message === 'This mobile number is already registered.') throw e;
+          e.message === 'This mobile number is already registered.') {
+        // Check if this uniqueness claim is stale (user doc deleted without cleaning _uniques)
+        try {
+          const userQuery = field === 'email'
+            ? query(collection(db, COL_USERS), where('email', '==', String(value).toLowerCase().trim()))
+            : query(collection(db, COL_USERS), where('phone', '==', String(value).trim()));
+          const userSnap = await getDocs(userQuery);
+          if (userSnap.empty) {
+            // Stale claim — delete and re-create
+            await deleteDoc(ref);
+            await setDoc(ref, { field, value: String(value).toLowerCase().trim(), claimed_at: new Date().toISOString() });
+            return;
+          }
+        } catch (_) { /* fall through to throw */ }
+        throw e;
+      }
       const existing = await getDoc(ref);
       if (existing.exists()) {
         throw new Error(field === 'email'
@@ -749,16 +764,17 @@ export const FirebaseUser = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
-  async deleteUser(id) {
+  async deleteUser(id, { email, phone } = {}) {
     const db = getDb();
     const user = await FirebaseUser.findById(id);
     
     if (!user) {
-      throw new Error('User not found');
+      // User doc already deleted (e.g. by old code) — still try to clean up uniqueness claims
+      console.warn(`User doc not found for ${id}, cleaning up _uniques with provided data`);
     }
 
     // Decrement referrer's count if this user was referred and approved
-    if (user.referred_by && user.referred_by_status === 'approved') {
+    if (user?.referred_by && user?.referred_by_status === 'approved') {
       try {
         const referrer = await FirebaseUser.findByReferralCode(user.referred_by);
         if (referrer) {
@@ -770,7 +786,7 @@ export const FirebaseUser = {
     }
 
     // Delete UPI screenshot from storage if exists
-    if (user.upi_screenshot_url) {
+    if (user?.upi_screenshot_url) {
       try {
         const storage = getStorageRef();
         const fileRef = ref(storage, user.upi_screenshot_url);
@@ -836,17 +852,19 @@ export const FirebaseUser = {
     }
 
     // Delete uniqueness claims
-    if (user.email) {
+    const userEmail = user?.email || email;
+    const userPhone = user?.phone || phone;
+    if (userEmail) {
       try {
-        const emailClaimRef = doc(db, '_uniques', `email:${user.email.toLowerCase().trim()}`);
+        const emailClaimRef = doc(db, '_uniques', `email:${userEmail.toLowerCase().trim()}`);
         await deleteDoc(emailClaimRef);
       } catch (e) {
         console.warn('Failed to delete email uniqueness claim:', e);
       }
     }
-    if (user.phone) {
+    if (userPhone) {
       try {
-        const phoneClaimRef = doc(db, '_uniques', `phone:${user.phone.trim()}`);
+        const phoneClaimRef = doc(db, '_uniques', `phone:${userPhone.trim()}`);
         await deleteDoc(phoneClaimRef);
       } catch (e) {
         console.warn('Failed to delete phone uniqueness claim:', e);
@@ -1370,6 +1388,47 @@ export const FirebaseUser = {
     return null;
   },
 
+  async findDuplicateTransactionId(transactionId, excludeUserId = null) {
+    if (!transactionId) return null;
+    const trimmedId = transactionId.toString().trim();
+    const normalizedId = this._normalizeUtr(trimmedId);
+
+    // 1. Check users_new for matching UTR (exact + normalized, no fuzzy)
+    const db = getDb();
+    const usersCol = collection(db, COL_USERS);
+    const statusFilter = query(usersCol, where('payment_status', 'in', ['approved', 'pending']));
+    const userSnap = await getDocs(statusFilter);
+    for (const d of userSnap.docs) {
+      const u = { id: d.id, ...d.data() };
+      if (excludeUserId && u.id === excludeUserId) continue;
+      for (const field of ['utr_number', 'cycle_payment_utr']) {
+        const val = u[field];
+        if (!val) continue;
+        const status = field === 'utr_number' ? u.payment_status : u.cycle_payment_status;
+        if (status !== 'approved' && status !== 'pending') continue;
+        const cNorm = this._normalizeUtr(val);
+        if (cNorm === normalizedId) {
+          return { source: 'user', id: u.id, name: u.name, email: u.email, phone: u.phone };
+        }
+      }
+    }
+
+    // 2. Check topups_new for matching transaction ID (exact + normalized)
+    const topupsCol = collection(db, COL_TOPUPS);
+    const topupStatusFilter = query(topupsCol, where('status', 'in', ['approved', 'pending']));
+    const topupSnap = await getDocs(topupStatusFilter);
+    for (const d of topupSnap.docs) {
+      const t = { id: d.id, ...d.data() };
+      if (t.userId === excludeUserId) continue;
+      const tNorm = this._normalizeUtr(t.transactionId || '');
+      if (tNorm === normalizedId) {
+        return { source: 'topup', id: t.id, userName: t.userName, userEmail: t.userEmail, amount: t.amount, status: t.status };
+      }
+    }
+
+    return null;
+  },
+
   async getAllUtrs() {
     const db = getDb();
     const colRef = collection(db, COL_USERS);
@@ -1814,58 +1873,100 @@ export const FirebaseUser = {
       details.push({ check, passed: true });
     }
 
+    function skip(check, reason) {
+      details.push({ check, passed: null, reason });
+    }
+
     const expectedAmount = Number(topupData.amount) || 0;
 
-    // 1. OCR Confidence
+    // 1. OCR Confidence — advisory
     const conf = ocrData?.ocr_confidence;
     if (conf === undefined) {
-      fail('OCR Confidence (≥70%)', 'OCR Confidence Not Detected');
+      skip('OCR Confidence (≥70%)', 'Not detected');
     } else if (conf < 70) {
-      fail('OCR Confidence (≥70%)', `OCR Confidence Too Low (${conf}%)`);
+      skip('OCR Confidence (≥70%)', `Low confidence (${conf}%)`);
     } else {
       pass('OCR Confidence (≥70%)');
     }
 
-    // 2. Amount
-    if (!ocrData?.amount) {
-      fail(`Payment Amount (₹${expectedAmount})`, 'Amount Not Detected');
-    } else if (expectedAmount <= 0) {
-      fail(`Payment Amount`, 'Invalid topup amount');
-    } else {
-      const parsedAmount = parseFloat(ocrData.amount.replace(/[,]/g, ''));
-      if (isNaN(parsedAmount) || Math.abs(parsedAmount - expectedAmount) >= 10) {
-        fail(`Payment Amount (₹${expectedAmount})`, `Incorrect Amount: ₹${ocrData.amount}`);
-      } else {
-        pass(`Payment Amount (₹${expectedAmount})`);
+    // 2. Amount — advisory (use raw-text fallback like Payments)
+    let resolvedAmount = ocrData?.amount;
+    if (resolvedAmount && ocrData?.raw && expectedAmount > 0) {
+      const parsedResolved = parseFloat(resolvedAmount.replace(/[,]/g, ''));
+      if (!isNaN(parsedResolved) && Math.abs(parsedResolved - expectedAmount) >= 1) {
+        if (ocrData.raw.includes(String(expectedAmount))) {
+          resolvedAmount = String(expectedAmount);
+        }
       }
     }
-
-      // 3. Receiver UPI — must match expected admin UPI
-      const upiCandidates = [ocrData?.receiver_upi, ocrData?.upi_id, ocrData?.sender_upi].filter(Boolean);
-      const matchedUpi = upiCandidates.find(upi => isUpiValid(upi));
-      if (matchedUpi) {
-        pass('Receiver UPI');
-      } else if (upiCandidates.length > 0) {
-        fail('Receiver UPI', `Expected admin UPI not found. Found: ${upiCandidates.join(', ')}`);
-      } else {
-        fail('Receiver UPI', 'UPI ID Missing');
+    if (!resolvedAmount && ocrData?.raw && expectedAmount > 0) {
+      const rawPatterns = [
+        /₹\s?(\d+)/i, /Rs\.?\s?(\d+)/i, /INR\s?(\d+)/i, /\b(\d{2,6})\.00\b/,
+      ];
+      for (const p of rawPatterns) {
+        const m = ocrData.raw.match(p);
+        if (m && m[1]) { resolvedAmount = m[1]; break; }
       }
+      if (!resolvedAmount) {
+        const bareRe = /\b(\d{2,5})\b/g;
+        let m;
+        while ((m = bareRe.exec(ocrData.raw)) !== null) {
+          const p = parseInt(m[1], 10);
+          if (p < 50 || p > 500 || p === 2024 || p === 2025 || p === 2026) continue;
+          if (m[1].length === 4) {
+            const a = parseInt(m[1].substring(0, 2), 10);
+            const b = parseInt(m[1].substring(2, 4), 10);
+            if ((a >= 1 && a <= 31 && b >= 1 && b <= 12) || (a >= 1 && a <= 12 && b >= 1 && b <= 31)) continue;
+          }
+          resolvedAmount = m[1]; break;
+        }
+      }
+      if (!resolvedAmount && ocrData.raw.includes(String(expectedAmount))) {
+        resolvedAmount = String(expectedAmount);
+      }
+    }
+    if (resolvedAmount) {
+      const parsedAmount = parseFloat(resolvedAmount.replace(/[,]/g, ''));
+      if (!isNaN(parsedAmount) && Math.abs(parsedAmount - expectedAmount) >= 1) {
+        skip(`Payment Amount (₹${expectedAmount})`, `OCR read ₹${resolvedAmount} — shown for admin review`);
+      } else if (!isNaN(parsedAmount)) {
+        pass(`Payment Amount (₹${expectedAmount})`);
+      } else {
+        skip(`Payment Amount (₹${expectedAmount})`, 'Amount unclear from OCR');
+      }
+    } else {
+      skip(`Payment Amount (₹${expectedAmount})`, 'Amount not detected in OCR');
+    }
 
-    // 4. Payment Status
+    // 3. Receiver UPI — PRIMARY: must match expected admin UPI
+    const receiverUpi = ocrData?.receiver_upi;
+    if (receiverUpi) {
+      if (isUpiValid(receiverUpi)) {
+        pass('Receiver UPI');
+      } else {
+        fail('Receiver UPI', `Receiver UPI mismatch: expected admin UPI, found ${receiverUpi}`);
+      }
+    } else {
+      skip('Receiver UPI', 'Not detected by OCR');
+    }
+
+    // 4. Payment Status — advisory (fail only if explicitly failed)
     if (!ocrData?.payment_status) {
-      fail('Payment Status (Completed)', 'Payment Status Missing');
+      skip('Payment Status', 'Not detected by OCR');
     } else {
       const status = ocrData.payment_status.toLowerCase();
-      if (status === REQUIRED_PAYMENT_STATUS.toLowerCase() || status === 'success' || status === 'successful' || status === 'paid') {
+      if (status.includes('failed')) {
+        fail('Payment Status', 'Payment Failed');
+      } else if (status === REQUIRED_PAYMENT_STATUS.toLowerCase() || status === 'success' || status === 'successful' || status === 'paid') {
         pass('Payment Status (Completed)');
       } else {
-        fail('Payment Status (Completed)', `Payment Not Completed: ${ocrData.payment_status}`);
+        skip('Payment Status', `Unclear status: ${ocrData.payment_status}`);
       }
     }
 
-    // 5. Transaction Date
+    // 5. Transaction Date — advisory
     if (!ocrData?.date) {
-      fail('Transaction Date (Today)', 'Transaction Date Missing');
+      skip('Transaction Date', 'Not detected by OCR');
     } else {
       const today = new Date();
       const ocrDateStr = ocrData.date.replace(/-/g, '/');
@@ -1874,20 +1975,17 @@ export const FirebaseUser = {
       if (isToday) {
         pass('Transaction Date (Today)');
       } else {
-        fail('Transaction Date (Today)', `Old Transaction Date: ${ocrData.date}`);
+        skip('Transaction Date', `Old Transaction Date: ${ocrData.date}`);
       }
     }
 
-    // 6. Duplicate Transaction ID — check both topups and user records
+    // 6. Unique Transaction ID — normalized match across topups + user UTR records (no fuzzy)
     let dupFound = null;
     if (!topupData.transactionId) {
-      fail('Unique Transaction ID', 'No Transaction ID Provided');
+      skip('Unique Transaction ID', 'No Transaction ID Provided');
     } else {
       const trimmedTxId = topupData.transactionId.trim();
-      dupFound = await this.checkDuplicateUtrInTopups(trimmedTxId, topupId);
-      if (!dupFound) {
-        dupFound = await this.findDuplicateUtr(trimmedTxId, topupData.userId);
-      }
+      dupFound = await this.findDuplicateTransactionId(trimmedTxId, topupData.userId);
       if (dupFound) {
         fail('Unique Transaction ID', 'Duplicate Transaction ID Detected');
       } else {
@@ -1895,16 +1993,49 @@ export const FirebaseUser = {
       }
     }
 
-    const autoApproved = failureReasons.length === 0;
-    const autoRejected = failureReasons.length > 0;
+    // 7. Cross-validation — PRIMARY: user UTR must match OCR-extracted UTR
+    const ocrUtr = ocrData?.utr || ocrData?.transaction_id;
+    const userTxId = topupData.transactionId;
+    if (ocrUtr && userTxId) {
+      const normOcr = this._normalizeUtr(ocrUtr.toString());
+      const normUser = this._normalizeUtr(userTxId.toString());
+      if (normOcr !== normUser) {
+        fail('Cross-Validation', `Transaction ID mismatch: entered=${userTxId} ocr=${ocrUtr}`);
+      } else {
+        pass('Cross-Validation');
+      }
+    } else {
+      skip('Cross-Validation', 'Skipped (no OCR UTR or transaction ID)');
+    }
+
+    // Decision: primary validations (UTR match + UPI match) plus existing checks
+    const receiverUpiPassed = details.some(d => d.check === 'Receiver UPI' && d.passed === true);
+    const utrMatchPassed = details.some(d => d.check === 'Cross-Validation' && d.passed === true);
+    const hasDuplicateUtr = details.some(d => d.check === 'Unique Transaction ID' && d.passed === false);
+    const hasFailedStatus = details.some(d => d.check.includes('Status') && d.passed === false);
+    const primaryFailed = details.some(d => (d.check === 'Receiver UPI' || d.check === 'Cross-Validation') && d.passed === false);
+
+    const autoApproved = receiverUpiPassed && utrMatchPassed && !hasDuplicateUtr && !hasFailedStatus;
+    const autoRejected = primaryFailed || hasDuplicateUtr || hasFailedStatus;
+    const autoPending = !autoApproved && !autoRejected;
+
+    // Build failure reasons from any non-passing detail
+    for (const d of details) {
+      if (d.passed !== true && d.reason && !failureReasons.includes(d.reason)) {
+        failureReasons.push(d.reason);
+      }
+    }
+
+    const validationStatus = autoApproved ? 'approved' : autoRejected ? 'rejected' : 'pending';
 
     const result = {
       autoApproved,
       autoRejected,
+      autoPending,
       details,
       failureReasons,
       duplicateUtrFlag: !!dupFound,
-      validationStatus: autoApproved ? 'passed' : 'failed',
+      validationStatus,
       ocrData: ocrData || null,
     };
 
