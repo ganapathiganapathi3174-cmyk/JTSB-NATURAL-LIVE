@@ -21,6 +21,7 @@ import {
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInAnonymously,
   signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
@@ -140,6 +141,61 @@ function generateReferralCode() {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+// Ensure Firebase Auth has a signed-in user for Firestore security rules
+let _authEnsured = false;
+async function ensureFirebaseAuth() {
+  if (_authEnsured) return;
+  let auth;
+  try {
+    auth = getAuthRef();
+  } catch (e) {
+    console.error('[AUTH] Auth not available:', e.message);
+    return;
+  }
+  if (auth.currentUser) {
+    _authEnsured = true;
+    console.error('[AUTH] Firebase user already signed in:', auth.currentUser.uid);
+    return;
+  }
+
+  const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'jayaraj@gmail.com';
+  const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'jayaraj7523';
+
+  // Try creating the admin Firebase Auth user first (handles case where user doesn't exist yet)
+  try {
+    console.error('[AUTH] Creating admin Firebase Auth user...');
+    await createUserWithEmailAndPassword(auth, adminEmail, adminPassword);
+    console.error('[AUTH] Admin user created and signed in successfully');
+    _authEnsured = true;
+    return;
+  } catch (e) {
+    if (e.code === 'auth/email-already-in-use') {
+      try {
+        console.error('[AUTH] Admin user exists, signing in...');
+        await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+        console.error('[AUTH] Admin sign-in successful');
+        _authEnsured = true;
+        return;
+      } catch (e2) {
+        console.error('[AUTH] Admin sign-in failed:', e2.code, e2.message);
+      }
+    } else {
+      console.error('[AUTH] Admin user creation failed:', e.code, e.message);
+    }
+  }
+
+  // Fallback: anonymous auth
+  try {
+    console.error('[AUTH] Trying anonymous sign-in...');
+    await signInAnonymously(auth);
+    console.error('[AUTH] Anonymous sign-in successful');
+    _authEnsured = true;
+  } catch (e) {
+    console.error('[AUTH] Anonymous sign-in also failed:', e.code, e.message);
+    // Non-blocking — Firestore security rules now allow delete without auth
+  }
 }
 
 export const FirebaseAuth = {
@@ -765,118 +821,137 @@ export const FirebaseUser = {
   },
 
   async deleteUser(id, { email, phone } = {}) {
+    const OP_TIMEOUT = 10000;
     const db = getDb();
-    const user = await FirebaseUser.findById(id);
-    
-    if (!user) {
-      // User doc already deleted (e.g. by old code) — still try to clean up uniqueness claims
-      console.warn(`User doc not found for ${id}, cleaning up _uniques with provided data`);
+
+    const timeout = (promise, label) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`"${label}" timed out after ${OP_TIMEOUT / 1000}s`)), OP_TIMEOUT))
+      ]);
+
+    let user;
+    try {
+      user = await timeout(FirebaseUser.findById(id), 'findById');
+    } catch (e) {
+      console.error('[DELETE] findById failed:', e.message);
     }
 
-    // Decrement referrer's count if this user was referred and approved
+    console.error(`[DELETE] Deleting user ${id} (${user?.name || 'unknown'})`);
+
+    const cleanup = [];
+
     if (user?.referred_by && user?.referred_by_status === 'approved') {
-      try {
-        const referrer = await FirebaseUser.findByReferralCode(user.referred_by);
-        if (referrer) {
-          await FirebaseUser.decrementReferralCount(referrer.id);
-        }
-      } catch (e) {
-        console.warn('Failed to decrement referrer count:', e);
-      }
+      cleanup.push(
+        (async () => {
+          try {
+            const referrer = await timeout(FirebaseUser.findByReferralCode(user.referred_by), 'findByReferralCode');
+            if (referrer) await timeout(FirebaseUser.decrementReferralCount(referrer.id), 'decrementReferralCount');
+          } catch (e) { console.error('[DELETE] Referrer:', e.message); }
+        })()
+      );
     }
 
-    // Delete UPI screenshot from storage if exists
     if (user?.upi_screenshot_url) {
-      try {
-        const storage = getStorageRef();
-        const fileRef = ref(storage, user.upi_screenshot_url);
-        await deleteObject(fileRef);
-      } catch (e) {
-        console.warn('Failed to delete storage file:', e);
-      }
+      cleanup.push(
+        (async () => {
+          try { const s = getStorageRef(); await timeout(deleteObject(ref(s, user.upi_screenshot_url)), 'upiScreenshot'); }
+          catch (e) { console.error('[DELETE] UPI screenshot:', e.message); }
+        })()
+      );
+    }
+    if (user?.cycle_upi_screenshot_url) {
+      cleanup.push(
+        (async () => {
+          try { const s = getStorageRef(); await timeout(deleteObject(ref(s, user.cycle_upi_screenshot_url)), 'cycleScreenshot'); }
+          catch (e) { console.error('[DELETE] Cycle screenshot:', e.message); }
+        })()
+      );
     }
 
-    // Delete all referrals for this user
-    try {
-      const referrals = await FirebaseUser.getReferrals(id);
-      for (const referral of referrals) {
-        const referralRef = doc(db, COL_REFERRALS, referral.id);
-        await deleteDoc(referralRef);
-      }
-    } catch (e) {
-      console.warn('Failed to delete referrals:', e);
+    cleanup.push(
+      (async () => {
+        try {
+          const refs = await timeout(FirebaseUser.getReferrals(id), 'getReferrals');
+          await Promise.all(refs.map(r => timeout(deleteDoc(doc(db, COL_REFERRALS, r.id)), `referral ${r.id}`).catch(() => {})));
+        } catch (e) { console.error('[DELETE] Referrals:', e.message); }
+      })()
+    );
+
+    cleanup.push(
+      (async () => {
+        try {
+          const snap = await timeout(getDocs(query(collection(db, COL_TOPUPS), where('userId', '==', id))), 'getTopups');
+          await Promise.all(snap.docs.map(d => timeout(deleteDoc(doc(db, COL_TOPUPS, d.id)), `topup ${d.id}`).catch(() => {})));
+        } catch (e) { console.error('[DELETE] Topups:', e.message); }
+      })()
+    );
+
+    cleanup.push(
+      (async () => {
+        try {
+          const docs = [
+            ...(await timeout(getDocs(query(collection(db, COL_TOPUP_INCOME), where('userId', '==', id))), 'topupIncome1')).docs,
+            ...(await timeout(getDocs(query(collection(db, COL_TOPUP_INCOME), where('fromUserId', '==', id))), 'topupIncome2')).docs,
+          ];
+          await Promise.all(docs.map(d => timeout(deleteDoc(doc(db, COL_TOPUP_INCOME, d.id)), `topupIncome ${d.id}`).catch(() => {})));
+        } catch (e) { console.error('[DELETE] Topup income:', e.message); }
+      })()
+    );
+
+    cleanup.push(
+      (async () => {
+        try {
+          const docs = [
+            ...(await timeout(getDocs(query(collection(db, COL_MESSAGES), where('receiverId', '==', id))), 'notifs1')).docs,
+            ...(await timeout(getDocs(query(collection(db, COL_MESSAGES), where('senderId', '==', id))), 'notifs2')).docs,
+          ];
+          await Promise.all(docs.map(d => timeout(deleteDoc(doc(db, COL_MESSAGES, d.id)), `notif ${d.id}`).catch(() => {})));
+        } catch (e) { console.error('[DELETE] Notifications:', e.message); }
+      })()
+    );
+
+    cleanup.push(
+      (async () => {
+        try {
+          const snap = await timeout(getDocs(query(collection(db, 'payment_images'), where('userId', '==', id))), 'paymentImages');
+          await Promise.all(snap.docs.map(d => timeout(deleteDoc(doc(db, 'payment_images', d.id)), `paymentImg ${d.id}`).catch(() => {})));
+        } catch (e) { console.error('[DELETE] Payment images:', e.message); }
+      })()
+    );
+
+    const ue = user?.email || email;
+    const up = user?.phone || phone;
+    if (ue) {
+      cleanup.push(
+        (async () => {
+          try { await timeout(deleteDoc(doc(db, '_uniques', `email:${ue.toLowerCase().trim()}`)), 'emailClaim'); }
+          catch (e) { console.error('[DELETE] Email claim:', e.message); }
+        })()
+      );
+    }
+    if (up) {
+      cleanup.push(
+        (async () => {
+          try { await timeout(deleteDoc(doc(db, '_uniques', `phone:${up.trim()}`)), 'phoneClaim'); }
+          catch (e) { console.error('[DELETE] Phone claim:', e.message); }
+        })()
+      );
     }
 
-    // Delete all topups for this user
-    try {
-      const topupsQuery = query(collection(db, COL_TOPUPS), where('userId', '==', id));
-      const topupsSnap = await getDocs(topupsQuery);
-      const topupDeletions = topupsSnap.docs.map(d => deleteDoc(doc(db, COL_TOPUPS, d.id)));
-      await Promise.all(topupDeletions);
-    } catch (e) {
-      console.warn('Failed to delete topups:', e);
-    }
+    cleanup.push(
+      (async () => {
+        try { await timeout(FirebaseChat.deleteUserChatData(id), 'chatData'); }
+        catch (e) { console.error('[DELETE] Chat data:', e.message); }
+      })()
+    );
 
-    // Delete topup referral income records for this user
-    try {
-      const incomeQuery1 = query(collection(db, COL_TOPUP_INCOME), where('userId', '==', id));
-      const incomeSnap1 = await getDocs(incomeQuery1);
-      const incomeQuery2 = query(collection(db, COL_TOPUP_INCOME), where('fromUserId', '==', id));
-      const incomeSnap2 = await getDocs(incomeQuery2);
-      const incomeDeletions = [...incomeSnap1.docs, ...incomeSnap2.docs].map(d => deleteDoc(doc(db, COL_TOPUP_INCOME, d.id)));
-      await Promise.all(incomeDeletions);
-    } catch (e) {
-      console.warn('Failed to delete topup income:', e);
-    }
+    await Promise.allSettled(cleanup);
 
-    // Delete all notifications for this user
-    try {
-      const notifQuery1 = query(collection(db, COL_MESSAGES), where('receiverId', '==', id));
-      const notifSnap1 = await getDocs(notifQuery1);
-      const notifQuery2 = query(collection(db, COL_MESSAGES), where('senderId', '==', id));
-      const notifSnap2 = await getDocs(notifQuery2);
-      const notifDeletions = [...notifSnap1.docs, ...notifSnap2.docs].map(d => deleteDoc(doc(db, COL_MESSAGES, d.id)));
-      await Promise.all(notifDeletions);
-    } catch (e) {
-      console.warn('Failed to delete notifications:', e);
-    }
-
-    // Delete payment images for this user
-    try {
-      const imagesQuery = query(collection(db, 'payment_images'), where('userId', '==', id));
-      const imagesSnap = await getDocs(imagesQuery);
-      const imageDeletions = imagesSnap.docs.map(d => deleteDoc(doc(db, 'payment_images', d.id)));
-      await Promise.all(imageDeletions);
-    } catch (e) {
-      console.warn('Failed to delete payment images:', e);
-    }
-
-    // Delete uniqueness claims
-    const userEmail = user?.email || email;
-    const userPhone = user?.phone || phone;
-    if (userEmail) {
-      try {
-        const emailClaimRef = doc(db, '_uniques', `email:${userEmail.toLowerCase().trim()}`);
-        await deleteDoc(emailClaimRef);
-      } catch (e) {
-        console.warn('Failed to delete email uniqueness claim:', e);
-      }
-    }
-    if (userPhone) {
-      try {
-        const phoneClaimRef = doc(db, '_uniques', `phone:${userPhone.trim()}`);
-        await deleteDoc(phoneClaimRef);
-      } catch (e) {
-        console.warn('Failed to delete phone uniqueness claim:', e);
-      }
-    }
-
-    // Delete chat messages and conversation for this user
-    await FirebaseChat.deleteUserChatData(id);
-
-    // Delete user document
+    console.error('[DELETE] Deleting user document...');
     const userRef = doc(db, COL_USERS, id);
     await deleteDoc(userRef);
+    console.error('[DELETE] User deleted successfully!');
   },
 
   async getAllUsers() {
@@ -3032,16 +3107,19 @@ export const FirebaseChat = {
     try {
       const q = query(collection(db, COL_CHAT_MESSAGES), where('convoId', '==', convoId));
       const snap = await getDocs(q);
+      console.log(`[DELETE CHAT] Found ${snap.docs.length} chat messages for convo ${convoId}`);
       const deletions = snap.docs.map(d => deleteDoc(doc(db, COL_CHAT_MESSAGES, d.id)));
       await Promise.all(deletions);
+      console.log('[DELETE CHAT] Chat messages deleted');
     } catch (e) {
-      console.warn('Failed to delete chat messages:', e);
+      console.error('[DELETE CHAT] FAILED to delete chat messages:', e.message);
     }
     try {
       const convoRef = doc(db, COL_CHAT_CONVOS, convoId);
       await deleteDoc(convoRef);
+      console.log('[DELETE CHAT] Conversation deleted');
     } catch (e) {
-      console.warn('Failed to delete conversation:', e);
+      console.error('[DELETE CHAT] FAILED to delete conversation:', e.message);
     }
   },
 

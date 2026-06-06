@@ -135,30 +135,21 @@ export default function FirebaseAdminDashboardPage() {
     }
   }
 
-  async function handleRejectInactive(userId, reason) {
+  async function handleDeleteInactive(userId, reason) {
     setActionLoading(true);
     setActionMsg('');
     try {
-      if (!actionMessage || !actionMessage.trim()) {
-        setActionMsg('Error: Message to user is required');
-        setActionLoading(false);
-        return;
-      }
-      await FirebaseUser.rejectUser(userId, getAdminName(), reason);
-      await FirebaseNotification.send({
-        receiverId: userId,
-        receiverName: actionUser?.name || '',
-        message: actionMessage,
-        type: 'user_rejected',
-        senderId: getAdminName(),
-        senderName: getAdminName(),
-      });
-      setActionMsg('✓ User rejected!');
+      const user = actionUser;
+      await FirebaseUser.deleteUser(userId, { email: user?.email, phone: user?.phone });
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      setActionMsg('✓ User permanently deleted');
       setActionUser(null);
       setActionMessage('');
-      setTimeout(() => { setActionMsg(''); }, 2000);
+      setTimeout(() => { setActionMsg(''); }, 3000);
     } catch (err) {
-      setActionMsg('Error: ' + (err.message || 'Failed to reject'));
+      console.error('[DELETE ERROR]', err);
+      const detail = err.response?.data?.message || err.message || 'Failed to delete user';
+      setActionMsg('Error: ' + detail + ' (see console for details)');
     } finally {
       setActionLoading(false);
     }
@@ -556,7 +547,7 @@ export default function FirebaseAdminDashboardPage() {
                               {'\u2713'} Approve
                             </button>
                             <button className="btn-modern btn-modern-danger btn-modern-xs"
-                              onClick={() => { setActionUser(u); setActionMode('reject'); setActionReason(''); }}>
+                              onClick={() => { setActionUser(u); setActionMode('delete'); setActionReason(''); }}>
                               {'\u2715'} Delete
                             </button>
                           </div>
@@ -573,7 +564,7 @@ export default function FirebaseAdminDashboardPage() {
             <div className="modal-modern-overlay" onClick={() => setActionUser(null)}>
               <div className="modal-modern" onClick={e => e.stopPropagation()}>
                 <div className="modal-modern-header">
-                  <h2>{actionMode === 'approve' ? 'Approve User' : 'Delete User'}</h2>
+                  <h2>{actionMode === 'approve' ? 'Approve User' : 'Permanently Delete User'}</h2>
                   <button onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
                 </div>
                 <div className="modal-modern-body">
@@ -597,25 +588,21 @@ export default function FirebaseAdminDashboardPage() {
                     </div>
                   </div>
 
+                  {actionMode === 'delete' && (
+                    <div className="alert alert-error" style={{ margin: '1rem 0' }}>
+                      <strong>⚠️ Permanent Data Loss Warning:</strong><br />
+                      This will permanently delete this user and ALL associated data including topups, transactions, payments, screenshots, messages, chat history, and notifications. This action CANNOT be undone!
+                    </div>
+                  )}
+
                   <div className="field modal-field-mb">
-                    <label>Reason for {actionMode === 'approve' ? 'approval' : 'rejection'}</label>
+                    <label>Reason for {actionMode === 'approve' ? 'approval' : 'deletion'}</label>
                     <textarea
                       className="input"
-                      placeholder={actionMode === 'approve' ? 'Why are you approving this user?' : 'Why are you rejecting this user?'}
+                      placeholder={actionMode === 'approve' ? 'Why are you approving this user?' : 'Why are you deleting this user?'}
                       value={actionReason}
                       onChange={e => setActionReason(e.target.value)}
                       rows={3}
-                    />
-                  </div>
-
-                  <div className="field modal-field-mb">
-                    <label>Message to User *</label>
-                    <textarea
-                      className="input"
-                      placeholder="Explain to the user why this action was taken (required)"
-                      value={actionMessage}
-                      onChange={e => setActionMessage(e.target.value)}
-                      rows={2}
                     />
                   </div>
 
@@ -634,7 +621,7 @@ export default function FirebaseAdminDashboardPage() {
                     </button>
                   ) : (
                     <button className={`btn-modern btn-modern-danger${actionLoading ? ' btn-loading' : ''}`}
-                      onClick={() => handleRejectInactive(actionUser.id, actionReason)}
+                      onClick={() => handleDeleteInactive(actionUser.id, actionReason)}
                       disabled={actionLoading}>
                       {actionLoading ? 'Deleting...' : '\u2715 Confirm Delete'}
                     </button>

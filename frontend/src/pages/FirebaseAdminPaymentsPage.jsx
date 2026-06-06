@@ -1522,6 +1522,9 @@ export default function FirebaseAdminPaymentsPage() {
   const [q, setQ] = useState('');
   const [smartFilter, setSmartFilter] = useState('');
   const [dupAlerts, setDupAlerts] = useState([]);
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState(null);
+  const [deleteSuccessMsg, setDeleteSuccessMsg] = useState('');
+  const [deletingUser, setDeletingUser] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
@@ -1642,12 +1645,18 @@ export default function FirebaseAdminPaymentsPage() {
   }, [users, dupAlerts]);
 
   const handleDeleteUser = async (userId, userEmail, userPhone) => {
-    if (!window.confirm('Delete this user permanently?')) return;
     try {
       await FirebaseUser.deleteUser(userId, { email: userEmail, phone: userPhone });
       setUsers(prev => prev.filter(u => u.id !== userId));
+      setDeleteConfirmUser(null);
+      setDeleteSuccessMsg('User permanently deleted');
+      setTimeout(() => setDeleteSuccessMsg(''), 3000);
+    } catch (err) {
+      console.error('[DELETE ERROR]', err);
+      setDeleteSuccessMsg('');
+      const detail = err.response?.data?.message || err.message || 'Unknown error';
+      alert('Delete failed: ' + detail + '\n\nCheck browser console (F12) for detailed error logs.');
     }
-    catch (err) { console.error('Delete error:', err); alert('Delete failed: ' + (err.message || 'Unknown error')); }
   };
 
   const updateSmartFilter = (value) => {
@@ -1808,7 +1817,7 @@ export default function FirebaseAdminPaymentsPage() {
                           <div className="flex-actions">
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => openVerification(u)}>Verify</button>
                             {displayUrl && <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={() => window.open(getImageUrl(displayUrl), '_blank', 'noopener,noreferrer')} title="View Screenshot">{'\u{1F4F7}'}</button>}
-                            <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => handleDeleteUser(u.id, u.email, u.phone)}>Del</button>
+                            <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => setDeleteConfirmUser(u)}>Del</button>
                           </div>
                         </td>
                       </tr>
@@ -1833,6 +1842,60 @@ export default function FirebaseAdminPaymentsPage() {
                 if (currentIdx + 1 < filteredUsers.length) setSelectedUser(filteredUsers[currentIdx + 1]);
               }}
             />
+          )}
+
+          {deleteSuccessMsg && (
+            <div style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999, padding: '1rem 1.5rem', borderRadius: '8px', background: 'var(--success)', color: '#fff', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+              {'\u2713'} {deleteSuccessMsg}
+            </div>
+          )}
+
+          {deleteConfirmUser && (
+            <div className="modal-modern-overlay" onClick={() => setDeleteConfirmUser(null)}>
+              <div className="modal-modern" onClick={e => e.stopPropagation()}>
+                <div className="modal-modern-header">
+                  <h2>Confirm Permanent Deletion</h2>
+                  <button onClick={() => setDeleteConfirmUser(null)} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+                </div>
+                <div className="modal-modern-body">
+                  <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+                    <strong>{'\u26A0\uFE0F'} Warning:</strong> This will permanently delete <strong>{deleteConfirmUser.name}</strong> and ALL associated data including topups, transactions, payments, screenshots, messages, chat history, and notifications. This action CANNOT be undone!
+                  </div>
+                  <div className="detail-grid card-section-sm">
+                    <div className="detail-row">
+                      <span className="detail-label">User</span>
+                      <span className="detail-value">{deleteConfirmUser.name}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Email</span>
+                      <span className="detail-value">{deleteConfirmUser.email}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Phone</span>
+                      <span className="detail-value">{deleteConfirmUser.phone || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-modern-footer">
+                  <button className={`btn-modern btn-modern-danger${deletingUser ? ' btn-loading' : ''}`}
+                    onClick={async () => {
+                      if (deletingUser) return;
+                      const u = deleteConfirmUser;
+                      setDeletingUser(true);
+                      try {
+                        await handleDeleteUser(u.id, u.email, u.phone);
+                      } catch (e) {} finally {
+                        setDeletingUser(false);
+                      }
+                    }} disabled={deletingUser}>
+                    {deletingUser ? 'Deleting...' : '\u2715 Confirm Delete'}
+                  </button>
+                  <button className="btn-modern btn-modern-ghost" onClick={() => setDeleteConfirmUser(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </main>

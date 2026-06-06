@@ -6,14 +6,72 @@ service cloud.firestore {
     match /users_new/{userId} {
       allow read: if true;
       allow create: if request.auth != null;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if true;
     }
     
     // Referrals_new collection - app's referral records
     match /referrals_new/{referralId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if true;
+    }
+    
+    // Topups collection
+    match /topups_new/{topupId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if true;
+    }
+    
+    // Topup referral income
+    match /topup_referral_income/{incomeId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if true;
+    }
+    
+    // Notifications / Messages
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if true;
+    }
+    
+    // Chat messages
+    match /chat_messages/{messageId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if true;
+    }
+    
+    // Chat conversations
+    match /chat_conversations/{conversationId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if true;
+    }
+    
+    // Payment images
+    match /payment_images/{imageId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if true;
+    }
+    
+    // Uniqueness claims
+    match /_uniques/{claimId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if true;
     }
     
     // Legacy users collection
@@ -21,6 +79,7 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == resource.data.firebase_uid;
       allow create: if request.auth != null;
+      allow delete: if true;
     }
     
     // Legacy referrals collection

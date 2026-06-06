@@ -689,13 +689,13 @@ return (
 
           <div className="profile-body">
             <div className="profile-detail-grid">
-              <div className="profile-detail-item">
+              <div className="profile-detail-item profile-contact-item">
                 <span className="profile-detail-label">Email</span>
-                <span className="profile-detail-value">{user?.email}</span>
+                <span className="profile-detail-value profile-contact-value">{user?.email}</span>
               </div>
-              <div className="profile-detail-item">
+              <div className="profile-detail-item profile-contact-item">
                 <span className="profile-detail-label">Phone</span>
-                <span className="profile-detail-value">{user?.phone || '—'}</span>
+                <span className="profile-detail-value profile-contact-value">{user?.phone || '—'}</span>
               </div>
               <div className="profile-detail-item">
                 <span className="profile-detail-label">Status</span>
