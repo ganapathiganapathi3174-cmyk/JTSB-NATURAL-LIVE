@@ -669,7 +669,12 @@ return (
               <div className="profile-avatar">{user?.name ? user.name.charAt(0).toUpperCase() : '?'}</div>
               <div className="profile-header-info">
                 <h2 className="profile-name">{user?.name || 'User'}</h2>
-                <span className="profile-email">{user?.email || ''}</span>
+                <div className="profile-header-meta">
+                  <span className="profile-email">{user?.email || ''}</span>
+                  <span className={`profile-status-badge ${user?.status === 'approved' ? 'badge-paid' : user?.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+                    {user?.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Pending'}
+                  </span>
+                </div>
               </div>
             </div>
             <div className="profile-header-right">
@@ -688,16 +693,73 @@ return (
           </div>
 
           <div className="profile-body">
+            <div className="quick-stats-grid">
+              <div className="quick-stat-card">
+                <div className="quick-stat-icon stat-icon-referrals">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                </div>
+                <div className="quick-stat-info">
+                  <span className="quick-stat-value">{approvedReferralCount}</span>
+                  <span className="quick-stat-label">Approved Referrals</span>
+                </div>
+              </div>
+              <div className="quick-stat-card">
+                <div className="quick-stat-icon stat-icon-income">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                </div>
+                <div className="quick-stat-info">
+                  <span className="quick-stat-value">₹{totalTopupIncome.toFixed(2)}</span>
+                  <span className="quick-stat-label">Total Rewards</span>
+                </div>
+              </div>
+              <div className="quick-stat-card">
+                <div className="quick-stat-icon stat-icon-status">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                </div>
+                <div className="quick-stat-info">
+                  <span className={`quick-stat-value ${user?.status === 'approved' ? 'text-success' : user?.status === 'rejected' ? 'text-danger' : 'text-warning'}`}>
+                    {user?.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Pending'}
+                  </span>
+                  <span className="quick-stat-label">Account Status</span>
+                </div>
+              </div>
+            </div>
             <div className="profile-detail-grid">
               <div className="profile-detail-item profile-contact-item">
+                <span className="profile-detail-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                  </svg>
+                </span>
                 <span className="profile-detail-label">Email</span>
                 <span className="profile-detail-value profile-contact-value">{user?.email}</span>
               </div>
               <div className="profile-detail-item profile-contact-item">
+                <span className="profile-detail-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                  </svg>
+                </span>
                 <span className="profile-detail-label">Phone</span>
                 <span className="profile-detail-value profile-contact-value">{user?.phone || '—'}</span>
               </div>
               <div className="profile-detail-item">
+                <span className="profile-detail-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                </span>
                 <span className="profile-detail-label">Status</span>
                 <span className="profile-detail-value">
                   <span className={`badge ${user?.status === 'approved' ? 'badge-paid' : user?.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
@@ -722,6 +784,12 @@ return (
               </div>
               {user?.referred_by && (
                 <div className="profile-detail-item">
+                  <span className="profile-detail-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  </span>
                   <span className="profile-detail-label">Referred By</span>
                   <span className="profile-detail-value">{referrerInfo ? `${referrerInfo.name} (${referrerInfo.email})` : user.referred_by}</span>
                 </div>
@@ -925,6 +993,30 @@ return (
                   />
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card mb-lg account-info-card">
+          <h3 className="card-title">Account Information</h3>
+          <div className="account-info-grid">
+            <div className="account-info-item">
+              <span className="account-info-label">Joined Date</span>
+              <span className="account-info-value">
+                {user?.joinedDate ? new Date(user.joinedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
+              </span>
+            </div>
+            <div className="account-info-item">
+              <span className="account-info-label">Approved Date</span>
+              <span className="account-info-value">
+                {user?.approvedDate ? new Date(user.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
+              </span>
+            </div>
+            <div className="account-info-item">
+              <span className="account-info-label">Account Status</span>
+              <span className={`account-info-value ${user?.account_status === 'active' ? 'text-success' : user?.account_status === 'blocked' ? 'text-danger' : 'text-warning'}`}>
+                {(user?.account_status || 'inactive').charAt(0).toUpperCase() + (user?.account_status || 'inactive').slice(1)}
+              </span>
             </div>
           </div>
         </div>

@@ -341,6 +341,8 @@ export const FirebaseUser = {
       admin_approval_status: 'PENDING',
       is_active: false,
       is_first_payment_done: false,
+      joinedDate: null,
+      approvedDate: null,
       created_at: now,
       referral_created_at: now,
       referral_expires_at: computeReferralExpiryDate(),
@@ -430,6 +432,8 @@ export const FirebaseUser = {
       admin_approval_status: 'PENDING',
       is_active: false,
       is_first_payment_done: false,
+      joinedDate: null,
+      approvedDate: null,
       created_at: now,
       referral_created_at: now,
       referral_expires_at: computeReferralExpiryDate(),
@@ -1897,10 +1901,17 @@ export const FirebaseUser = {
     const ref = doc(db, COL_USERS, userId);
     const updates = { admin_approval_status: status };
     if (status === 'APPROVED') {
+      const now = new Date().toISOString();
       updates.account_status = 'active';
-      updates.approved_at = new Date().toISOString();
+      updates.approved_at = now;
       updates.approved_by = adminName || 'Unknown Admin';
       updates.is_active = true;
+      updates.approvedDate = now;
+      const snap = await getDoc(ref);
+      const user = snap.data();
+      if (user && !user.joinedDate) {
+        updates.joinedDate = now;
+      }
       console.log(`[ADMIN APPROVAL] User ${userId} APPROVED by ${adminName}`);
     } else if (status === 'REJECTED') {
       updates.is_active = false;
@@ -2173,24 +2184,30 @@ export const FirebaseUser = {
 
     const db = getDb();
     const ref = doc(db, COL_USERS, userId);
+    const now = new Date().toISOString();
 
     const historyEntry = {
       from: user.account_status || 'inactive',
       to: 'active',
       changed_by: adminName || 'Unknown Admin',
-      changed_at: new Date().toISOString(),
+      changed_at: now,
       reason: reason || 'Manual activation by admin',
     };
 
     const existingHistory = user.status_change_history || [];
 
-    await updateDoc(ref, {
+    const updates = {
       account_status: 'active',
       activated_by: adminName || 'Unknown Admin',
-      activated_at: new Date().toISOString(),
+      activated_at: now,
       activation_reason: reason || 'Manual activation by admin',
       status_change_history: [...existingHistory, historyEntry],
-    });
+    };
+
+    if (!user.joinedDate) updates.joinedDate = now;
+    if (!user.approvedDate) updates.approvedDate = now;
+
+    await updateDoc(ref, updates);
 
     return {
       success: true,

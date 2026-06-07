@@ -211,6 +211,18 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               </span>
             </div>
             <div className="detail-row">
+              <span className="detail-label">Joined Date</span>
+              <span className="detail-value text-xs">
+                {user.joinedDate ? new Date(user.joinedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+              </span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Approved Date</span>
+              <span className="detail-value text-xs">
+                {user.approvedDate ? new Date(user.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+              </span>
+            </div>
+            <div className="detail-row">
               <span className="detail-label">Admin Approval</span>
               <span className={`badge ${currentAdminStatus === 'APPROVED' ? 'badge-paid' : currentAdminStatus === 'REJECTED' ? 'badge-rejected' : 'badge-pending'}`}>
                 {currentAdminStatus}
@@ -674,6 +686,8 @@ export default function FirebaseAdminUsersPage() {
                     <th>Admin</th>
                     <th>Topup</th>
                     <th>Referrals</th>
+                    <th>Joined</th>
+                    <th>Approved</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -725,6 +739,12 @@ export default function FirebaseAdminUsersPage() {
                             </button>
                           </div>
                         </td>
+                        <td data-label="Joined" className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
+                          {u.joinedDate ? new Date(u.joinedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
+                        <td data-label="Approved" className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
+                          {u.approvedDate ? new Date(u.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
                         <td data-label="Actions">
                           <div className="flex-actions" onClick={(e) => e.stopPropagation()}>
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => setSelectedUser(u)}>View</button>
@@ -734,7 +754,7 @@ export default function FirebaseAdminUsersPage() {
                       </tr>
                       {expandedUserId === u.id && (
                         <tr>
-                          <td colSpan={8} className="expandable-row">
+                          <td colSpan={10} className="expandable-row">
                             {loadingReferrals ? (
                               <div className="muted">Loading referrals...</div>
                             ) : expandedReferrals.length > 0 ? (
@@ -772,7 +792,7 @@ export default function FirebaseAdminUsersPage() {
                     );
                   })}
                   {filteredUsers.length === 0 && (
-                    <tr><td colSpan={8}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
+                    <tr><td colSpan={10}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
                   )}
                 </tbody>
               </table>
