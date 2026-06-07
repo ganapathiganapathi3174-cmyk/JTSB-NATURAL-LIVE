@@ -343,6 +343,7 @@ export const FirebaseUser = {
       is_first_payment_done: false,
       joinedDate: null,
       approvedDate: null,
+      lastActiveAt: null,
       created_at: now,
       referral_created_at: now,
       referral_expires_at: computeReferralExpiryDate(),
@@ -434,6 +435,7 @@ export const FirebaseUser = {
       is_first_payment_done: false,
       joinedDate: null,
       approvedDate: null,
+      lastActiveAt: null,
       created_at: now,
       referral_created_at: now,
       referral_expires_at: computeReferralExpiryDate(),
@@ -3138,6 +3140,14 @@ export const FirebaseChat = {
     } catch (e) {
       console.error('[DELETE CHAT] FAILED to delete conversation:', e.message);
     }
+  },
+
+  // ---- Update last active timestamp ----
+  async updateLastActive(userId) {
+    if (!userId) return;
+    const db = getDb();
+    const ref = doc(db, COL_USERS, userId);
+    await updateDoc(ref, { lastActiveAt: new Date().toISOString() });
   },
 
   // ---- Delete chat data for all deleted users (orphaned conversations) ----

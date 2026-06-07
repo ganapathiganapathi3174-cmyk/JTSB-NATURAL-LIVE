@@ -100,7 +100,15 @@ function applyTheme(color) {
   root.style.setProperty('--glass-border', t.glassBorder);
 }
 
-export default function FirebaseUserDashboard() {
+export default function getLastActiveStatus(dateStr) {
+  if (!dateStr) return 'inactive';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  if (diff < 5 * 60 * 1000) return 'online';
+  if (diff < 24 * 60 * 60 * 1000) return 'recent';
+  return 'inactive';
+}
+
+function FirebaseUserDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [referrals, setReferrals] = useState([]);
@@ -195,6 +203,11 @@ export default function FirebaseUserDashboard() {
       if (unsubscribeReferrals) unsubscribeReferrals();
     };
   }, [user?.referral_code]);
+
+  useEffect(() => {
+    if (!userId || !user) return;
+    FirebaseUser.updateLastActive(userId);
+  }, [userId, user]);
 
   useEffect(() => {
     if (!userId) return;
@@ -1010,6 +1023,16 @@ return (
               <span className="account-info-label">Approved Date</span>
               <span className="account-info-value">
                 {user?.approvedDate ? new Date(user.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
+              </span>
+            </div>
+            <div className="account-info-item">
+              <span className="account-info-label">Last Active</span>
+              <span className={`account-info-value ${user?.lastActiveAt ? getLastActiveStatus(user.lastActiveAt) : ''}`}>
+                {user?.lastActiveAt ? (
+                  <span className={`last-active-indicator ${getLastActiveStatus(user.lastActiveAt)}`}>
+                    {new Date(user.lastActiveAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                  </span>
+                ) : '—'}
               </span>
             </div>
             <div className="account-info-item">

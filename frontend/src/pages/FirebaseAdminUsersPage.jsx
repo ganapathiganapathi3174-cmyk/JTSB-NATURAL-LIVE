@@ -14,6 +14,14 @@ const getImageUrl = (url) => {
   return url + (url.includes('?') ? '&' : '?') + 'alt=media';
 };
 
+function getLastActiveStatus(dateStr) {
+  if (!dateStr) return 'inactive';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  if (diff < 5 * 60 * 1000) return 'online';
+  if (diff < 24 * 60 * 60 * 1000) return 'recent';
+  return 'inactive';
+}
+
 function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate }) {
   const [deleting, setDeleting] = useState(false);
   const [referrals, setReferrals] = useState([]);
@@ -688,6 +696,7 @@ export default function FirebaseAdminUsersPage() {
                     <th>Referrals</th>
                     <th>Joined</th>
                     <th>Approved</th>
+                    <th>Last Active</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -745,6 +754,13 @@ export default function FirebaseAdminUsersPage() {
                         <td data-label="Approved" className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
                           {u.approvedDate ? new Date(u.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                         </td>
+                        <td data-label="Last Active" className="text-xs" style={{ whiteSpace: 'nowrap' }}>
+                          {u.lastActiveAt ? (
+                            <span className={`last-active-indicator ${getLastActiveStatus(u.lastActiveAt)}`}>
+                              {new Date(u.lastActiveAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          ) : <span className="text-muted">—</span>}
+                        </td>
                         <td data-label="Actions">
                           <div className="flex-actions" onClick={(e) => e.stopPropagation()}>
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => setSelectedUser(u)}>View</button>
@@ -754,7 +770,7 @@ export default function FirebaseAdminUsersPage() {
                       </tr>
                       {expandedUserId === u.id && (
                         <tr>
-                          <td colSpan={10} className="expandable-row">
+                          <td colSpan={11} className="expandable-row">
                             {loadingReferrals ? (
                               <div className="muted">Loading referrals...</div>
                             ) : expandedReferrals.length > 0 ? (
@@ -792,7 +808,7 @@ export default function FirebaseAdminUsersPage() {
                     );
                   })}
                   {filteredUsers.length === 0 && (
-                    <tr><td colSpan={10}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
+                    <tr><td colSpan={11}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
                   )}
                 </tbody>
               </table>

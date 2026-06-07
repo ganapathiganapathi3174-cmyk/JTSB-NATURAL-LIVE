@@ -8374,4 +8374,38 @@ html {
   }
 }
 
+/* ===== Last Active Status Indicators ===== */
+.last-active-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.last-active-indicator::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.last-active-indicator.online::before {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+.last-active-indicator.recent::before {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+.last-active-indicator.inactive::before {
+  background: #6b7280;
+}
+.last-active-indicator.online {
+  color: #10b981;
+}
+.last-active-indicator.recent {
+  color: #f59e0b;
+}
+.last-active-indicator.inactive {
+  color: #9ca3af;
+}
+
 /* --- End of all CSS --- */
