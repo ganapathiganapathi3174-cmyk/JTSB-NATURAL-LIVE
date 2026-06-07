@@ -100,7 +100,7 @@ function applyTheme(color) {
   root.style.setProperty('--glass-border', t.glassBorder);
 }
 
-export default function getLastActiveStatus(dateStr) {
+function getLastActiveStatus(dateStr) {
   if (!dateStr) return 'inactive';
   const diff = Date.now() - new Date(dateStr).getTime();
   if (diff < 5 * 60 * 1000) return 'online';
@@ -108,7 +108,7 @@ export default function getLastActiveStatus(dateStr) {
   return 'inactive';
 }
 
-function FirebaseUserDashboard() {
+export default function FirebaseUserDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [referrals, setReferrals] = useState([]);

@@ -2253,6 +2253,13 @@ export const FirebaseUser = {
     const ref = doc(db, COL_USERS, id);
     await updateDoc(ref, { theme_color: themeColor });
   },
+
+  async updateLastActive(userId) {
+    if (!userId) return;
+    const db = getDb();
+    const ref = doc(db, COL_USERS, userId);
+    await updateDoc(ref, { lastActiveAt: new Date().toISOString() });
+  },
 };
 
 export const FirebaseStorage = {
@@ -3140,14 +3147,6 @@ export const FirebaseChat = {
     } catch (e) {
       console.error('[DELETE CHAT] FAILED to delete conversation:', e.message);
     }
-  },
-
-  // ---- Update last active timestamp ----
-  async updateLastActive(userId) {
-    if (!userId) return;
-    const db = getDb();
-    const ref = doc(db, COL_USERS, userId);
-    await updateDoc(ref, { lastActiveAt: new Date().toISOString() });
   },
 
   // ---- Delete chat data for all deleted users (orphaned conversations) ----
