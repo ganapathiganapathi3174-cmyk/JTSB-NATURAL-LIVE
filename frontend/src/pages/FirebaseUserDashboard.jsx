@@ -185,81 +185,45 @@ export default function FirebaseUserDashboard() {
         return;
       }
       setUser(data);
+
+      if (data.referral_code) {
+        FirebaseUser.subscribeToReferralsByCode(data.referral_code, setReferrals);
+      }
+      if (data.referred_by) {
+        FirebaseUser.getReferrerInfo(data.referred_by).then(setReferrerInfo).catch(() => setReferrerInfo(null));
+      }
+      if (data.id) {
+        FirebaseUser.incrementReferralViewCount(data.id).then(r => { if (r) setViewCount(r.count); }).catch(() => {});
+      }
+      if (data.theme_color) {
+        applyTheme(data.theme_color);
+      }
       setLoading(false);
+    });
+
+    FirebaseUser.updateLastActive(userId);
+
+    const unsubNotifs = FirebaseNotification.subscribeToUserNotifications(userId, (items) => {
+      setUnreadCount(items.filter(n => n.status === 'unread').length);
+      setRecentNotifications(items.slice(0, 10));
+    });
+
+    const unsubTopups = FirebaseTopup.subscribeToUserTopups(userId, (data) => {
+      setTopups(data || []);
+    });
+
+    const unsubIncome = FirebaseTopupReferral.subscribeToIncome(userId, (data) => {
+      setTopupIncome(data || []);
     });
 
     return () => {
       clearTimeout(timeoutId);
       if (unsub) unsub();
+      if (unsubNotifs) unsubNotifs();
+      if (unsubTopups) unsubTopups();
+      if (unsubIncome) unsubIncome();
     };
   }, [userId, navigate]);
-
-  useEffect(() => {
-    if (!user?.referral_code) return;
-    const unsubscribeReferrals = FirebaseUser.subscribeToReferralsByCode(user.referral_code, (updatedReferrals) => {
-      setReferrals(updatedReferrals);
-    });
-    return () => {
-      if (unsubscribeReferrals) unsubscribeReferrals();
-    };
-  }, [user?.referral_code]);
-
-  useEffect(() => {
-    if (!userId || !user) return;
-    FirebaseUser.updateLastActive(userId);
-  }, [userId, user]);
-
-  useEffect(() => {
-    if (!userId) return;
-    const unsub = FirebaseNotification.subscribeToUserNotifications(userId, (items) => {
-      setUnreadCount(items.filter(n => n.status === 'unread').length);
-      setRecentNotifications(items.slice(0, 10));
-    });
-    return () => { if (unsub) unsub(); };
-  }, [userId]);
-
-  useEffect(() => {
-    if (user?.referred_by) {
-      FirebaseUser.getReferrerInfo(user.referred_by).then(setReferrerInfo).catch(() => setReferrerInfo(null));
-    } else {
-      setReferrerInfo(null);
-    }
-  }, [user?.referred_by]);
-
-  useEffect(() => {
-    if (user?.id) {
-      FirebaseUser.incrementReferralViewCount(user.id).then(result => {
-        if (result) {
-          setViewCount(result.count);
-        }
-      }).catch(err => console.error('View count error:', err));
-    }
-  }, [user?.id]);
-
-  // Apply saved theme when user data loads or theme_color changes
-  useEffect(() => {
-    if (user?.theme_color) {
-      applyTheme(user.theme_color);
-    }
-  }, [user?.theme_color]);
-
-  // Load topups
-  useEffect(() => {
-    if (!userId) return;
-    const unsub = FirebaseTopup.subscribeToUserTopups(userId, (data) => {
-      setTopups(data || []);
-    });
-    return () => { if (unsub) unsub(); };
-  }, [userId]);
-
-  // Load topup income
-  useEffect(() => {
-    if (!userId) return;
-    const unsub = FirebaseTopupReferral.subscribeToIncome(userId, (data) => {
-      setTopupIncome(data || []);
-    });
-    return () => { if (unsub) unsub(); };
-  }, [userId]);
 
   async function handleLogout() {
     await FirebaseAuth.logout();

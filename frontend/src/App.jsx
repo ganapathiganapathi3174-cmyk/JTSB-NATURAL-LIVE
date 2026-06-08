@@ -28,20 +28,8 @@ function LoadingFallback() {
 }
 
 function ProtectedFirebase({ children }) {
-  const [verified, setVerified] = useState(null);
   const userId = localStorage.getItem('fb_user_id');
-  useEffect(() => {
-    if (!userId) { setVerified(false); return; }
-    let cancelled = false;
-    import('./db/firebase-db.js').then(({ FirebaseUser }) => {
-      FirebaseUser.findById(userId).then(user => {
-        if (!cancelled) setVerified(!!user);
-      }).catch(() => { if (!cancelled) setVerified(false); });
-    }).catch(() => { if (!cancelled) setVerified(false); });
-    return () => { cancelled = true; };
-  }, [userId]);
-  if (verified === null) return <LoadingFallback />;
-  if (!verified) return <Navigate to="/fb/login" replace />;
+  if (!userId) return <Navigate to="/fb/login" replace />;
   return children;
 }
 
