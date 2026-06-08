@@ -831,7 +831,7 @@ export const FirebaseUser = {
   },
 
   async deleteUser(id, { email, phone } = {}) {
-    const OP_TIMEOUT = 5000;
+    const OP_TIMEOUT = 8000;
     const db = getDb();
 
     const timeout = (promise, label) =>
@@ -842,99 +842,58 @@ export const FirebaseUser = {
 
     let user;
     try {
-      user = await retryFirestore(() => FirebaseUser.findById(id));
+      user = await timeout(FirebaseUser.findById(id), 'findById');
     } catch (e) {
       console.error('[DELETE] findById failed:', e.message);
     }
 
-    console.error(`[DELETE] Deleting user ${id} (${user?.name || 'unknown'})`);
-
     const allDeletions = [];
 
+    // Fire-and-forget non-critical cleanup
     if (user?.referred_by && user?.referred_by_status === 'approved') {
-      (async () => {
-        try {
-          const referrer = await retryFirestore(() => FirebaseUser.findByReferralCode(user.referred_by));
-          if (referrer) await retryFirestore(() => FirebaseUser.decrementReferralCount(referrer.id));
-        } catch (e) { console.error('[DELETE] Referrer:', e.message); }
-      })();
+      FirebaseUser.findByReferralCode(user.referred_by).then(r => {
+        if (r) FirebaseUser.decrementReferralCount(r.id).catch(() => {});
+      }).catch(() => {});
     }
 
     if (user?.upi_screenshot_url) {
-      try { const s = getStorageRef(); await deleteObject(ref(s, user.upi_screenshot_url)); }
-      catch (e) { console.error('[DELETE] UPI screenshot:', e.message); }
+      try { const s = getStorageRef(); deleteObject(ref(s, user.upi_screenshot_url)).catch(() => {}); }
+      catch (e) { /* storage not configured */ }
     }
     if (user?.cycle_upi_screenshot_url) {
-      try { const s = getStorageRef(); await deleteObject(ref(s, user.cycle_upi_screenshot_url)); }
-      catch (e) { console.error('[DELETE] Cycle screenshot:', e.message); }
+      try { const s = getStorageRef(); deleteObject(ref(s, user.cycle_upi_screenshot_url)).catch(() => {}); }
+      catch (e) { /* storage not configured */ }
     }
 
-    // Gather all document references to delete in parallel batches
-    const refPromises = [];
-
-    refPromises.push(
+    // Gather all document references to delete in parallel with timeout
+    const refPromises = [
+      timeout(FirebaseUser.getReferrals(id).then(r => r.map(rr => doc(db, COL_REFERRALS, rr.id))).catch(() => []), 'getReferrals'),
+      timeout(getDocs(query(collection(db, COL_TOPUPS), where('userId', '==', id))).then(s => s.docs.map(d => doc(db, COL_TOPUPS, d.id))).catch(() => []), 'getTopups'),
       (async () => {
         try {
-          const refs = await retryFirestore(() => FirebaseUser.getReferrals(id));
-          return refs.map(r => doc(db, COL_REFERRALS, r.id));
+          const [d1, d2] = await Promise.all([
+            timeout(getDocs(query(collection(db, COL_TOPUP_INCOME), where('userId', '==', id))), 'topupIncome1'),
+            timeout(getDocs(query(collection(db, COL_TOPUP_INCOME), where('fromUserId', '==', id))), 'topupIncome2'),
+          ]);
+          return [...d1.docs.map(d => doc(db, COL_TOPUP_INCOME, d.id)), ...d2.docs.map(d => doc(db, COL_TOPUP_INCOME, d.id))];
         } catch { return []; }
-      })()
-    );
-
-    refPromises.push(
+      })(),
       (async () => {
         try {
-          const snap = await retryFirestore(() => getDocs(query(collection(db, COL_TOPUPS), where('userId', '==', id))));
-          return snap.docs.map(d => doc(db, COL_TOPUPS, d.id));
+          const [d1, d2] = await Promise.all([
+            timeout(getDocs(query(collection(db, COL_MESSAGES), where('receiverId', '==', id))), 'notifs1'),
+            timeout(getDocs(query(collection(db, COL_MESSAGES), where('senderId', '==', id))), 'notifs2'),
+          ]);
+          return [...d1.docs.map(d => doc(db, COL_MESSAGES, d.id)), ...d2.docs.map(d => doc(db, COL_MESSAGES, d.id))];
         } catch { return []; }
-      })()
-    );
-
-    refPromises.push(
-      (async () => {
-        try {
-          const docs = [
-            ...(await retryFirestore(() => getDocs(query(collection(db, COL_TOPUP_INCOME), where('userId', '==', id))))).docs,
-            ...(await retryFirestore(() => getDocs(query(collection(db, COL_TOPUP_INCOME), where('fromUserId', '==', id))))).docs,
-          ];
-          return docs.map(d => doc(db, COL_TOPUP_INCOME, d.id));
-        } catch { return []; }
-      })()
-    );
-
-    refPromises.push(
-      (async () => {
-        try {
-          const docs = [
-            ...(await retryFirestore(() => getDocs(query(collection(db, COL_MESSAGES), where('receiverId', '==', id))))).docs,
-            ...(await retryFirestore(() => getDocs(query(collection(db, COL_MESSAGES), where('senderId', '==', id))))).docs,
-          ];
-          return docs.map(d => doc(db, COL_MESSAGES, d.id));
-        } catch { return []; }
-      })()
-    );
-
-    refPromises.push(
-      (async () => {
-        try {
-          const snap = await retryFirestore(() => getDocs(query(collection(db, 'payment_images'), where('userId', '==', id))));
-          return snap.docs.map(d => doc(db, 'payment_images', d.id));
-        } catch { return []; }
-      })()
-    );
-
-    refPromises.push(
-      (async () => {
-        try {
-          await retryFirestore(() => FirebaseChat.deleteUserChatData(id));
-        } catch (e) { console.error('[DELETE] Chat data:', e.message); }
-        return [];
-      })()
-    );
+      })(),
+      timeout(getDocs(query(collection(db, 'payment_images'), where('userId', '==', id))).then(s => s.docs.map(d => doc(db, 'payment_images', d.id))).catch(() => []), 'paymentImages'),
+      timeout(FirebaseChat.deleteUserChatData(id).then(() => []).catch(() => []), 'chatData'),
+    ];
 
     const results = await Promise.allSettled(refPromises);
     for (const r of results) {
-      if (r.status === 'fulfilled') allDeletions.push(...r.value);
+      if (r.status === 'fulfilled' && Array.isArray(r.value)) allDeletions.push(...r.value);
     }
 
     // Delete unique claims
@@ -943,15 +902,12 @@ export const FirebaseUser = {
     if (ue) allDeletions.push(doc(db, '_uniques', `email:${ue.toLowerCase().trim()}`));
     if (up) allDeletions.push(doc(db, '_uniques', `phone:${up.trim()}`));
 
-    // Batch delete all collected refs
     if (allDeletions.length > 0) {
       await batchDeleteDocs(db, allDeletions);
     }
 
-    console.error('[DELETE] Deleting user document...');
     const userRef = doc(db, COL_USERS, id);
-    await retryFirestore(() => deleteDoc(userRef));
-    console.error('[DELETE] User deleted successfully!');
+    await timeout(deleteDoc(userRef), 'deleteUserDoc');
   },
 
   async getAllUsers() {
