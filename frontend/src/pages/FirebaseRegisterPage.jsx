@@ -37,26 +37,6 @@ export default function FirebaseRegisterPage() {
     return nameValid && emailValid && phoneValid && utrValid && passwordValid && isValidReferral && !loading && !emailExists && !phoneExists && !utrExists;
   }, [name, email, phone, utr, password, isValidReferral, loading, emailExists, phoneExists]);
 
-  function checkEmailDuplicate(emailVal) {
-    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
-      setEmailExists(false);
-      return;
-    }
-    FirebaseUser.findByEmail(emailVal).then(existing => {
-      setEmailExists(!!existing);
-    }).catch(() => setEmailExists(false));
-  }
-
-  function checkPhoneDuplicate(phoneVal) {
-    if (phoneVal.trim().length < 10) {
-      setPhoneExists(false);
-      return;
-    }
-    FirebaseUser.findByPhone(phoneVal).then(existing => {
-      setPhoneExists(!!existing);
-    }).catch(() => setPhoneExists(false));
-  }
-
   function checkUtrDuplicate(val) {
     if (utrTimer.current) clearTimeout(utrTimer.current);
     if (!val.trim()) {
@@ -250,7 +230,6 @@ if (!referrer || referrer.payment_status !== 'approved' || referrer.account_stat
               type="email" 
               value={email} 
               onChange={e => setEmail(e.target.value)} 
-              onBlur={e => checkEmailDuplicate(e.target.value)}
               style={{ borderColor: emailExists ? 'var(--error)' : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'var(--success)' : '' }}
             />
             {emailExists && <div className="field-error">This email is already registered. Please use another email or login.</div>}
@@ -262,7 +241,6 @@ if (!referrer || referrer.payment_status !== 'approved' || referrer.account_stat
               type="tel" 
               value={phone} 
               onChange={e => setPhone(e.target.value)} 
-              onBlur={e => checkPhoneDuplicate(e.target.value)}
               style={{ borderColor: phoneExists ? 'var(--error)' : phone.trim().length >= 10 ? 'var(--success)' : '' }}
             />
             {phoneExists && <div className="field-error">This mobile number is already registered.</div>}

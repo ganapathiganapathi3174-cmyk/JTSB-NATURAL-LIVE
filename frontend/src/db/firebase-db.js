@@ -241,6 +241,24 @@ export const FirebaseAuth = {
   },
 };
 
+async function retryFirestore(fn, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const isRateLimit = e?.code === 'resource-exhausted' || e?.code === 'unavailable' ||
+        (typeof e?.message === 'string' && (e.message.includes('429') || e.message.includes('Too Many Requests') || e.message.includes('RESOURCE_EXHAUSTED')));
+      if (isRateLimit && attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1) + Math.random() * 1000, 8000);
+        console.warn(`Firestore rate limited (429), retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
 export const FirebaseUser = {
   async _claimUnique(db, field, value) {
     const docId = `${field}:${String(value).toLowerCase().trim()}`;
@@ -377,21 +395,11 @@ export const FirebaseUser = {
     const pass = userData.password || '';
     const hashedPass = await hashPasswordCached(pass);
     
-    const existingEmail = await FirebaseUser.findByEmail(userData.email);
-    if (existingEmail) {
-      throw new Error('This email is already registered. Please use another email or login.');
-    }
-    
-    const existingPhone = await FirebaseUser.findByPhone(userData.phone);
-    if (existingPhone) {
-      throw new Error('This mobile number is already registered.');
-    }
-    
     console.log('createWithPassword: creating user with password:', pass.substring(0, 2) + '***');
     console.log('Collection name:', COL_USERS);
     
     let referralCode;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 3; i++) {
       referralCode = generateReferralCode();
       const existing = await FirebaseUser.findByReferralCode(referralCode);
       if (!existing) break;
@@ -441,10 +449,10 @@ export const FirebaseUser = {
       referral_expires_at: computeReferralExpiryDate(),
     };
 
-    await this._claimUnique(db, 'email', userData.email);
-    if (userData.phone) await this._claimUnique(db, 'phone', userData.phone);
+    await retryFirestore(() => this._claimUnique(db, 'email', userData.email));
+    if (userData.phone) await retryFirestore(() => this._claimUnique(db, 'phone', userData.phone));
 
-    const ref = await addDoc(collection(db, COL_USERS), userDoc);
+    const ref = await retryFirestore(() => addDoc(collection(db, COL_USERS), userDoc));
     const newId = ref.id;
     
     console.log('[REGISTRATION] User document created in:', COL_USERS);
@@ -490,12 +498,7 @@ export const FirebaseUser = {
       }
     }
     
-    // Verify the save
-    const verifySnap = await getDoc(ref);
-    const savedData = verifySnap.data();
-    console.log('createWithPassword: password saved:', savedData.password === pass ? 'YES' : 'NO');
-    
-    return { id: newId, ...savedData };
+    return { id: newId, ...userDoc };
   },
 
   async findByEmail(email) {
