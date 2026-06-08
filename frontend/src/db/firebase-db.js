@@ -303,18 +303,8 @@ export const FirebaseUser = {
     const db = getDb();
     const now = new Date().toISOString();
     
-    const existingEmail = await FirebaseUser.findByEmail(userData.email);
-    if (existingEmail) {
-      throw new Error('This email is already registered. Please use another email or login.');
-    }
-    
-    const existingPhone = await FirebaseUser.findByPhone(userData.phone);
-    if (existingPhone) {
-      throw new Error('This mobile number is already registered.');
-    }
-    
     let referralCode;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 3; i++) {
       referralCode = generateReferralCode();
       const existing = await FirebaseUser.findByReferralCode(referralCode);
       if (!existing) break;
@@ -367,10 +357,10 @@ export const FirebaseUser = {
       referral_expires_at: computeReferralExpiryDate(),
     };
 
-    await this._claimUnique(db, 'email', userData.email);
-    if (userData.phone) await this._claimUnique(db, 'phone', userData.phone);
+    await retryFirestore(() => this._claimUnique(db, 'email', userData.email));
+    if (userData.phone) await retryFirestore(() => this._claimUnique(db, 'phone', userData.phone));
 
-    const ref = await addDoc(collection(db, COL_USERS), userDoc);
+    const ref = await retryFirestore(() => addDoc(collection(db, COL_USERS), userDoc));
     console.log('User created in Firestore with password:', userDoc.password ? 'YES' : 'NO');
     
     if (userData.referredBy) {
