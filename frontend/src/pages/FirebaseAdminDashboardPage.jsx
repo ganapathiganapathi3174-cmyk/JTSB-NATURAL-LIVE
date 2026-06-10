@@ -606,6 +606,19 @@ export default function FirebaseAdminDashboardPage() {
                     />
                   </div>
 
+                  {actionMode === 'approve' && (
+                    <div className="field modal-field-mb">
+                      <label>Message to user (required)</label>
+                      <textarea
+                        className="input"
+                        placeholder="Enter message to notify the user about approval"
+                        value={actionMessage}
+                        onChange={e => setActionMessage(e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                  )}
+
                   {actionMsg && (
                     <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
                       {actionMsg}

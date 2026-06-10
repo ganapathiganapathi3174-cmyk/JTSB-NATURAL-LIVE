@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, memo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess, FirebaseTopup, FirebaseTopupReferral, FirebaseNotification } from '../db/firebase-db.js';
+const QUOTA_KEY = 'fb_quota_exhausted';
 
 const UPI_VPA = import.meta.env.VITE_UPI_VPA || 'jayarajj126-3@okicici';
 const UPI_PAYEE_NAME = import.meta.env.VITE_UPI_PAYEE_NAME || 'Community';
@@ -208,6 +209,9 @@ export default function FirebaseUserDashboard() {
     if (!userId || !user) return;
     FirebaseUser.updateLastActive(userId);
   }, [userId, user]);
+
+  // Clear stale quota flag on mount (might be a new day)
+  useEffect(() => { localStorage.removeItem(QUOTA_KEY); }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -435,13 +439,30 @@ export default function FirebaseUserDashboard() {
     }
   }
 
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out — Firestore daily quota is exhausted. Upgrade to Blaze plan at https://console.firebase.google.com or try again tomorrow.')), ms))
+    ]);
+  }
+
   async function handleSubmitTopup() {
     if (!topupAmount || !topupTransactionId.trim() || !topupFile) {
       setError('Amount, transaction ID, and screenshot are required');
       return;
     }
+    if (localStorage.getItem(QUOTA_KEY) === 'true') {
+      setError('Firestore quota is still exhausted. Upgrade to Blaze plan or wait for reset.');
+      return;
+    }
     const trimmedTxId = topupTransactionId.trim();
-    const dupCheck = await FirebaseUser.checkUtrExists(trimmedTxId);
+    let dupCheck = false;
+    try {
+      dupCheck = await withTimeout(FirebaseUser.checkUtrExists(trimmedTxId), 10000);
+    } catch (e) {
+      setError('Could not verify transaction ID. Firestore reads may be exhausted. Try again later.');
+      return;
+    }
     if (dupCheck) {
       setError('This UTR ID has already been used.');
       return;
@@ -449,12 +470,13 @@ export default function FirebaseUserDashboard() {
     setSubmittingTopup(true);
     setError('');
     try {
-      const url = await FirebaseStorage.uploadTopupScreenshot(userId, topupFile);
-      await FirebaseTopup.create(userId, {
+      const url = await withTimeout(FirebaseStorage.uploadTopupScreenshot(userId, topupFile), 10000);
+      await withTimeout(FirebaseTopup.create(userId, {
         amount: Number(topupAmount),
         transactionId: topupTransactionId.trim(),
         screenshotData: url,
-      });
+      }), 10000);
+      localStorage.removeItem(QUOTA_KEY);
       setTopupAmount('');
       setTopupTransactionId('');
       setTopupUtrExists(false);
@@ -462,6 +484,10 @@ export default function FirebaseUserDashboard() {
       setTopupPreview(null);
       setShowTopupForm(false);
     } catch (err) {
+      console.error('Topup submission error:', err);
+      if (err.message?.includes('quota') || err.message?.includes('resource-exhausted') || err.message?.includes('timed out')) {
+        localStorage.setItem(QUOTA_KEY, 'true');
+      }
       setError(err.message);
     } finally {
       setSubmittingTopup(false);

@@ -1503,17 +1503,6 @@ export const FirebaseUser = {
     const topupDup = await this.checkDuplicateUtrInTopups(utr);
     if (topupDup) return true;
 
-    // Fuzzy fallback on approved/pending users
-    const statusFilter = query(colRef, where('payment_status', 'in', ['approved', 'pending']));
-    const statusSnap = await getDocs(statusFilter);
-    for (const d of statusSnap.docs) {
-      const u = { id: d.id, ...d.data() };
-      for (const field of ['utr_number', 'cycle_payment_utr']) {
-        const val = u[field];
-        if (!val) continue;
-        if (this._normalizeUtr(val) === normalized) return true;
-      }
-    }
     return false;
   },
 
@@ -2219,22 +2208,32 @@ export const FirebaseStorage = {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = async () => {
-        const base64 = reader.result.split(',')[1];
-        const fileId = `payment_${userId}_${Date.now()}`;
-        
-        const db = getDb();
-        const imagesRef = collection(db, 'payment_images');
-        await addDoc(imagesRef, {
-          fileId,
-          userId,
-          type: 'payment',
-          base64,
-          fileName: file.name,
-          createdAt: serverTimestamp(),
-        });
-        
-        console.log('✅ Base64 stored in Firestore');
-        resolve({ url: `data:image/jpeg;base64,${base64}`, path: fileId });
+        try {
+          let imageData = reader.result;
+          try {
+            imageData = await this.compressImage(reader.result);
+          } catch (compressErr) {
+            console.warn('Compression failed, using original:', compressErr.message);
+          }
+          const base64 = imageData.split(',')[1];
+          const fileId = `payment_${userId}_${Date.now()}`;
+          
+          const db = getDb();
+          const imagesRef = collection(db, 'payment_images');
+          await addDoc(imagesRef, {
+            fileId,
+            userId,
+            type: 'payment',
+            base64,
+            fileName: file.name,
+            createdAt: serverTimestamp(),
+          });
+          
+          console.log('✅ Base64 stored in Firestore');
+          resolve({ url: imageData, path: fileId });
+        } catch (err) {
+          reject(err);
+        }
       };
       reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsDataURL(file);
@@ -2245,25 +2244,46 @@ export const FirebaseStorage = {
     console.log('Delete not needed for Base64:', url);
   },
 
+  compressImage(dataUrl, maxWidth = 1200, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      let settled = false;
+      const done = (fn) => (v) => { if (!settled) { settled = true; fn(v); } };
+      const timer = setTimeout(() => done(reject)(new Error('Image compression timed out. Unsupported format?')), 10000);
+      img.onload = () => {
+        clearTimeout(timer);
+        try {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          if (w > maxWidth) { h = h * maxWidth / w; w = maxWidth; }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          done(resolve)(canvas.toDataURL('image/jpeg', quality));
+        } catch (e) { done(reject)(e); }
+      };
+      img.onerror = () => { clearTimeout(timer); done(reject)(new Error('Failed to load image for compression')); };
+      img.src = dataUrl;
+    });
+  },
+
   async uploadTopupScreenshot(userId, file) {
     console.log('Converting topup to Base64:', file.name);
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = async () => {
-        const base64 = reader.result.split(',')[1];
-        const fileId = `topup_${userId}_${Date.now()}`;
-        const db = getDb();
-        const imagesRef = collection(db, 'payment_images');
-        await addDoc(imagesRef, {
-          fileId,
-          userId,
-          type: 'topup',
-          base64,
-          fileName: file.name,
-          createdAt: serverTimestamp(),
-        });
-        console.log('Topup Base64 stored in Firestore');
-        resolve(`data:image/jpeg;base64,${base64}`);
+        try {
+          let imageData = reader.result;
+          try {
+            imageData = await this.compressImage(reader.result);
+          } catch (compressErr) {
+            console.warn('Compression failed, using original:', compressErr.message);
+          }
+          console.log('Topup image ready');
+          resolve(imageData);
+        } catch (err) {
+          reject(err);
+        }
       };
       reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsDataURL(file);
@@ -2276,22 +2296,32 @@ export const FirebaseStorage = {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = async () => {
-        const base64 = reader.result.split(',')[1];
-        const fileId = `cycle_${userId}_${Date.now()}`;
-        
-        const db = getDb();
-        const imagesRef = collection(db, 'payment_images');
-        await addDoc(imagesRef, {
-          fileId,
-          userId,
-          type: 'cycle',
-          base64,
-          fileName: file.name,
-          createdAt: serverTimestamp(),
-        });
-        
-        console.log('✅ Cycle payment Base64 stored in Firestore');
-        resolve(`data:image/jpeg;base64,${base64}`);
+        try {
+          let imageData = reader.result;
+          try {
+            imageData = await this.compressImage(reader.result);
+          } catch (compressErr) {
+            console.warn('Compression failed, using original:', compressErr.message);
+          }
+          const base64 = imageData.split(',')[1];
+          const fileId = `cycle_${userId}_${Date.now()}`;
+          
+          const db = getDb();
+          const imagesRef = collection(db, 'payment_images');
+          await addDoc(imagesRef, {
+            fileId,
+            userId,
+            type: 'cycle',
+            base64,
+            fileName: file.name,
+            createdAt: serverTimestamp(),
+          });
+          
+          console.log('✅ Cycle payment Base64 stored in Firestore');
+          resolve(imageData);
+        } catch (err) {
+          reject(err);
+        }
       };
       reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsDataURL(file);
