@@ -248,17 +248,17 @@ function useOcr(imageUrl) {
           return null;
         }
 
+        const _EXPECTED_AMOUNT = 120;
+
         function extractAmount(text) {
           if (!text) return null;
           const compacted = text.replace(/(\d)\s+(?=\d)/g, '$1');
           const ocrFixed = applyOcrFix(text);
           const compactedFixed = applyOcrFix(compacted);
 
-          // Log preview of text being scanned
           const preview = text.substring(0, 300).replace(/\n/g, '\\n');
           console.log('[AMOUNT] text preview:', preview);
 
-          // Deduplicated sources
           const sources = [...new Set([text, ocrFixed, compacted, compactedFixed])].filter(Boolean);
 
           for (const t of sources) {
@@ -279,6 +279,23 @@ function useOcr(imageUrl) {
               return '120';
             }
 
+            // 2b. Digit-sequence recovery: "1 20", "1.20", "1-20" near currency symbol
+            const seqMatch = t.match(/1[^0-9]*?2[^0-9]*?0/);
+            if (seqMatch) {
+              const surrounding = t.substring(Math.max(0, seqMatch.index - 5), seqMatch.index + seqMatch[0].length + 5);
+              if (/(?:₹|Rs\.?|INR)/i.test(surrounding)) {
+                console.log('[AMOUNT] digit-sequence recovery');
+                return '120';
+              }
+            }
+
+            // 2c. Digit-only contiguous scan
+            const digitsOnly = t.replace(/[^0-9]/g, '');
+            if (digitsOnly.includes('120')) {
+              console.log('[AMOUNT] contiguous digits match');
+              return '120';
+            }
+
             // 3. Number ending with .00
             const dotMatch = t.match(/\b(\d{2,5})\.00\b/);
             if (dotMatch) {
@@ -290,39 +307,81 @@ function useOcr(imageUrl) {
             }
           }
 
-          // 4. Aggressive: find any number close to 120 in full text
+          // 4. Aggressive: score-based selection with currency proximity bonus
           console.log('[AMOUNT] trying aggressive number scan');
           for (const t of sources) {
             const numbers = t.match(/\b(\d{2,5})\b/g);
             if (numbers) {
+              let bestAgg = null;
+              let bestAggScore = -Infinity;
               for (const n of numbers) {
                 const parsed = parseInt(n, 10);
-                if (parsed >= 50 && parsed <= 500 && parsed !== 2024 && parsed !== 2025 && parsed !== 2026) {
-                  if (n.length === 4) {
-                    const a = parseInt(n.substring(0, 2), 10);
-                    const b = parseInt(n.substring(2, 4), 10);
-                    if ((a >= 1 && a <= 31 && b >= 1 && b <= 12) || (a >= 1 && a <= 12 && b >= 1 && b <= 31)) continue;
-                  }
-                  console.log('[AMOUNT] aggressive number match:', n);
-                  return n;
+                if (parsed < 50 || parsed > 500 || parsed === 2024 || parsed === 2025 || parsed === 2026) continue;
+                if (n.length === 4) {
+                  const a = parseInt(n.substring(0, 2), 10);
+                  const b = parseInt(n.substring(2, 4), 10);
+                  if ((a >= 1 && a <= 31 && b >= 1 && b <= 12) || (a >= 1 && a <= 12 && b >= 1 && b <= 31)) continue;
                 }
-                // Also try swapping digits (92→29)
-                if (n.length >= 2) {
-                  const swapped = parseInt(n[1] + n[0] + n.substring(2), 10);
-                  if (swapped >= 50 && swapped <= 500) {
-                    console.log('[AMOUNT] swapped digit match:', n, '→', swapped);
-                    return String(swapped);
-                  }
+                const nearCurr = (t.lastIndexOf('₹', t.indexOf(n)) !== -1) || (t.lastIndexOf('Rs', t.indexOf(n)) !== -1) ? 100 : 0;
+                const score = (100 - Math.abs(parsed - _EXPECTED_AMOUNT)) + nearCurr;
+                if (score > bestAggScore) { bestAggScore = score; bestAgg = n; }
+              }
+              if (bestAgg) {
+                console.log('[AMOUNT] aggressive number match:', bestAgg);
+                return bestAgg;
+              }
+            }
+          }
+
+          // 5. Substring "120" check
+          for (const t of sources) {
+            if (t && t.includes('120')) {
+              console.log('[AMOUNT] substring 120 found');
+              return '120';
+            }
+          }
+
+          // 6. OCR confusion patterns
+          const confusionPatterns = [
+            /I\s*Z\s*O/i, /I\s*2\s*O/i, /l\s*Z\s*O/i, /l\s*2\s*O/i,
+            /1\s*Z\s*O/i, /1\s*2\s*O/i, /I\s*2\s*0/i, /l\s*2\s*0/i,
+          ];
+          for (const t of sources) {
+            for (const cp of confusionPatterns) {
+              if (cp.test(t)) {
+                console.log('[AMOUNT] OCR confusion pattern matched');
+                return '120';
+              }
+            }
+          }
+
+          // 7. Swapped-digit fallback
+          for (const t of sources) {
+            const numbers = t.match(/\b(\d{2,5})\b/g) || [];
+            for (const n of numbers) {
+              if (n.length >= 2) {
+                const swapped = parseInt(n[1] + n[0] + n.substring(2), 10);
+                if (swapped >= 50 && swapped <= 500) {
+                  console.log('[AMOUNT] swapped digit match:', n, '→', swapped);
+                  return String(swapped);
                 }
               }
             }
           }
 
-          // 5. Nuclear: substring "120" check
+          // 8. Partial expected-amount context scan
+          const expectedStr = String(_EXPECTED_AMOUNT);
           for (const t of sources) {
-            if (t && t.includes('120')) {
-              console.log('[AMOUNT] substring 120 found');
-              return '120';
+            for (let i = 0; i <= expectedStr.length; i++) {
+              const prefix = expectedStr.substring(0, i);
+              if (prefix.length >= 2 && t.includes(prefix)) {
+                const idx = t.indexOf(prefix);
+                const before = t.substring(Math.max(0, idx - 3), idx);
+                if (/[₹RsINR]/.test(before)) {
+                  console.log('[AMOUNT] partial prefix with currency context');
+                  return expectedStr;
+                }
+              }
             }
           }
 
@@ -350,7 +409,17 @@ function useOcr(imageUrl) {
           return null;
         }
 
-        function correctDate(rawDate) {
+        const _MONTHS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+        const _MONTH_FIX = { 'mar':'may','jur':'jun','jul':'jun','aug':'apr','jui':'jun','juu':'jun','juI':'jun','apt':'apr','aor':'apr','may':'may','mav':'may','jun':'jun','jan':'jan','ian':'jan','lan':'jan','jnn':'jun','jvn':'jun' };
+
+        function _guessMonth(word) {
+          if (!word) return null;
+          const w = word.toLowerCase().replace(/[^a-z]/g, '');
+          if (_MONTH_FIX[w]) return _MONTH_FIX[w];
+          return _MONTHS.find(m => w.startsWith(m) || m.startsWith(w) || stringSimilarity(w, m) >= 50) || null;
+        }
+
+        function correctDate(rawDate, contextText) {
           if (!rawDate) return null;
           const trimmed = rawDate.trim();
 
@@ -369,6 +438,20 @@ function useOcr(imageUrl) {
               if (swapped >= 1 && swapped <= 12) { mon = swapped; ms = String(swapped).padStart(2, '0'); }
             }
 
+            // Ambiguous: both ≤ 12 — use surrounding month words to disambiguate
+            if (day >= 1 && day <= 12 && mon >= 1 && mon <= 12 && day !== mon && contextText) {
+              const nearDate = contextText.substring(Math.max(0, contextText.indexOf(rawDate) - 40), contextText.indexOf(rawDate) + 40);
+              const monthWords = nearDate.match(/[A-Za-z]{3,}/g) || [];
+              for (const mw of monthWords) {
+                const guessedMonth = _guessMonth(mw);
+                const monthIdx = guessedMonth ? _MONTHS.indexOf(guessedMonth) + 1 : -1;
+                if (monthIdx === mon || monthIdx === day) {
+                  if (monthIdx !== mon) { [day, mon] = [mon, day]; }
+                  break;
+                }
+              }
+            }
+
             if (day >= 1 && day <= 31 && mon >= 1 && mon <= 12) {
               return `${String(day).padStart(2, '0')}/${String(mon).padStart(2, '0')}/${yr}`;
             }
@@ -377,7 +460,6 @@ function useOcr(imageUrl) {
 
           const txtMatch = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
           if (txtMatch) {
-            const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
             let day = parseInt(txtMatch[1]), monWord = txtMatch[2].toLowerCase(), yr = txtMatch[3];
             let ds = txtMatch[1];
 
@@ -386,10 +468,7 @@ function useOcr(imageUrl) {
               if (swapped >= 1 && swapped <= 31) { day = swapped; ds = String(swapped); }
             }
 
-            const ocrMonthFix = { 'mar': 'may', 'jur': 'jun', 'jul': 'jun', 'aug': 'apr' };
-            if (ocrMonthFix[monWord]) monWord = ocrMonthFix[monWord];
-
-            const matchedMonth = months.find(m => monWord.startsWith(m) || stringSimilarity(monWord, m) >= 50);
+            const matchedMonth = _guessMonth(monWord);
             if (day >= 1 && day <= 31 && matchedMonth) {
               return `${String(day).padStart(2, '0')} ${matchedMonth.charAt(0).toUpperCase() + matchedMonth.slice(1)} ${yr}`;
             }
@@ -417,14 +496,14 @@ function useOcr(imageUrl) {
               if (m) {
                 for (const pattern of datePatterns) {
                   const dm = m[0].match(pattern);
-                  if (dm) return correctDate(dm[1]);
+                  if (dm) return correctDate(dm[1], t);
                 }
               }
             }
 
             for (const pattern of datePatterns) {
               const dm = t.match(pattern);
-              if (dm) return correctDate(dm[1]);
+              if (dm) return correctDate(dm[1], t);
             }
           }
 
@@ -569,7 +648,7 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
       setDupLoading(true);
       FirebaseUser.findDuplicateTransactionId(topup.transactionId, topup.userId).then(r => {
         if (!cancelled) setDupCheck(r);
-      }).catch(() => {}).finally(() => { if (!cancelled) setDupLoading(false); });
+      }).catch(e => console.warn('Duplicate transaction check failed:', e)).finally(() => { if (!cancelled) setDupLoading(false); });
     } else {
       setDupLoading(false);
       setDupCheck(null);
@@ -587,7 +666,7 @@ function TopupModal({ topup, onClose, onVerify, onDelete, userData }) {
         setAutoApproving(false);
         setMsg('⏱ Processing Timeout');
       }, VALIDATION_TIMEOUT);
-      withTimeout(FirebaseUser.processTopupAutoApproval(topup.id, topup, { ocrData }), VALIDATION_CALL_TIMEOUT, { autoApproved: false, autoRejected: true, wasAutoRejected: true, failureReasons: ['Validation timed out'] }).then(res => {
+      withTimeout(FirebaseUser.processTopupAutoApproval(topup.id, topup, { ocrData }), VALIDATION_CALL_TIMEOUT, { autoApproved: false, autoRejected: false, wasAutoRejected: false, autoPending: true, failureReasons: ['Validation timed out'] }).then(res => {
         if (cancelled) return;
         setAutoApprovalRes(res);
         if (res.wasAutoApproved) {
@@ -1072,7 +1151,7 @@ export default function FirebaseAdminTopupsPage() {
   }, [navigate]);
 
   useEffect(() => {
-    FirebaseTopup.getSponsorsAwaitingCredit().then(setSponsors).catch(() => {});
+    FirebaseTopup.getSponsorsAwaitingCredit().then(setSponsors).catch(e => console.warn('getSponsors failed:', e));
   }, []);
 
   const handleReview = async (topup) => {
@@ -1080,7 +1159,8 @@ export default function FirebaseAdminTopupsPage() {
     try {
       const user = await FirebaseUser.findById(topup.userId);
       setSelectedUser(user);
-    } catch {
+    } catch (e) {
+      console.warn('Failed to load user for topup:', e);
       setSelectedUser(null);
     }
   };
@@ -1121,6 +1201,8 @@ export default function FirebaseAdminTopupsPage() {
         filtered = filtered.filter(t => t.auto_approved === true);
       } else if (statusFilter === 'auto_rejected') {
         filtered = filtered.filter(t => t.auto_rejected === true);
+      } else if (statusFilter === 'needs_review') {
+        filtered = filtered.filter(t => t.review_status === 'needs_review' || (t.status === 'pending' && !t.auto_approved && !t.auto_rejected));
       } else {
         filtered = filtered.filter(t => t.status === statusFilter);
       }
@@ -1288,6 +1370,7 @@ export default function FirebaseAdminTopupsPage() {
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
                 <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>
+                <option value="needs_review">Pending Review</option>
                 <option value="auto_approved">Auto Approved</option>
                 <option value="auto_rejected">Auto Rejected</option>
               </select>
@@ -1340,13 +1423,19 @@ export default function FirebaseAdminTopupsPage() {
                           {t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : 'Pending'}
                         </span>
                         {t.auto_approved && <span className="verification-badge valid" style={{ marginLeft: '0.25rem' }}>Auto</span>}
-                        {t.auto_rejected && <span className="verification-badge invalid" style={{ marginLeft: '0.25rem' }}>Auto</span>}
+                        {t.auto_rejected && <span className="verification-badge invalid" style={{ marginLeft: '0.25rem' }} title={(t.failure_reasons || []).join('; ') || 'Auto Rejected'}>Auto</span>}
                       </td>
                       <td data-label="Actions">
                         <div className="action-group">
-                          <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => handleReview(t)}>
-                            Review
-                          </button>
+                          {!t.auto_approved && !t.auto_rejected ? (
+                            <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => handleReview(t)}>
+                              Review
+                            </button>
+                          ) : (
+                            <span className={`verification-badge ${t.auto_approved ? 'valid' : 'invalid'}`} style={{ fontSize: '0.75rem' }}>
+                              {t.auto_approved ? 'Approved' : 'Rejected'}
+                            </span>
+                          )}
                           <button className="btn-modern btn-modern-danger btn-modern-xs"
                             onClick={() => {
                               if (window.confirm('Delete topup for ' + t.userName + '?')) {

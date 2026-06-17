@@ -7,7 +7,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Referrals_new collection - app's referral records
@@ -15,7 +15,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Topups collection
@@ -23,7 +23,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Topup referral income
@@ -31,7 +31,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Notifications / Messages
@@ -39,7 +39,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Chat messages
@@ -47,7 +47,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Chat conversations
@@ -55,7 +55,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Payment images
@@ -63,7 +63,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Uniqueness claims
@@ -71,7 +71,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Legacy users collection
@@ -79,7 +79,7 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == resource.data.firebase_uid;
       allow create: if request.auth != null;
-      allow delete: if true;
+      allow delete: if request.auth != null && request.auth.uid != null;
     }
     
     // Legacy referrals collection

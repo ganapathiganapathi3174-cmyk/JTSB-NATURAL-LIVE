@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FirebaseUser, FirebaseTopup, FirebaseNotification } from '../db/firebase-db.js';
+import { computePaymentAnalytics } from '../db/payment-analytics.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
@@ -180,7 +181,33 @@ export default function FirebaseAdminDashboardPage() {
     duplicateUtrAlerts: 0,
     cyclePendingPayments: users.filter(u => u.cycle_payment_status === 'pending').length,
     totalPendingApprovals: users.filter(u => u.payment_status === 'pending').length + users.filter(u => u.cycle_payment_status === 'pending').length,
+    approvedTopups: topups.filter(t => t.status === 'approved').length,
+    rejectedTopups: topups.filter(t => t.status === 'rejected').length,
+    autoApprovedPayments: users.filter(u => u.auto_approved === true).length,
+    autoRejectedPayments: users.filter(u => u.auto_rejected === true).length,
+    autoApprovedTopups: topups.filter(t => t.auto_approved === true).length,
+    autoRejectedTopups: topups.filter(t => t.auto_rejected === true).length,
+    pendingReviewPayments: users.filter(u => !u.auto_approved && !u.auto_rejected && u.payment_status !== 'approved' && (u.utr_number || u.user_entered_amount)).length,
+    pendingReviewTopups: topups.filter(t => t.status === 'pending' && !t.auto_approved && !t.auto_rejected && t.review_status === 'needs_review').length + topups.filter(t => t.status === 'pending' && !t.auto_approved && !t.auto_rejected && !t.review_status).length,
   }), [users, topups]);
+
+  const paymentAnalytics = useMemo(() => computePaymentAnalytics(users, topups), [users, topups]);
+  const [analyticsFilter, setAnalyticsFilter] = useState('Approved Only');
+  const filteredEntries = useMemo(() => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const monthStr = todayStr.substring(0, 7);
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    const weekStartStr = weekStart.toISOString();
+    return paymentAnalytics.allEntries.filter(e => {
+      if (analyticsFilter === 'Today') return e.approvedAt && e.approvedAt.startsWith(todayStr);
+      if (analyticsFilter === 'This Week') return e.approvedAt && e.approvedAt >= weekStartStr;
+      if (analyticsFilter === 'This Month') return e.approvedAt && e.approvedAt.startsWith(monthStr);
+      return true;
+    });
+  }, [paymentAnalytics, analyticsFilter]);
 
   useEffect(() => {
     if (users.length > 0) {
@@ -193,7 +220,7 @@ export default function FirebaseAdminDashboardPage() {
           seen[u.utr] = u;
         });
         setDupAlertCount(dupCount);
-      }).catch(() => {});
+      }).catch(e => console.warn('Duplicate UTR check failed:', e));
     }
   }, [users]);
 
@@ -422,6 +449,185 @@ export default function FirebaseAdminDashboardPage() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div className="card-modern card-section">
+            <div className="card-modern-header">
+              <h2 className="card-modern-title">{'\u2699\uFE0F'} Approval Overview</h2>
+            </div>
+            <div className="priority-grid">
+              <Link to="/fb-admin/payments?status=approved" className="priority-card priority-border-success" style={{ textDecoration: 'none' }}>
+                <div className="card-icon">{'\u2705'}</div>
+                <div className="card-value" style={{ color: 'var(--success)' }}>{stats.approvedPayments}</div>
+                <div className="card-label">Approved Payments</div>
+                <span className="priority-link">View {'\u2192'}</span>
+              </Link>
+              <Link to="/fb-admin/payments?status=rejected" className="priority-card priority-border-danger" style={{ textDecoration: 'none' }}>
+                <div className="card-icon">{'\u2715'}</div>
+                <div className="card-value" style={{ color: 'var(--danger)' }}>{stats.rejectedPayments}</div>
+                <div className="card-label">Rejected Payments</div>
+                <span className="priority-link">View {'\u2192'}</span>
+              </Link>
+              <Link to="/fb-admin/payments?status=manual_review" className="priority-card priority-border-warning" style={{ textDecoration: 'none' }}>
+                <div className="card-icon">{'\u{1F50D}'}</div>
+                <div className="card-value" style={{ color: 'var(--warning)' }}>{stats.pendingReviewPayments}</div>
+                <div className="card-label">Pending Review Payments</div>
+                <span className="priority-link">Review {'\u2192'}</span>
+              </Link>
+              <Link to="/fb-admin/topups?status=approved" className="priority-card priority-border-success" style={{ textDecoration: 'none' }}>
+                <div className="card-icon">{'\u{1F4E4}'}</div>
+                <div className="card-value" style={{ color: 'var(--success)' }}>{stats.approvedTopups}</div>
+                <div className="card-label">Approved Top-Ups</div>
+                <span className="priority-link">View {'\u2192'}</span>
+              </Link>
+              <Link to="/fb-admin/topups?status=rejected" className="priority-card priority-border-danger" style={{ textDecoration: 'none' }}>
+                <div className="card-icon">{'\u{1F6AB}'}</div>
+                <div className="card-value" style={{ color: 'var(--danger)' }}>{stats.rejectedTopups}</div>
+                <div className="card-label">Rejected Top-Ups</div>
+                <span className="priority-link">View {'\u2192'}</span>
+              </Link>
+              <Link to="/fb-admin/topups?status=pending" className="priority-card priority-border-warning" style={{ textDecoration: 'none' }}>
+                <div className="card-icon">{'\u23F3'}</div>
+                <div className="card-value" style={{ color: 'var(--warning)' }}>{stats.pendingTopups}</div>
+                <div className="card-label">Pending Review Top-Ups</div>
+                <span className="priority-link">Review {'\u2192'}</span>
+              </Link>
+            </div>
+          </div>
+
+          <div className="card-modern card-section">
+            <div className="card-modern-header">
+              <h2 className="card-modern-title">{'\u{1F4CA}'} Collection Analytics</h2>
+            </div>
+            <div className="stats-grid-modern">
+              <div className="stat-card-modern success">
+                <div className="stat-bg-icon">{'\u{1F4B0}'}</div>
+                <div className="stat-value">₹{paymentAnalytics.totalCollectionAmount.toFixed(2)}</div>
+                <div className="stat-label">Total Collection Amount</div>
+                <div className="stat-sub">{'\u2705'} Approved entries</div>
+              </div>
+              <div className="stat-card-modern accent">
+                <div className="stat-bg-icon">{'\u{1F4CB}'}</div>
+                <div className="stat-value">{paymentAnalytics.totalApprovedPayments}</div>
+                <div className="stat-label">Total Approved Payments</div>
+                <div className="stat-sub">{'\u{1F4B3}'} Entries</div>
+              </div>
+              <div className="stat-card-modern" style={{ '--accent-soft': 'var(--success-soft, rgba(34, 197, 94, 0.1))' }}>
+                <div className="stat-bg-icon">{'\u{1F4C5}'}</div>
+                <div className="stat-value">₹{paymentAnalytics.todayCollection.toFixed(2)}</div>
+                <div className="stat-label">Today's Collection</div>
+                <div className="stat-sub">{'\u{1F4C8}'} Daily total</div>
+              </div>
+              <div className="stat-card-modern warning">
+                <div className="stat-bg-icon">{'\u{1F4C6}'}</div>
+                <div className="stat-value">₹{paymentAnalytics.monthCollection.toFixed(2)}</div>
+                <div className="stat-label">This Month Collection</div>
+                <div className="stat-sub">{'\u{1F4C8}'} Monthly total</div>
+              </div>
+              <div className="stat-card-modern" style={{ '--accent-soft': 'var(--info-soft, rgba(59, 130, 246, 0.1))' }}>
+                <div className="stat-bg-icon">{'\u{1F522}'}</div>
+                <div className="stat-value">₹{paymentAnalytics.averagePaymentValue.toFixed(2)}</div>
+                <div className="stat-label">Average Payment Value</div>
+                <div className="stat-sub">{'\u{1F4C8}'} Per entry</div>
+              </div>
+            </div>
+
+            <div className="stats-grid-modern" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginTop: '1rem' }}>
+              <div className="stat-card-modern" style={{ '--accent-soft': 'transparent', border: '1px solid var(--border, #e2e8f0)' }}>
+                <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.todayCollection.toFixed(2)}</div>
+                <div className="stat-label" style={{ fontSize: '0.7rem' }}>Daily Collection</div>
+              </div>
+              <div className="stat-card-modern" style={{ '--accent-soft': 'transparent', border: '1px solid var(--border, #e2e8f0)' }}>
+                <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.weekCollection.toFixed(2)}</div>
+                <div className="stat-label" style={{ fontSize: '0.7rem' }}>Weekly Collection</div>
+              </div>
+              <div className="stat-card-modern" style={{ '--accent-soft': 'transparent', border: '1px solid var(--border, #e2e8f0)' }}>
+                <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.monthCollection.toFixed(2)}</div>
+                <div className="stat-label" style={{ fontSize: '0.7rem' }}>Monthly Collection</div>
+              </div>
+              <div className="stat-card-modern" style={{ '--accent-soft': 'transparent', border: '1px solid var(--border, #e2e8f0)' }}>
+                <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.yearCollection.toFixed(2)}</div>
+                <div className="stat-label" style={{ fontSize: '0.7rem' }}>Yearly Collection</div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '1.5rem' }}>
+              <div className="card-modern-header" style={{ padding: '0 0 0.75rem 0', borderBottom: '1px solid var(--border, #e2e8f0)', marginBottom: '0.75rem' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {'\u{1F4CB}'} Payment Collection Records
+                  <span style={{ fontSize: '0.75rem', color: 'var(--muted, #64748b)', fontWeight: 400 }}>
+                    ({filteredEntries.length} entries)
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                  {['Approved Only', 'Today', 'This Week', 'This Month'].map(f => (
+                    <button key={f}
+                      className={`btn-modern btn-modern-xs ${analyticsFilter === f ? 'btn-modern-primary' : 'btn-modern-ghost'}`}
+                      onClick={() => setAnalyticsFilter(f)}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="table-wrap-modern table-section">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>User ID</th>
+                      <th>User Name</th>
+                      <th>Transaction ID</th>
+                      <th>Amount</th>
+                      <th>Payment Date</th>
+                      <th>Approval Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredEntries.length === 0 ? (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted, #64748b)', padding: '2rem' }}>No approved entries found</td></tr>
+                    ) : filteredEntries.slice(0, 100).map((e, i) => (
+                      <tr key={e.transactionId + '-' + e.userId + '-' + i}>
+                        <td data-label="User ID"><code style={{ fontSize: '0.75rem' }}>{e.userId ? e.userId.substring(0, 12) + '...' : '—'}</code></td>
+                        <td data-label="User Name" className="font-semibold">{e.userName || '—'}</td>
+                        <td data-label="Transaction ID" style={{ fontSize: '0.8rem' }}>{e.transactionId}</td>
+                        <td data-label="Amount" className="font-bold">₹{e.amount.toFixed(2)}</td>
+                        <td data-label="Payment Date" style={{ fontSize: '0.8rem' }}>
+                          {e.paymentDate ? new Date(e.paymentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                        </td>
+                        <td data-label="Approval Status"><span className="badge badge-paid badge-xs">Approved</span></td>
+                      </tr>
+                    ))}
+                    {filteredEntries.length > 100 && (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted, #64748b)', padding: '0.5rem', fontSize: '0.8rem' }}>
+                        Showing 100 of {filteredEntries.length} entries
+                      </td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="stats-grid-modern" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginTop: '1rem', gap: '0.5rem' }}>
+              <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--success-soft, rgba(34, 197, 94, 0.08))', borderRadius: '0.5rem' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--muted, #64748b)', marginBottom: '0.15rem' }}>Payments</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--success)' }}>{paymentAnalytics.approvedPaymentsCount}</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--accent-soft, rgba(139, 92, 246, 0.08))', borderRadius: '0.5rem' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--muted, #64748b)', marginBottom: '0.15rem' }}>Topups</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent)' }}>{paymentAnalytics.approvedTopupsCount}</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--info-soft, rgba(59, 130, 246, 0.08))', borderRadius: '0.5rem' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--muted, #64748b)', marginBottom: '0.15rem' }}>Collection Growth</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--info, #3b82f6)' }}>
+                  {paymentAnalytics.totalCollectionAmount > 0
+                    ? ((paymentAnalytics.monthCollection / paymentAnalytics.totalCollectionAmount) * 100).toFixed(1) + '%'
+                    : '0%'}
+                </div>
+              </div>
+              <div style={{ textAlign: 'center', padding: '0.5rem', background: 'rgba(234, 179, 8, 0.08)', borderRadius: '0.5rem' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--muted, #64748b)', marginBottom: '0.15rem' }}>Total Users Paid</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#eab308' }}>{paymentAnalytics.approvedPaymentsCount}</div>
+              </div>
             </div>
           </div>
 

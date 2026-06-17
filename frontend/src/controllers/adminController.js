@@ -1,24 +1,11 @@
 // Admin controller using Firebase
 import jwt from '../utils/jwt.js';
-import { FirebaseUser, FirebaseStorage } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseStorage, FirebaseNewReferral } from '../db/firebase-db.js';
 
-const SupabaseUser = FirebaseUser;
-const SupabaseReferral = { 
-  deleteByUserId: async (userId) => {
-    const { FirebaseNewReferral } = await import('../db/firebase-db.js');
-    return await FirebaseNewReferral.deleteByUserId(userId);
-  },
-  findByUserId: async (userId) => {
-    const { FirebaseNewReferral } = await import('../db/firebase-db.js');
-    return await FirebaseNewReferral.findByUserId(userId);
-  }
-};
-const SupabaseStorage = FirebaseStorage;
+const ADMIN_JWT_SECRET = import.meta.env.VITE_ADMIN_JWT_SECRET || import.meta.env.VITE_JWT_SECRET;
 
-const ADMIN_JWT_SECRET = import.meta.env.VITE_ADMIN_JWT_SECRET || import.meta.env.VITE_JWT_SECRET || 'frontend-dev-secret-change-in-production';
-
-const ADMIN_EMAIL = 'jayaraj@gmail.com';
-const ADMIN_PASSWORD = 'jayaraj7523';
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 
 function signAdminToken(admin) {
   const expiresInMs = 7 * 24 * 60 * 60 * 1000;
@@ -56,7 +43,7 @@ export async function adminLogin(req) {
 export async function listUsers(req) {
   const q = String(req.query?.q || '').trim().toLowerCase();
   
-  let users = await SupabaseUser.findAll();
+  let users = await FirebaseUser.findAll();
   
   if (q) {
     users = users.filter(u => 
@@ -93,19 +80,19 @@ export async function listUsers(req) {
 export async function deleteUser(req) {
   const { id } = req.params;
   
-  const user = await SupabaseUser.findById(id);
+  const user = await FirebaseUser.findById(id);
   if (!user) {
     throw { status: 404, message: 'User not found' };
   }
   
   if (user.referred_by) {
-    const referrer = await SupabaseUser.findByReferralCode(user.referred_by);
+    const referrer = await FirebaseUser.findByReferralCode(user.referred_by);
     if (referrer) {
-      await SupabaseUser.decrementReferralCount(referrer.id);
+      await FirebaseUser.decrementReferralCount(referrer.id);
     }
   }
   
-  await SupabaseUser.findByIdAndDelete(id);
+  await FirebaseUser.findByIdAndDelete(id);
   
   return {
     status: 200,
@@ -116,25 +103,25 @@ export async function deleteUser(req) {
 export async function permanentDeleteUser(req) {
   const { id } = req.params;
   
-  const user = await SupabaseUser.findById(id);
+  const user = await FirebaseUser.findById(id);
   if (!user) {
     throw { status: 404, message: 'User not found' };
   }
   
   if (user.upi_screenshot_url) {
-    await SupabaseStorage.deletePaymentScreenshot(user.upi_screenshot_url);
+    await FirebaseStorage.deletePaymentScreenshot(user.upi_screenshot_url);
   }
   
-  await SupabaseReferral.deleteByUserId(id);
+  await FirebaseNewReferral.deleteByUserId(id);
   
   if (user.referred_by) {
-    const referrer = await SupabaseUser.findByReferralCode(user.referred_by);
+    const referrer = await FirebaseUser.findByReferralCode(user.referred_by);
     if (referrer) {
-      await SupabaseUser.decrementReferralCount(referrer.id);
+      await FirebaseUser.decrementReferralCount(referrer.id);
     }
   }
   
-  await SupabaseUser.permanentDelete(id);
+  await FirebaseUser.permanentDelete(id);
   
   return {
     status: 200,
@@ -143,8 +130,8 @@ export async function permanentDeleteUser(req) {
 }
 
 export async function dashboardStats() {
-  const totalUsers = await SupabaseUser.count();
-  const allUsers = await SupabaseUser.findAll();
+  const totalUsers = await FirebaseUser.count();
+  const allUsers = await FirebaseUser.findAll();
   
   const totalReferrals = allUsers.reduce((sum, u) => sum + (u.referrals_count || 0), 0);
   const usersWithReferrals = allUsers.filter(u => u.referrals_count > 0).length;
@@ -170,7 +157,7 @@ export async function dashboardStats() {
 }
 
 export async function listPayments(req) {
-  const allUsers = await SupabaseUser.findAll();
+  const allUsers = await FirebaseUser.findAll();
   const payments = allUsers
     .filter(u => u.upi_screenshot_url)
     .map(u => ({
@@ -198,12 +185,12 @@ export async function verifyPayment(req) {
     throw { status: 400, message: 'action must be approved, rejected, or pending' };
   }
 
-  const user = await SupabaseUser.findById(id);
+  const user = await FirebaseUser.findById(id);
   if (!user) {
     throw { status: 404, message: 'User not found' };
   }
 
-  await SupabaseUser.updatePaymentStatusById(id, action);
+  await FirebaseUser.updatePaymentStatusById(id, action);
 
   return {
     status: 200,
@@ -212,7 +199,7 @@ export async function verifyPayment(req) {
 }
 
 export async function referralTree(req) {
-  const allUsers = await SupabaseUser.findAll();
+  const allUsers = await FirebaseUser.findAll();
   
   const userByCode = {};
   allUsers.forEach(u => {
@@ -250,12 +237,12 @@ export async function referralTree(req) {
 export async function getUserReferrals(req) {
   const { id } = req.params;
   
-  const user = await SupabaseUser.findById(id);
+  const user = await FirebaseUser.findById(id);
   if (!user) {
     throw { status: 404, message: 'User not found' };
   }
 
-  const referrals = await SupabaseReferral.findByUserId(id);
+  const referrals = await FirebaseNewReferral.findByUserId(id);
 
   return {
     status: 200,
@@ -276,7 +263,7 @@ export async function getUserReferrals(req) {
 export async function filterUsersByReferral(req) {
   const { filter } = req.query;
   
-  let users = await SupabaseUser.findAll();
+  let users = await FirebaseUser.findAll();
 
   switch (filter) {
     case 'has_referrals':
@@ -323,12 +310,12 @@ export async function updateUserUpiQr(req) {
   const { id } = req.params;
   const { upiQrUrl } = req.body;
 
-  const user = await SupabaseUser.findById(id);
+  const user = await FirebaseUser.findById(id);
   if (!user) {
     throw { status: 404, message: 'User not found' };
   }
 
-  await SupabaseUser.updateUpiQrUrl(id, upiQrUrl);
+  await FirebaseUser.updateUpiQrUrl(id, upiQrUrl);
 
   return {
     status: 200,
@@ -344,12 +331,12 @@ export async function verifyUpiQr(req) {
     throw { status: 400, message: 'status must be approved, rejected, or pending' };
   }
 
-  const user = await SupabaseUser.findById(id);
+  const user = await FirebaseUser.findById(id);
   if (!user) {
     throw { status: 404, message: 'User not found' };
   }
 
-  await SupabaseUser.updatePaymentStatusById(id, status);
+  await FirebaseUser.updatePaymentStatusById(id, status);
 
   return {
     status: 200,
@@ -360,7 +347,7 @@ export async function verifyUpiQr(req) {
 export async function getUserReferralContacts(req) {
   const { userId } = req.params;
 
-  const contacts = await SupabaseReferral.findByUserId(userId);
+  const contacts = await FirebaseNewReferral.findByUserId(userId);
 
   return {
     status: 200,

@@ -84,6 +84,31 @@ function getDb() {
   return db;
 }
 
+// Separate Firestore instance for payment data (optional, second Firebase project)
+let paymentsDb = null;
+if (import.meta.env.VITE_PAYMENTS_PROJECT_ID && import.meta.env.VITE_PAYMENTS_API_KEY) {
+  try {
+    const pc = {
+      apiKey: import.meta.env.VITE_PAYMENTS_API_KEY,
+      authDomain: import.meta.env.VITE_PAYMENTS_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_PAYMENTS_PROJECT_ID,
+      storageBucket: import.meta.env.VITE_PAYMENTS_STORAGE_BUCKET,
+      messagingSenderId: import.meta.env.VITE_PAYMENTS_MESSAGING_SENDER_ID,
+      appId: import.meta.env.VITE_PAYMENTS_APP_ID,
+    };
+    const paymentsApp = initializeApp(pc, 'payments');
+    paymentsDb = getFirestore(paymentsApp);
+    console.log('Payments Firestore init OK:', pc.projectId);
+  } catch (e) {
+    console.warn('Payments Firestore init failed, using main db:', e.message);
+  }
+}
+
+function getPaymentsDb() {
+  if (paymentsDb) return paymentsDb;
+  return getDb();
+}
+
 function getStorageRef() {
   if (!storage) {
     throw new Error('Storage not available. Check Firebase Console → Storage → Enable it.');
@@ -98,5 +123,5 @@ function getAuthRef() {
   return auth;
 }
 
-export { app, analytics, db, storage, auth, getDb, getStorageRef, getAuthRef };
+export { app, analytics, db, storage, auth, getDb, getStorageRef, getAuthRef, getPaymentsDb };
 export default app;

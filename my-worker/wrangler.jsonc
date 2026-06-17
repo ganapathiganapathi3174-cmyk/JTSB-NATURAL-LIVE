@@ -1,17 +1,21 @@
 {
-	"name": "<WORKER_NAME>",
+	"name": "jtsb-natural-live-worker",
 	"main": "src/index.js",
-	"compatibility_date": "<COMPATIBILITY_DATE>",
+	"compatibility_date": "2025-01-01",
+	"workers_dev": true,
+
+	"compatibility_flags": ["nodejs_compat"],
 
 	"observability": {
 		"enabled": true,
-		"head_sampling_rate": 1,
+		"head_sampling_rate": 1
 	},
-	"workflows": [
-		{
-			"name": "workflow-<WORKER_NAME>",
-			"binding": "MY_WORKFLOW",
-			"class_name": "MyWorkflow",
-		},
-	],
+
+	"vars": {
+		"APPWRITE_ENDPOINT": "https://cloud.appwrite.io/v1",
+		"APPWRITE_PROJECT_ID": "6a302b460028b21fdfa0",
+		"APPWRITE_DATABASE_ID": "6a302b6e0033adabbbe6"
+	},
+
+	"workflows": []
 }

@@ -3,6 +3,7 @@
   "outputDirectory": "frontend/dist",
   "framework": "vite",
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/appwrite/[...slug].js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

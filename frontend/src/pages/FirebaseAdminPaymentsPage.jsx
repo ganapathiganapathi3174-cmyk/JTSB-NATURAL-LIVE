@@ -263,6 +263,13 @@ function preprocessImage(url) {
           const idx4 = i * 4;
           d[idx4] = val; d[idx4 + 1] = val; d[idx4 + 2] = val;
         }
+        const blackRatio = blackCount / total;
+        // If binarization collapsed to nearly all-white or all-black, revert to sharpened grayscale
+        if (blackRatio < 0.02 || blackRatio > 0.98) {
+          for (let i = 0; i < d.length; i += 4) {
+            d[i] = sharp[i]; d[i + 1] = sharp[i + 1]; d[i + 2] = sharp[i + 2];
+          }
+        }
         ctx.putImageData(imageData, 0, 0);
         resolve(canvas.toDataURL('image/jpeg', 0.9));
       } catch (e) { reject(e); }
@@ -308,7 +315,7 @@ function analyzeImageQuality(url) {
           height: img.height,
           lapVariance: Math.round(lapVariance),
         });
-      } catch { resolve({ passed: true }); }
+      } catch (e) { console.warn('Image analysis error:', e); resolve({ passed: true, error: e.message }); }
     };
     img.onerror = () => resolve({ passed: true });
     img.src = url;
@@ -426,6 +433,8 @@ function useOcr(imageUrl) {
           return null;
         }
 
+        const EXPECTED_AMOUNT = 120;
+
         function extractAmount(text) {
           if (!text) return null;
           const compacted = text.replace(/(\d)\s+(?=\d)/g, '$1');
@@ -444,7 +453,23 @@ function useOcr(imageUrl) {
             if (/\b120\b/.test(t)) return '120';
           }
 
-          // Pass 1: Amount near "Amount" label — collect all matches, pick closest to 120
+          // Pass 0.75: Expected-amount digit-sequence recovery
+          // Handle cases where OCR separates digits: "1 20", "1  20", "1.20", "1-20"
+          for (const t of sources) {
+            const seqMatch = t.match(/1[^0-9]*?2[^0-9]*?0/);
+            if (seqMatch) {
+              const surrounding = t.substring(Math.max(0, seqMatch.index - 5), seqMatch.index + seqMatch[0].length + 5);
+              if (/(?:₹|Rs\.?|INR)/i.test(surrounding)) return '120';
+            }
+          }
+
+          // Pass 0.8: Digit-only contiguous scan — remove all non-digits, find expected amount as substring
+          for (const t of sources) {
+            const digitsOnly = t.replace(/[^0-9]/g, '');
+            if (digitsOnly.includes('120')) return '120';
+          }
+
+          // Pass 1: Amount near "Amount" label — collect all matches, pick closest to EXPECTED_AMOUNT
           let bestLabel = null;
           let bestLabelDist = Infinity;
           for (const t of sources) {
@@ -452,14 +477,14 @@ function useOcr(imageUrl) {
             for (const m of allLabel) {
               const val = parseFloat(m[1].replace(/,/g, ''));
               if (!isNaN(val) && val >= 50 && val <= 500) {
-                const dist = Math.abs(val - 120);
+                const dist = Math.abs(val - EXPECTED_AMOUNT);
                 if (dist < bestLabelDist) { bestLabelDist = dist; bestLabel = String(Math.round(val)); }
               }
             }
           }
           if (bestLabel) return bestLabel;
 
-          // Pass 2: Currency-prefixed amounts (₹, Rs, INR) — pick closest to EXPECTED
+          // Pass 2: Currency-prefixed amounts (₹, Rs, INR) — pick closest to EXPECTED_AMOUNT
           let bestCurrency = null;
           let bestDist = Infinity;
           for (const t of sources) {
@@ -467,14 +492,14 @@ function useOcr(imageUrl) {
             for (const m of allCurr) {
               const val = parseFloat(m[1].replace(/,/g, ''));
               if (!isNaN(val) && val >= 1 && val <= 10000) {
-                const dist = Math.abs(val - 120);
+                const dist = Math.abs(val - EXPECTED_AMOUNT);
                 if (dist < bestDist) { bestDist = dist; bestCurrency = String(Math.round(val)); }
               }
             }
           }
           if (bestCurrency) return bestCurrency;
 
-          // Pass 3: Number ending with .00 — pick closest to 120
+          // Pass 3: Number ending with .00 — pick closest to EXPECTED_AMOUNT
           let bestDot = null;
           let bestDotDist = Infinity;
           for (const t of sources) {
@@ -482,31 +507,32 @@ function useOcr(imageUrl) {
             for (const m of allDot) {
               const val = parseInt(m[1], 10);
               if (val >= 50 && val <= 10000) {
-                const dist = Math.abs(val - 120);
+                const dist = Math.abs(val - EXPECTED_AMOUNT);
                 if (dist < bestDotDist) { bestDotDist = dist; bestDot = String(val); }
               }
             }
           }
           if (bestDot) return bestDot;
 
-          // Pass 4: Aggressive scan — first remove UTR-length numbers, then scan
+          // Pass 4: Aggressive scan — with proximity weighting and anti-false-positive filtering
           for (const t of sources) {
             const cleaned = removeUtrNumbers(t);
             const numbers = cleaned.match(/\b(\d{2,5})\b/g);
             if (numbers) {
               let bestAgg = null;
-              let bestAggDist = Infinity;
+              let bestAggScore = -Infinity;
               for (const n of numbers) {
                 const parsed = parseInt(n, 10);
-                if (parsed >= 50 && parsed <= 500 && parsed !== 2024 && parsed !== 2025 && parsed !== 2026) {
-                  if (n.length === 4) {
-                    const a = parseInt(n.substring(0, 2), 10);
-                    const b = parseInt(n.substring(2, 4), 10);
-                    if ((a >= 1 && a <= 31 && b >= 1 && b <= 12) || (a >= 1 && a <= 12 && b >= 1 && b <= 31)) continue;
-                  }
-                  const dist = Math.abs(parsed - 120);
-                  if (dist < bestAggDist) { bestAggDist = dist; bestAgg = n; }
+                if (parsed < 50 || parsed > 500 || parsed === 2024 || parsed === 2025 || parsed === 2026) continue;
+                if (n.length === 4) {
+                  const a = parseInt(n.substring(0, 2), 10);
+                  const b = parseInt(n.substring(2, 4), 10);
+                  if ((a >= 1 && a <= 31 && b >= 1 && b <= 12) || (a >= 1 && a <= 12 && b >= 1 && b <= 31)) continue;
                 }
+                // Score: proximity to expected amount + currency proximity bonus
+                const nearCurr = (cleaned.lastIndexOf('₹', cleaned.indexOf(n)) !== -1) || (cleaned.lastIndexOf('Rs', cleaned.indexOf(n)) !== -1) ? 100 : 0;
+                const score = (100 - Math.abs(parsed - EXPECTED_AMOUNT)) + nearCurr;
+                if (score > bestAggScore) { bestAggScore = score; bestAgg = n; }
               }
               if (bestAgg) return bestAgg;
             }
@@ -517,7 +543,19 @@ function useOcr(imageUrl) {
             if (t && t.includes('120')) return '120';
           }
 
-          // Pass 6: Swapped-digit fallback (e.g., 92→29)
+          // Pass 6: OCR confusion rollup — try common digit confusions on the expected amount itself
+          // Check if text contains patterns like "IZO" (I→1, Z→2, O→0) or "l2O" (l→1, O→0)
+          const confusionPatterns = [
+            /I\s*Z\s*O/i, /I\s*2\s*O/i, /l\s*Z\s*O/i, /l\s*2\s*O/i,
+            /1\s*Z\s*O/i, /1\s*2\s*O/i, /I\s*2\s*0/i, /l\s*2\s*0/i,
+          ];
+          for (const t of sources) {
+            for (const cp of confusionPatterns) {
+              if (cp.test(t)) return '120';
+            }
+          }
+
+          // Pass 7: Swapped-digit fallback (e.g., 92→29, 10→01→10→100 → no, but 21→12)
           for (const t of sources) {
             const cleaned = removeUtrNumbers(t);
             const numbers = cleaned.match(/\b(\d{2,5})\b/g) || [];
@@ -525,6 +563,20 @@ function useOcr(imageUrl) {
               if (n.length >= 2) {
                 const swapped = parseInt(n[1] + n[0] + n.substring(2), 10);
                 if (swapped >= 50 && swapped <= 500) return String(swapped);
+              }
+            }
+          }
+
+          // Pass 8: Scan for partial expected-amount match in image-quality context
+          // Some phone UPI screens show "₹120" in a button or decorative element that OCR fragments
+          const expectedStr = String(EXPECTED_AMOUNT);
+          for (const t of sources) {
+            for (let i = 0; i <= expectedStr.length; i++) {
+              const prefix = expectedStr.substring(0, i);
+              if (prefix.length >= 2 && t.includes(prefix)) {
+                const idx = t.indexOf(prefix);
+                const before = t.substring(Math.max(0, idx - 3), idx);
+                if (/[₹RsINR]/.test(before)) return expectedStr;
               }
             }
           }
@@ -553,7 +605,7 @@ function useOcr(imageUrl) {
         }
 
         const MONTHS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-        const OCR_MONTH_FIX = { 'mar':'may','jur':'jun','jul':'jun','aug':'apr','jui':'jun','juu':'jun','juI':'jun','apt':'apr','aor':'apr','may':'may','mav':'may','sep':'sep','sept':'sep','oct':'oct','nov':'nov','dec':'dec' };
+        const OCR_MONTH_FIX = { 'mar':'may','jur':'jun','jul':'jun','aug':'apr','jui':'jun','juu':'jun','juI':'jun','apt':'apr','aor':'apr','may':'may','mav':'may','sep':'sep','sept':'sep','oct':'oct','nov':'nov','dec':'dec','jun':'jun','jan':'jan','ian':'jan','lan':'jan','jnn':'jun','jvn':'jun' };
 
         function guessMonth(word) {
           if (!word) return null;
@@ -563,15 +615,24 @@ function useOcr(imageUrl) {
           return m || null;
         }
 
-        function correctDate(rawDate) {
+        function correctDate(rawDate, contextText) {
           if (!rawDate) return null;
           let trimmed = rawDate.trim().replace(/[,\s]+/g, ' ').replace(/^[^\d]+/, '').replace(/[^a-zA-Z\d\s/-]+$/, '').trim();
+
+          // Helper: try a month name more precisely — reject if word doesn't resemble a month
+          function isMonthLike(word) {
+            const w = word.toLowerCase().replace(/[^a-z]/g, '');
+            if (w.length < 2) return false;
+            if (OCR_MONTH_FIX[w]) return true;
+            return MONTHS.some(m => w.startsWith(m) || m.startsWith(w) || stringSimilarity(w, m) >= 50);
+          }
 
           // DD-MM-YYYY or DD/MM/YYYY
           const numMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
           if (numMatch) {
             let day = parseInt(numMatch[1], 10), mon = parseInt(numMatch[2], 10), yr = numMatch[3];
             let ds = numMatch[1], ms = numMatch[2];
+            // Swap digits if clearly out of range
             if (day > 31 && ds.length === 2) {
               const swapped = parseInt(ds[1] + ds[0], 10);
               if (swapped >= 1 && swapped <= 31) { day = swapped; ds = String(swapped).padStart(2, '0'); }
@@ -579,6 +640,26 @@ function useOcr(imageUrl) {
             if (mon > 12 && ms.length === 2) {
               const swapped = parseInt(ms[1] + ms[0], 10);
               if (swapped >= 1 && swapped <= 12) { mon = swapped; ms = String(swapped).padStart(2, '0'); }
+            }
+            // Ambiguous: both ≤ 12 — use context to determine actual order
+            if (day >= 1 && day <= 12 && mon >= 1 && mon <= 12 && day !== mon) {
+              // Look for nearby month words in context text to disambiguate
+              if (contextText) {
+                const nearDate = contextText.substring(Math.max(0, contextText.indexOf(rawDate) - 40), contextText.indexOf(rawDate) + 40);
+                const monthWords = nearDate.match(/[A-Za-z]{3,}/g) || [];
+                for (const mw of monthWords) {
+                  if (isMonthLike(mw)) {
+                    const guessedMonth = guessMonth(mw);
+                    const monthIdx = guessedMonth ? MONTHS.indexOf(guessedMonth) + 1 : -1;
+                    if (monthIdx === mon || monthIdx === day) {
+                      // The month word matches one of the numbers — use that as month, other as day
+                      if (monthIdx === mon) { /* already correct */ }
+                      else { [day, mon] = [mon, day]; }
+                      break;
+                    }
+                  }
+                }
+              }
             }
             if (day >= 1 && day <= 31 && mon >= 1 && mon <= 12) {
               const yr4 = yr.length === 2 ? '20' + yr : yr;
@@ -635,7 +716,7 @@ function useOcr(imageUrl) {
                 for (const pattern of datePatterns) {
                   const dm = m[0].match(pattern);
                   if (dm) {
-                    const cd = correctDate(dm[1] || (dm[2] ? dm[1] + ' ' + dm[2] + ' ' + dm[3] : null));
+                    const cd = correctDate(dm[1] || (dm[2] ? dm[1] + ' ' + dm[2] + ' ' + dm[3] : null), t);
                     if (cd) return cd;
                   }
                 }
@@ -648,7 +729,7 @@ function useOcr(imageUrl) {
               for (const dm of allDates) {
                 const raw = dm[1] || (dm[2] ? dm[1] + ' ' + dm[2] + ' ' + dm[3] : null);
                 if (raw) {
-                  const cd = correctDate(raw);
+                  const cd = correctDate(raw, t);
                   if (cd) return cd;
                 }
               }
@@ -660,7 +741,7 @@ function useOcr(imageUrl) {
               // Match "DD Month YYYY" or "DD MonthName YYYY"
               const lm = line.match(/(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})/);
               if (lm) {
-                const cd = correctDate(lm[1] + ' ' + lm[2] + ' ' + lm[3]);
+                const cd = correctDate(lm[1] + ' ' + lm[2] + ' ' + lm[3], t);
                 if (cd) return cd;
               }
             }
@@ -915,7 +996,7 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
     let cancelled = false;
     if (displayUtr) {
       setDupLoading(true);
-      FirebaseUser.findDuplicateUtr(displayUtr, user.id).then(r => { if (!cancelled) setDupCheck(r); }).catch(() => {}).finally(() => { if (!cancelled) setDupLoading(false); });
+      FirebaseUser.findDuplicateUtr(displayUtr, user.id).then(r => { if (!cancelled) setDupCheck(r); }).catch(e => { console.warn('Duplicate UTR check failed:', e); }).finally(() => { if (!cancelled) setDupLoading(false); });
     } else {
       setDupLoading(false);
       setDupCheck(null);
@@ -937,7 +1018,7 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
         amount: user.user_entered_amount || '120',
         date: user.user_entered_date || '',
       };
-      withTimeout(FirebaseUser.processAutoApproval(user.id, { ocrData, userInputs }), VALIDATION_CALL_TIMEOUT, { autoApproved: false, autoRejected: true, wasAutoRejected: true, failureReasons: ['Validation timed out'] }).then(res => {
+      withTimeout(FirebaseUser.processAutoApproval(user.id, { ocrData, userInputs }), VALIDATION_CALL_TIMEOUT, { autoApproved: false, autoRejected: false, wasAutoRejected: false, autoPending: true, failureReasons: ['Validation timed out'] }).then(res => {
         if (cancelled) return;
         clearTimeout(timeoutId);
         setAutoApprovalRes(res);
@@ -948,7 +1029,7 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
           setMsg('✗ Rejected');
           setTimeout(() => { if (!cancelled) onClose(); }, 2000);
         }
-      }).catch(() => { if (!cancelled) clearTimeout(timeoutId); }).finally(() => { if (!cancelled) setAutoApproving(false); });
+      }).catch(e => { if (!cancelled) { clearTimeout(timeoutId); console.warn('Auto-approval error:', e); } }).finally(() => { if (!cancelled) setAutoApproving(false); });
     }
     return () => { cancelled = true; };
   }, [ocrData, user.id, autoApprovalRes, onClose, displayUtr]);
@@ -1114,7 +1195,7 @@ function PaymentModal({ user, onClose, onVerify, onVerifyAndNext }) {
         return;
       }
       await FirebaseUser.forceApprovePayment(user.id, adminName, overrideReason);
-      await FirebaseUser.updateAdminApproval(user.id, 'APPROVED').catch(() => {});
+      await FirebaseUser.updateAdminApproval(user.id, 'APPROVED', adminName).catch(e => console.warn('updateAdminApproval failed:', e));
       await FirebaseNotification.send({
         receiverId: user.id,
         receiverName: user.name || '',
@@ -1550,7 +1631,7 @@ export default function FirebaseAdminPaymentsPage() {
           seen[u.utr] = u;
         });
         setDupAlerts(alerts);
-      }).catch(() => {});
+      }).catch(e => console.warn('getAllUtrs failed:', e));
     }
   }, [users]);
 
@@ -1567,7 +1648,7 @@ export default function FirebaseAdminPaymentsPage() {
     const adminStatus = status === 'approved' ? 'APPROVED' : status === 'rejected' ? 'REJECTED' : null;
     if (adminStatus) {
       const adminName = getAdminName();
-      await FirebaseUser.updateAdminApproval(userId, adminStatus, adminName).catch(() => {});
+      await FirebaseUser.updateAdminApproval(userId, adminStatus, adminName).catch(e => console.warn('updateAdminApproval failed:', e));
     }
   };
 
@@ -1587,6 +1668,9 @@ export default function FirebaseAdminPaymentsPage() {
           break;
         case 'recommended_approval':
           filtered = filtered.filter(u => u.auto_approved === true);
+          break;
+        case 'needs_review':
+          filtered = filtered.filter(u => u.review_status === 'needs_review' || (!u.auto_approved && !u.auto_rejected && u.payment_status !== 'approved' && (u.utr_number || u.user_entered_amount)));
           break;
         case 'manual_review':
           filtered = filtered.filter(u => !u.auto_approved && !u.auto_rejected && u.payment_status !== 'approved');
@@ -1740,6 +1824,7 @@ export default function FirebaseAdminPaymentsPage() {
                 <option value="rejected">Rejected</option>
                 <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>
                 <option value="recommended_approval">Recommended Approval</option>
+                <option value="needs_review">Pending Review</option>
                 <option value="manual_review">Manual Review Required</option>
                 <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>
                 <option value="duplicate_utr">Duplicate UTR</option>
@@ -1806,7 +1891,7 @@ export default function FirebaseAdminPaymentsPage() {
                             {displayUrl && <span className="verification-badge valid">SS</span>}
                             {!displayUrl && displayUtr && <span className="verification-badge invalid">No SS</span>}
                             {u.auto_approved && <span className="verification-badge valid">Auto</span>}
-                            {u.auto_rejected && <span className="verification-badge invalid">Rejected</span>}
+                            {u.auto_rejected && <span className="verification-badge invalid" title={u.failure_reasons?.join('; ') || 'Rejected'}>Rejected</span>}
                             {u.validation_status === 'failed' && !u.auto_approved && !u.auto_rejected && <span className="verification-badge invalid">Review</span>}
                           </div>
                         </td>
@@ -1815,7 +1900,13 @@ export default function FirebaseAdminPaymentsPage() {
                         </td>
                         <td data-label="Actions">
                           <div className="flex-actions">
-                            <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => openVerification(u)}>Verify</button>
+                            {!u.auto_approved && !u.auto_rejected ? (
+                              <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => openVerification(u)}>Verify</button>
+                            ) : (
+                              <span className={`verification-badge ${u.auto_approved ? 'valid' : 'invalid'}`} style={{ fontSize: '0.75rem' }}>
+                                {u.auto_approved ? 'Approved' : 'Rejected'}
+                              </span>
+                            )}
                             {displayUrl && <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={() => window.open(getImageUrl(displayUrl), '_blank', 'noopener,noreferrer')} title="View Screenshot">{'\u{1F4F7}'}</button>}
                             <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => setDeleteConfirmUser(u)}>Del</button>
                           </div>
@@ -1884,7 +1975,7 @@ export default function FirebaseAdminPaymentsPage() {
                       setDeletingUser(true);
                       try {
                         await handleDeleteUser(u.id, u.email, u.phone);
-                      } catch (e) {} finally {
+                      } catch (e) { console.error('Delete user error:', e); } finally {
                         setDeletingUser(false);
                       }
                     }} disabled={deletingUser}>

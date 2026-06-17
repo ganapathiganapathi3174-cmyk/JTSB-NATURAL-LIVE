@@ -1,112 +1,18 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import QRCode from 'qrcode';
-import { FirebaseUser, hashData } from '../db/firebase-db.js';
+import { FirebaseUser } from '../db/firebase-db.js';
 import { checkRateLimit } from '../utils/rateLimiter.js';
 
 const AMOUNT = Number(import.meta.env.VITE_PAYMENT_AMOUNT) || 120;
-const UPI_VPA = import.meta.env.VITE_UPI_VPA || 'jayarajj126-3@okicici';
-const UPI_PAYEE_NAME = import.meta.env.VITE_UPI_PAYEE_NAME || 'Community';
 
-function buildUpiUri() {
-  const pa = encodeURIComponent(UPI_VPA);
-  const pn = encodeURIComponent(UPI_PAYEE_NAME);
-  const am = AMOUNT.toFixed(2);
-  return `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR`;
-}
-
-function toBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = error => reject(error);
-  });
-}
-
-function enhanceImage(file) {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    img.onload = () => {
-      try {
-        const scale = 1.5;
-        const w = img.width * scale;
-        const h = img.height * scale;
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, w, h);
-        const imageData = ctx.getImageData(0, 0, w, h);
-        const d = imageData.data;
-        for (let i = 0; i < d.length; i += 4) {
-          const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-          const contrast = 1.6;
-          let val = contrast * (gray - 128) + 128;
-          val = Math.max(0, Math.min(255, val));
-          d[i] = val; d[i + 1] = val; d[i + 2] = val;
-        }
-        const sharp = new Uint8ClampedArray(d.length);
-        for (let y = 1; y < h - 1; y++) {
-          for (let x = 1; x < w - 1; x++) {
-            const idx = (y * w + x) * 4;
-            const v = -d[((y-1)*w+(x-1))*4] - d[((y-1)*w+x)*4] - d[((y-1)*w+(x+1))*4] - d[(y*w+(x-1))*4] + 9*d[idx] - d[(y*w+(x+1))*4] - d[((y+1)*w+(x-1))*4] - d[((y+1)*w+x)*4] - d[((y+1)*w+(x+1))*4];
-            sharp[idx] = Math.max(0, Math.min(255, v)); sharp[idx+1] = sharp[idx]; sharp[idx+2] = sharp[idx]; sharp[idx+3] = d[idx+3];
-          }
-        }
-        for (let y = 1; y < h - 1; y++) { for (let x = 1; x < w - 1; x++) { const idx = (y * w + x) * 4; d[idx] = sharp[idx]; d[idx+1] = sharp[idx+1]; d[idx+2] = sharp[idx+2]; } }
-        ctx.putImageData(imageData, 0, 0);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      } catch (e) { reject(e); }
-    };
-    const blobUrl = URL.createObjectURL(file);
-    const origOnload = img.onload;
-    img.onload = () => {
-      URL.revokeObjectURL(blobUrl);
-      origOnload();
-    };
-    img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Failed to load image')); };
-    img.src = blobUrl;
-  });
-}
-
-function checkImageQuality(file) {
+function loadRazorpayScript() {
   return new Promise((resolve) => {
-    const img = new window.Image();
-    const blobUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(blobUrl);
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, img.width, img.height);
-        const d = imageData.data;
-        let lapSum = 0, lapCount = 0;
-        for (let y = 2; y < img.height - 2; y++) {
-          for (let x = 2; x < img.width - 2; x++) {
-            const idx = (y * img.width + x) * 4;
-            const lap = -d[((y-2)*img.width+x)*4] - d[((y-1)*img.width+x)*4] + 4*d[idx] - d[((y+1)*img.width+x)*4] - d[((y+2)*img.width+x)*4];
-            lapSum += lap * lap;
-            lapCount++;
-          }
-        }
-        const lapVariance = lapCount > 0 ? lapSum / lapCount : 0;
-        const minDim = Math.min(img.width, img.height);
-        const ratio = img.width / img.height;
-        const issues = [];
-        if (lapVariance < 50) issues.push('blurry');
-        if (minDim < 300) issues.push('too small');
-        if (ratio > 1.5 || ratio < 0.3) issues.push('cropped');
-        resolve(issues);
-      } catch { resolve([]); }
-    };
-    img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve([]); };
-    img.src = blobUrl;
+    if (window.Razorpay) { resolve(true); return; }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
   });
 }
 
@@ -116,27 +22,23 @@ export default function PaymentPage() {
   const referredBy = searchParams.get('ref') || '';
   const [manualReferralCode, setManualReferralCode] = useState('');
 
-  const [qrDataUrl, setQrDataUrl] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
-  const [utr, setUtr] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
-  const [confirmedAmount, setConfirmedAmount] = useState(false);
-  const [screenshot, setScreenshot] = useState(null);
-  const [screenshotPreview, setScreenshotPreview] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [utrExists, setUtrExists] = useState(false);
-  const [checkingUtr, setCheckingUtr] = useState(false);
+  const [paymentStep, setPaymentStep] = useState('form');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [paymentSessionId, setPaymentSessionId] = useState('');
   const [emailExists, setEmailExists] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [phoneExists, setPhoneExists] = useState(false);
   const [checkingPhone, setCheckingPhone] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
 
   useEffect(() => {
     if (rateLimitCountdown <= 0) return;
@@ -145,74 +47,12 @@ export default function PaymentPage() {
     }, 1000);
     return () => clearInterval(id);
   }, [rateLimitCountdown]);
-  const utrTimer = useRef(null);
   const emailTimer = useRef(null);
   const phoneTimer = useRef(null);
 
-  const MAX_FILE_SIZE = 500000; // 500KB limit for base64
-  const UPI_REF_REGEX = /^[0-9]{10,20}$/;
-
   useEffect(() => {
-    const uri = buildUpiUri();
-    QRCode.toDataURL(uri, { width: 280, margin: 2 }).then(setQrDataUrl);
+    loadRazorpayScript().then(setRazorpayLoaded);
   }, []);
-
-  function handleScreenshotChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) {
-      setScreenshot(null);
-      setScreenshotPreview(null);
-      return;
-    }
-    if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      setError('Only JPG and PNG files are allowed');
-      setScreenshot(null);
-      setScreenshotPreview(null);
-      e.target.value = '';
-      return;
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      setError('File size must be less than 500KB for faster upload');
-      setScreenshot(null);
-      setScreenshotPreview(null);
-      e.target.value = '';
-      return;
-    }
-    setError('');
-    setScreenshot(file);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const previewUrl = e.target?.result;
-      // Show enhanced preview
-      try {
-        const enhanced = await enhanceImage(file);
-        setScreenshotPreview(enhanced);
-      } catch {
-        setScreenshotPreview(previewUrl);
-      }
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function checkUtrDuplicate(val) {
-    if (utrTimer.current) clearTimeout(utrTimer.current);
-    if (!val || !UPI_REF_REGEX.test(val.trim())) {
-      setUtrExists(false);
-      setCheckingUtr(false);
-      return;
-    }
-    setCheckingUtr(true);
-    utrTimer.current = setTimeout(async () => {
-      try {
-        const exists = await FirebaseUser.checkUtrExists(val.trim());
-        setUtrExists(exists);
-      } catch {
-        setUtrExists(false);
-      } finally {
-        setCheckingUtr(false);
-      }
-    }, 500);
-  }
 
   function checkEmailDuplicate(emailVal) {
     if (emailTimer.current) clearTimeout(emailTimer.current);
@@ -265,38 +105,58 @@ export default function PaymentPage() {
       setError('Please enter a valid email address');
       return false;
     }
+    if (emailExists) {
+      setError('This email is already registered. Please use another email or login.');
+      return false;
+    }
     if (!phoneNumber || !/^[6-9]\d{9}$/.test(phoneNumber)) {
       setError('Please enter a valid 10-digit Indian mobile number');
-      return false;
-    }
-    if (!utr.trim() || !UPI_REF_REGEX.test(utr.trim())) {
-      setError('Enter a valid UPI Reference Number (10-20 digits)');
-      return false;
-    }
-    if (utrExists) {
-      setError('This UTR number already exists.');
       return false;
     }
     if (phoneExists) {
       setError('This mobile number is already registered.');
       return false;
     }
-    if (!confirmedAmount) {
-      setError('Please confirm you have paid ₹120');
-      return false;
-    }
-    if (!screenshot) {
-      setError('Please upload payment screenshot before submitting');
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
       return false;
     }
     return true;
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    console.log('handleSubmit called');
-    setError('');
-    setSuccess('');
+  async function validateReferralCodeBeforePayment(code) {
+    if (!code || !code.trim()) return true;
+    try {
+      const { checkReferralLinkExpiry } = await import('../db/firebase-db.js');
+      const result = await checkReferralLinkExpiry(code.trim().toUpperCase());
+      if (!result.valid) {
+        if (result.reason === 'expired') setError('Referral link has expired. Please use a valid referral code.');
+        else if (result.reason === 'limit_reached') setError('Invalid Referral Code');
+        else setError('Invalid referral code');
+        return false;
+      }
+      if (!result.referrer || result.referrer.payment_status !== 'approved' || result.referrer.account_status !== 'active') {
+        setError('Referral code is no longer valid');
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function handlePayWithRazorpay() {
+    if (!razorpayLoaded) {
+      setError('Razorpay is loading. Please wait...');
+      return;
+    }
+    if (!validateForm()) return;
+
+    const refCode = (manualReferralCode || referredBy || '').trim();
+    if (refCode) {
+      const validRef = await validateReferralCodeBeforePayment(refCode);
+      if (!validRef) return;
+    }
 
     const rl = checkRateLimit('payment_submit');
     if (!rl.allowed) {
@@ -305,119 +165,107 @@ export default function PaymentPage() {
       return;
     }
 
-    if (!validateForm()) {
-      console.log('validateForm failed');
-      return;
-    }
-
-    // Image quality check before upload
-    if (screenshot) {
-      const issues = await checkImageQuality(screenshot);
-      if (issues.length > 0) {
-        setError(`Screenshot is ${issues.join(', ')}. Please upload a clearer screenshot.`);
-        return;
-      }
-    }
-
+    setError('');
     setLoading(true);
-    console.log('Loading started');
-
     try {
-      const trimmedUtr = utr.trim();
-
-      // Screenshot hash dedup
-      let screenshotHash = '';
-      if (screenshot) {
-        try {
-          screenshotHash = await hashData(await toBase64(screenshot));
-          const dupScreenshot = await FirebaseUser.findDuplicateScreenshot(screenshotHash);
-          if (dupScreenshot) {
-            setError('This screenshot has already been used for a payment.');
-            setLoading(false);
-            return;
-          }
-        } catch {}
-      }
-
-      const dupCheck = await FirebaseUser.checkUtrExists(trimmedUtr);
-      if (dupCheck) {
-        setError('This UTR number already exists.');
-        setLoading(false);
-        return;
-      }
-
-      const normalizedEmail = email.trim().toLowerCase();
-      console.log('Email:', normalizedEmail);
-
-      console.log('Finding user by email...');
-      let user = await FirebaseUser.findByEmail(normalizedEmail);
-      console.log('User found:', user);
-
-      let screenshotData = null;
-      if (screenshot) {
-        try {
-          let base64 = await enhanceImage(screenshot);
-          if (base64.length > 350000) {
-            const img2 = new window.Image();
-            await new Promise((resolve, reject) => { img2.onload = resolve; img2.onerror = reject; img2.src = base64; });
-            const c2 = document.createElement('canvas');
-            c2.width = img2.width; c2.height = img2.height;
-            c2.getContext('2d').drawImage(img2, 0, 0);
-            base64 = c2.toDataURL('image/jpeg', 0.5);
-          }
-          screenshotData = base64;
-          console.log('Screenshot enhanced, size:', Math.round(base64.length / 1024), 'KB');
-        } catch (err) {
-          console.error('Failed to enhance screenshot:', err);
-          try {
-            screenshotData = await toBase64(screenshot);
-          } catch {}
-        }
-      }
-
-      if (user) {
-        console.log('Updating existing user...');
-        await FirebaseUser.updatePayment(user.id, screenshotData, utr.trim(), String(AMOUNT), paymentDate, screenshotHash);
-        // If no password, save it
-        if (!user.password && password) {
-          await FirebaseUser.updatePassword(user.id, password);
-        }
-        // If referral code provided, save it
-        const refCode = manualReferralCode || referredBy;
-        if (refCode && !user.referred_by) {
-          await FirebaseUser.updateReferralCode(user.id, refCode);
-        }
-      } else {
-        // Save referred_by for new user registration
-        console.log('Creating new user with password...');
-        user = await FirebaseUser.createWithPassword({
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out. Check your network or disable QUIC in chrome://flags')), 15000)
+      );
+      const session = await Promise.race([
+        FirebaseUser.createPaymentSession({
           name: fullName.trim(),
-          email: normalizedEmail,
+          email: email.trim().toLowerCase(),
           phone: phoneNumber.trim(),
-          password: password,
-          referredBy: manualReferralCode || referredBy || null,
-        });
-        console.log('New user created:', user.id);
-        await FirebaseUser.updatePayment(user.id, screenshotData, utr.trim(), String(AMOUNT), paymentDate);
-      }
+          amount: AMOUNT,
+        }),
+        timeoutPromise,
+      ]);
+      setPaymentSessionId(session.sessionId);
 
-      console.log('Done!');
-      setSuccess('Payment submitted successfully!');
-      setTimeout(() => {
-        navigate(`/fb/login?email=${encodeURIComponent(normalizedEmail)}`);
-      }, 2000);
+      const rzpOptions = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_xxxxxxxxxxxx',
+        amount: AMOUNT * 100,
+        currency: 'INR',
+        name: 'Starlight Ascent',
+        description: 'Registration Payment',
+        prefill: {
+          name: fullName.trim(),
+          email: email.trim().toLowerCase(),
+          contact: phoneNumber.trim(),
+        },
+        handler: async function (response) {
+          try {
+            const codePromise = FirebaseUser.generateVerificationCode(
+              session.sessionId,
+              response.razorpay_order_id,
+              response.razorpay_payment_id,
+            );
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Code generation timed out')), 10000)
+            );
+            const codeResult = await Promise.race([codePromise, timeoutPromise]);
+            setGeneratedCode(codeResult?.code || '');
+          } catch (codeErr) {
+            console.warn('Direct code generation failed, webhook may handle it:', codeErr);
+          }
+          setPaymentStep('verify');
+          setLoading(false);
+        },
+        modal: {
+          ondismiss: function () {
+            setLoading(false);
+            setError('Payment cancelled. Please try again when ready.');
+          },
+        },
+      };
+      if (session.razorpayOrderId) {
+        rzpOptions.order_id = session.razorpayOrderId;
+      }
+      const rzp = new window.Razorpay(rzpOptions);
+      rzp.on('payment.failed', function (response) {
+        setError('Payment failed: ' + (response.error?.description || 'Unknown error'));
+        setLoading(false);
+        setPaymentStep('form');
+      });
+      rzp.open();
+      setPaymentStep('pay');
     } catch (err) {
-      console.error('Submission error:', err);
-      setError(err.message || 'Submission failed. Please try again.');
-    } finally {
+      setError(err.message || 'Failed to initiate payment');
       setLoading(false);
+      setPaymentStep('form');
     }
   }
 
-  function copyUpiId() {
-    navigator.clipboard.writeText(UPI_VPA);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function handleVerifyAndRegister() {
+    const code = verificationCode.trim();
+    if (!code || !/^JTSB-[A-Z0-9]{6}$/i.test(code)) {
+      setError('Enter a valid verification code (format: JTSB-XXXXXX)');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const result = await FirebaseUser.verifyPaymentCode(paymentSessionId, code.toUpperCase(), {
+        name: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phoneNumber.trim(),
+        password: password,
+        referredBy: manualReferralCode || referredBy || null,
+      });
+      if (result.success) {
+        setSuccess('Payment verified! Creating your account...');
+        setPaymentStep('done');
+        setTimeout(() => {
+          navigate(`/fb/login?email=${encodeURIComponent(email.trim().toLowerCase())}`);
+        }, 2000);
+      } else {
+        setError(result.error || 'Verification failed. Please try again.');
+      }
+    } catch (err) {
+      setError(err.message || 'Verification failed');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -445,223 +293,193 @@ export default function PaymentPage() {
           </div>
         )}
 
-        <div className="payment-steps">
-          <h3>How to Pay:</h3>
-          <div className="step-item">
-            <div className="step-number">1</div>
-            <div className="step-text">
-              <strong>Scan the QR code</strong> below with any UPI app (PhonePe, GPay, Paytm, etc.)
-            </div>
-          </div>
-          <div className="step-item">
-            <div className="step-number">2</div>
-            <div className="step-text">
-              <strong>Pay ₹{AMOUNT}</strong> and save the transaction screenshot
-            </div>
-          </div>
-          <div className="step-item">
-            <div className="step-number">3</div>
-            <div className="step-text">
-              <strong>Copy the UPI Reference Number</strong> from your payment confirmation screen
-            </div>
-          </div>
-          <div className="step-item">
-            <div className="step-number">4</div>
-            <div className="step-text">
-              <strong>Fill the form</strong> below with your details and submit
-            </div>
-          </div>
-        </div>
-
-        {qrDataUrl && (
-          <div className="payment-layout">
-            <div className="payment-sidebar">
-              <div className="qr-container">
-                <div className="qr-box">
-                  <img src={qrDataUrl} alt="UPI QR Code" />
+        {paymentStep === 'form' && (
+          <>
+            <div className="payment-steps">
+              <h3>How it works:</h3>
+              <div className="step-item">
+                <div className="step-number">1</div>
+                <div className="step-text">
+                  <strong>Fill in</strong> your registration details below
                 </div>
-                <div className="qr-label">Scan with any UPI app</div>
               </div>
-
-              <div className="amount-display">
-                <div className="amount">₹{AMOUNT}</div>
-                <div className="label">Payment Amount</div>
+              <div className="step-item">
+                <div className="step-number">2</div>
+                <div className="step-text">
+                  <strong>Pay ₹{AMOUNT}</strong> using UPI, card, or net banking via Razorpay
+                </div>
               </div>
-
-              <div className="upi-id-box">
-                <div className="label">UPI ID / VPA</div>
-                <div className="value">
-                  <code>{UPI_VPA}</code>
-                  <button type="button" className={`copy-btn ${copied ? 'copied' : ''}`} onClick={copyUpiId}>
-                    {copied ? '✓ Copied!' : 'Copy'}
-                  </button>
+              <div className="step-item">
+                <div className="step-number">3</div>
+                <div className="step-text">
+                  <strong>Enter the verification code</strong> from your payment confirmation to complete registration
                 </div>
               </div>
             </div>
 
-            <div className="payment-main">
-              <div className="divider">
-                <span>Submit Payment Details</span>
-              </div>
+            {error && <div className="alert alert-error">{error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}</div>}
+            {success && <div className="alert alert-success">{success}</div>}
 
-              {error && <div className="alert alert-error">{error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}</div>}
-              {success && <div className="alert alert-success">{success}</div>}
-
-              <form onSubmit={handleSubmit}>
-          <div className="field">
-            <label>Full Name *</label>
-            <input
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Enter your full name"
-            />
-          </div>
-
-          <div className="field">
-            <label>Email Address *</label>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={(e) => checkEmailDuplicate(e.target.value)}
-              placeholder="your.email@example.com"
-              autoComplete="email"
-              className={emailExists ? 'input-error' : ''}
-            />
-            {checkingEmail && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking email...</div>}
-            {emailExists && <div className="field-error">This email is already registered. Please use another email or login.</div>}
-          </div>
-
-          <div className="field">
-            <label>Phone Number *</label>
-            <input
-              required
-              inputMode="numeric"
-              value={phoneNumber}
-              onChange={(e) => {
-                setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10));
-                setPhoneExists(false);
-              }}
-              onBlur={(e) => checkPhoneDuplicate(e.target.value)}
-              placeholder="10-digit mobile number"
-              autoComplete="tel"
-              className={phoneExists ? 'input-error' : ''}
-            />
-            {checkingPhone && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking mobile number...</div>}
-            {phoneExists && <div className="field-error">This mobile number is already registered.</div>}
-            <div className="hint">Example: 9876543210</div>
-          </div>
-
-          <div className="field">
-            <label>Password *</label>
-            <input
-              required
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Create a password"
-              minLength={6}
-            />
-            <div className="hint">Use this password to login</div>
-          </div>
-
-          <div className="field">
-            <label>Referral Code (optional)</label>
-            <input
-              value={manualReferralCode || referredBy}
-              onChange={(e) => {
-                setManualReferralCode(e.target.value.toUpperCase().trim());
-              }}
-              placeholder="Enter referral code if you have one"
-            />
-            <div className="hint">
-              Have a referral code? Enter it here to get bonus referrals
-            </div>
-          </div>
-
-          <div className="field">
-            <label>UPI Reference Number *</label>
-            <input
-              required
-              value={utr}
-              onChange={(e) => {
-                const val = e.target.value.replace(/\D/g, '');
-                setUtr(val.slice(0, 20));
-                checkUtrDuplicate(val.slice(0, 20));
-              }}
-              inputMode="numeric"
-              placeholder="e.g. 1234567890123"
-              className={utrExists ? 'input-error' : (utr && UPI_REF_REGEX.test(utr) && !utrExists ? 'input-valid' : '')}
-            />
-            {checkingUtr && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking UTR...</div>}
-            {utrExists && <div className="field-error">This UTR number already exists.</div>}
-            {utr && UPI_REF_REGEX.test(utr) && !utrExists && !checkingUtr && <div className="hint" style={{ color: 'var(--success)', marginTop: '0.25rem' }}>UTR number is available</div>}
-            <div className="hint">
-              This is the UPI Reference Number (10-20 digits) shown in your payment app after completing the payment
-            </div>
-          </div>
-
-          <div className="field">
-            <label>Payment Amount *</label>
-            <div className="amount-confirm-row">
-              <span className="amount-value">₹{AMOUNT}</span>
-              <label className="amount-check-label">
+            <form onSubmit={(e) => { e.preventDefault(); handlePayWithRazorpay(); }}>
+              <div className="field">
+                <label>Full Name *</label>
                 <input
-                  type="checkbox"
-                  checked={confirmedAmount}
-                  onChange={(e) => setConfirmedAmount(e.target.checked)}
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Enter your full name"
                 />
-                <span>I confirm I paid exactly ₹{AMOUNT}</span>
-              </label>
+              </div>
+
+              <div className="field">
+                <label>Email Address *</label>
+                <input
+                  required
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={(e) => checkEmailDuplicate(e.target.value)}
+                  placeholder="your.email@example.com"
+                  autoComplete="email"
+                  className={emailExists ? 'input-error' : ''}
+                />
+                {checkingEmail && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking email...</div>}
+                {emailExists && <div className="field-error">This email is already registered. Please use another email or login.</div>}
+              </div>
+
+              <div className="field">
+                <label>Phone Number *</label>
+                <input
+                  required
+                  inputMode="numeric"
+                  value={phoneNumber}
+                  onChange={(e) => {
+                    setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10));
+                    setPhoneExists(false);
+                  }}
+                  onBlur={(e) => checkPhoneDuplicate(e.target.value)}
+                  placeholder="10-digit mobile number"
+                  autoComplete="tel"
+                  className={phoneExists ? 'input-error' : ''}
+                />
+                {checkingPhone && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking mobile number...</div>}
+                {phoneExists && <div className="field-error">This mobile number is already registered.</div>}
+                <div className="hint">Example: 9876543210</div>
+              </div>
+
+              <div className="field">
+                <label>Password *</label>
+                <input
+                  required
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Create a password"
+                  minLength={6}
+                />
+                <div className="hint">Use this password to login</div>
+              </div>
+
+              <div className="field">
+                <label>Referral Code (optional)</label>
+                <input
+                  value={manualReferralCode || referredBy}
+                  onChange={(e) => {
+                    setManualReferralCode(e.target.value.toUpperCase().trim());
+                  }}
+                  placeholder="Enter referral code if you have one"
+                />
+                <div className="hint">
+                  Have a referral code? Enter it here to get bonus referrals
+                </div>
+              </div>
+
+              <button
+                className={`btn btn-primary${loading ? ' btn-loading' : ''} submit-btn-full`}
+                type="submit"
+                disabled={loading}
+              >
+                {loading ? 'Opening Razorpay...' : `Pay ₹${AMOUNT} with Razorpay →`}
+              </button>
+            </form>
+          </>
+        )}
+
+        {paymentStep === 'pay' && (
+          <div className="payment-status">
+            {error && <div className="alert alert-error">{error}</div>}
+            <div className="alert alert-info">
+              <strong>Payment window opened!</strong><br />
+              Complete the payment in the Razorpay popup to continue.
             </div>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setPaymentStep('form')}
+              disabled={loading}
+            >
+              Back to Form
+            </button>
           </div>
+        )}
 
-          <div className="field">
-            <label>Payment Date *</label>
-            <input
-              required
-              type="date"
-              value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
-              max={new Date().toISOString().split('T')[0]}
-            />
-            <div className="hint">Date of payment (must be today)</div>
-          </div>
+        {paymentStep === 'verify' && (
+          <div className="verify-section">
+            <h3>Enter Verification Code</h3>
+            <p className="muted">
+              A verification code has been sent to the payment confirmation screen.
+              Enter it below to complete your registration.
+            </p>
 
-          <div className="field">
-            <label>Payment Screenshot *</label>
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              onChange={handleScreenshotChange}
-            />
-            {screenshotPreview && (
-              <div className="screenshot-preview">
-                <img src={screenshotPreview} alt="Preview" />
+            {error && <div className="alert alert-error">{error}</div>}
+            {success && <div className="alert alert-success">{success}</div>}
+
+            {generatedCode && (
+              <div className="alert alert-success" style={{ fontSize: '1.2rem', textAlign: 'center', padding: '1rem' }}>
+                Your verification code: <strong>{generatedCode}</strong>
               </div>
             )}
-            <div className="hint">Upload a screenshot of your payment (optional, helps verification)</div>
-          </div>
 
-          <button
-            className={`btn btn-primary${loading ? ' btn-loading' : ''} submit-btn-full`}
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? 'Submitting...' : 'Submit Payment Details →'}
-          </button>
-        </form>
+            <div className="field">
+              <label>Verification Code *</label>
+              <input
+                required
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                placeholder="JTSB-XXXXXX"
+                className="code-input"
+              />
+              <div className="hint">
+                Check your payment confirmation for the code (format: JTSB-XXXXXX)
+              </div>
+            </div>
+
+            <button
+              className={`btn btn-primary${loading ? ' btn-loading' : ''} submit-btn-full`}
+              onClick={handleVerifyAndRegister}
+              disabled={loading || !verificationCode.trim()}
+            >
+              {loading ? 'Verifying...' : 'Verify & Register →'}
+            </button>
+
+            <div className="verify-help">
+              <button
+                className="btn btn-link"
+                onClick={() => {
+                  setPaymentStep('form');
+                  setVerificationCode('');
+                  setError('');
+                }}
+              >
+                ← Start over
+              </button>
             </div>
           </div>
         )}
 
-        {success && (
+        {paymentStep === 'done' && (
           <div className="payment-success-note">
-            <strong>Payment submitted!</strong><br />
-            Admin will verify and enable your account.<br />
-            Contact admin for login access after approval.
+            <strong>Payment verified! Account created successfully.</strong><br />
+            You will be redirected to the login page shortly.
           </div>
         )}
       </div>

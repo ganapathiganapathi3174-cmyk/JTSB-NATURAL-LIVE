@@ -35,7 +35,7 @@ export default function FirebaseRegisterPage() {
     const utrValid = utr.trim().length > 0;
     const passwordValid = password.length >= 6;
     return nameValid && emailValid && phoneValid && utrValid && passwordValid && isValidReferral && !loading && !emailExists && !phoneExists && !utrExists;
-  }, [name, email, phone, utr, password, isValidReferral, loading, emailExists, phoneExists]);
+  }, [name, email, phone, utr, password, isValidReferral, loading, emailExists, phoneExists, utrExists]);
 
   function checkUtrDuplicate(val) {
     if (utrTimer.current) clearTimeout(utrTimer.current);
@@ -97,6 +97,7 @@ export default function FirebaseRegisterPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    console.log('[REGISTRATION] Started');
 
     try {
       if (!name.trim()) {
@@ -124,7 +125,8 @@ export default function FirebaseRegisterPage() {
         setLoading(false);
         return;
       }
-      const dupCheck = await FirebaseUser.checkUtrExists(utrVal);
+      console.log('[REGISTRATION] Validation passed');
+      const dupCheck = await withTimeout(FirebaseUser.checkUtrExists(utrVal), 10000);
       if (dupCheck) {
         setError('This UTR number already exists.');
         setLoading(false);
@@ -140,7 +142,7 @@ export default function FirebaseRegisterPage() {
 
       let referredBy = null;
       if (referralCode.trim()) {
-        const expiryCheck = await checkReferralLinkExpiry(referralCode.trim().toUpperCase());
+        const expiryCheck = await withTimeout(checkReferralLinkExpiry(referralCode.trim().toUpperCase()), 10000);
         if (!expiryCheck.valid) {
           if (expiryCheck.reason === 'expired') {
             setError('Referral link has expired. Please use a valid referral code.');
@@ -161,24 +163,41 @@ if (!referrer || referrer.payment_status !== 'approved' || referrer.account_stat
         referredBy = referralCode.trim().toUpperCase();
       }
 
-      const user = await FirebaseUser.createWithPassword({
+      console.log('[REGISTRATION] Auth request sent');
+      const user = await withTimeout(FirebaseUser.createWithPassword({
         name: name.trim(),
         email: emailVal,
         phone: phone.trim(),
         password: passVal,
         referredBy: referredBy,
-      });
+      }), 30000);
+      console.log('[REGISTRATION] Auth response received');
+      console.log('[REGISTRATION] User ID:', user?.id);
 
-      await FirebaseUser.updatePayment(user.id, null, utrVal, String(import.meta.env.VITE_PAYMENT_AMOUNT || 120), new Date().toISOString().split('T')[0], '');
+      console.log('[REGISTRATION] Database insert - payment record');
+      await withTimeout(FirebaseUser.updatePayment(user.id, null, utrVal, String(import.meta.env.VITE_PAYMENT_AMOUNT || 120), new Date().toISOString().split('T')[0], ''), 15000);
+      console.log('[REGISTRATION] Database insert success');
 
+      console.log('[REGISTRATION] Complete');
       setSuccess(true);
       setTimeout(() => navigate('/fb/login'), 2000);
     } catch (err) {
-      console.error('Registration error:', err);
-      setError(err.message || 'Registration failed');
+      console.error('[REGISTRATION] Failed:', err);
+      if (err.message?.includes('timed out') || err.message?.includes('quota') || err.message?.includes('resource-exhausted')) {
+        setError('Server is busy. Please try again in a few minutes.');
+      } else {
+        setError(err.message || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
+  }
+
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out — server is busy. Please try again.')), ms))
+    ]);
   }
 
   if (success) {

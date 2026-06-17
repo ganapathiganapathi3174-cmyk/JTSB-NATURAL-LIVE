@@ -5060,6 +5060,81 @@ input[type="file"]::file-selector-button:hover {
   box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent-glow);
 }
 
+.profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.profile-avatar-actions {
+  position: absolute;
+  bottom: -4px;
+  right: -8px;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+}
+
+.profile-pic-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+  padding: 0;
+  line-height: 1;
+}
+
+.profile-pic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-pic-upload {
+  background: var(--accent);
+  color: #fff;
+}
+
+.profile-pic-remove {
+  background: #ef4444;
+  color: #fff;
+}
+
+.profile-pic-uploading {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.profile-pic-uploading::after {
+  content: '';
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: profile-pic-spin 0.6s linear infinite;
+}
+
+@keyframes profile-pic-spin {
+  to { transform: rotate(360deg); }
+}
+
 .profile-header-info {
   display: flex;
   flex-direction: column;

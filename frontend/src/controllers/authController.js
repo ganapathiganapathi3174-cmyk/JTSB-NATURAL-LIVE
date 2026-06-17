@@ -1,7 +1,7 @@
 import jwt from '../utils/jwt.js';
 import { FirebaseUser, checkReferralLinkExpiry } from '../db/firebase-db.js';
 
-const JWT_SECRET = import.meta.env.VITE_JWT_SECRET || 'jtsb-secret-key-2026';
+const JWT_SECRET = import.meta.env.VITE_JWT_SECRET;
 const TOKEN_MS = 7 * 24 * 60 * 60 * 1000;
 
 function generateReferralCode() {
@@ -15,7 +15,7 @@ function generateReferralCode() {
 
 async function simpleHash(password) {
   const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'pc-salt-2026');
+  const data = encoder.encode(password);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');

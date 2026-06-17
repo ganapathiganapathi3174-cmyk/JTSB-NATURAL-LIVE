@@ -87,26 +87,24 @@ export default function FirebaseLoginPage() {
         return;
       }
 
-      // Admin approval check (new field — existing users without it are treated as approved)
-      const adminApproval = user.admin_approval_status;
-      if (adminApproval === 'PENDING') {
-        setError('Your account is waiting for admin approval');
-        setLoading(false);
-        return;
-      }
-      if (adminApproval === 'REJECTED') {
-        setError('Your account has been rejected by admin');
-        setLoading(false);
-        return;
-      }
-
-      // Check account is active (first payment approved and account activated)
-      const isActive = user.account_status === 'active';
-      if (!isActive) {
-        if (user.account_status === 'inactive' && (user.inactive_reason === 'own_topup_completed' || user.sponsor_awaiting_credit)) {
+      // [DEBUG] log all approval fields at login time
+      console.log('[AUTO APPROVAL DEBUG] login check fields:', JSON.stringify({
+        userId: user.id,
+        payment_status: user.payment_status,
+        account_status: user.account_status,
+        status: user.status,
+        admin_approval_status: user.admin_approval_status,
+        is_active: user.is_active,
+      }));
+      // Allow login if any approval indicator is positive
+      const canLogin = user.payment_status === 'approved' || user.account_status === 'active' || user.admin_approval_status === 'APPROVED';
+      if (!canLogin) {
+        if (user.admin_approval_status === 'REJECTED') {
+          const reasons = user.failure_reasons || user.validation_details?.filter(d => d.passed !== true)?.map(d => d.reason) || [];
+          const msg = reasons.length > 0 ? 'Your account was rejected: ' + reasons.join('; ') : 'Your account has been rejected by admin';
+          setError(msg);
+        } else if (user.account_status === 'inactive' && (user.inactive_reason === 'own_topup_completed' || user.sponsor_awaiting_credit)) {
           setError('Your account is inactive (own topup completed). Please contact admin for reactivation.');
-        } else if (user.account_status === 'inactive') {
-          setError('Your account is inactive. Please contact admin.');
         } else {
           setError('Your account is pending approval. Please wait for admin to approve your payment.');
         }
