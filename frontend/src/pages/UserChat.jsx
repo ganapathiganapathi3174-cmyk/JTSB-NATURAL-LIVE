@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FirebaseChat } from '../db/firebase-db.js';
+import { checkRateLimit } from '../utils/rateLimiter.js';
 
 export default function UserChat() {
   const navigate = useNavigate();
@@ -50,6 +51,10 @@ export default function UserChat() {
   async function handleSend(e) {
     e.preventDefault();
     if (!inputText.trim() || sending) return;
+    const rl = checkRateLimit('chat:user:' + userId, 10, 30000);
+    if (!rl.allowed) {
+      return;
+    }
     setSending(true);
     try {
       await FirebaseChat.send({ senderId: userId, receiverId: 'admin', messageText: inputText.trim() });

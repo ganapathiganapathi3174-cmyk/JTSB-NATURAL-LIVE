@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser } from '../db/firebase-db.js';
 import { checkRateLimit } from '../utils/rateLimiter.js';
+import { db } from '../firebase/config.js';
+import { doc, onSnapshot } from 'firebase/firestore';
 
-const AMOUNT = Number(import.meta.env.VITE_PAYMENT_AMOUNT) || 120;
+const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 
 function loadRazorpayScript() {
   return new Promise((resolve) => {
@@ -19,26 +20,33 @@ function loadRazorpayScript() {
 export default function PaymentPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const referredBy = searchParams.get('ref') || '';
-  const [manualReferralCode, setManualReferralCode] = useState('');
+  const urlMode = searchParams.get('mode') || '';
 
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [password, setPassword] = useState('');
+  const isTopup = urlMode === 'topup';
+
+  const [topupUserId] = useState(() => localStorage.getItem('fb_user_id') || '');
+  const [topupAmount, setTopupAmount] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [paymentStep, setPaymentStep] = useState('form');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [generatedCode, setGeneratedCode] = useState('');
-  const [paymentSessionId, setPaymentSessionId] = useState('');
-  const [emailExists, setEmailExists] = useState(false);
-  const [checkingEmail, setCheckingEmail] = useState(false);
-  const [phoneExists, setPhoneExists] = useState(false);
-  const [checkingPhone, setCheckingPhone] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+
+  const walletUnsub = useRef(null);
+  const confirmTimer = useRef(null);
+
+  useEffect(() => {
+    if (!isTopup) {
+      navigate('/fb/register', { replace: true });
+    }
+  }, [isTopup, navigate]);
+
+  useEffect(() => {
+    if (isTopup && !topupUserId) {
+      navigate('/fb/login', { replace: true });
+    }
+  }, [isTopup, topupUserId, navigate]);
 
   useEffect(() => {
     if (rateLimitCountdown <= 0) return;
@@ -47,115 +55,54 @@ export default function PaymentPage() {
     }, 1000);
     return () => clearInterval(id);
   }, [rateLimitCountdown]);
-  const emailTimer = useRef(null);
-  const phoneTimer = useRef(null);
+
+  useEffect(() => {
+    if (paymentStep !== 'confirming' || !topupUserId) return;
+    const walletRef = doc(db, 'wallet_balances', topupUserId);
+    let firstSnapshot = true;
+    walletUnsub.current = onSnapshot(walletRef, (snap) => {
+      if (firstSnapshot) { firstSnapshot = false; return; }
+      if (snap.exists) {
+        if (walletUnsub.current) walletUnsub.current();
+        if (confirmTimer.current) clearTimeout(confirmTimer.current);
+        navigate('/fb/dashboard', { replace: true });
+      }
+    }, (error) => {
+      console.error('Topup listener error:', error);
+      if (walletUnsub.current) walletUnsub.current();
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      setError('Unable to verify topup status. Please check your wallet.');
+      setPaymentStep('form');
+      setLoading(false);
+    });
+    confirmTimer.current = setTimeout(() => {
+      if (walletUnsub.current) walletUnsub.current();
+      navigate('/fb/dashboard', { replace: true });
+    }, 30000);
+    return () => {
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      if (walletUnsub.current) walletUnsub.current();
+    };
+  }, [paymentStep, topupUserId, navigate]);
 
   useEffect(() => {
     loadRazorpayScript().then(setRazorpayLoaded);
   }, []);
 
-  function checkEmailDuplicate(emailVal) {
-    if (emailTimer.current) clearTimeout(emailTimer.current);
-    const trimmed = emailVal.trim();
-    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setEmailExists(false);
-      setCheckingEmail(false);
-      return;
-    }
-    setCheckingEmail(true);
-    emailTimer.current = setTimeout(async () => {
-      try {
-        const existing = await FirebaseUser.findByEmail(trimmed);
-        setEmailExists(!!existing);
-      } catch {
-        setEmailExists(false);
-      } finally {
-        setCheckingEmail(false);
-      }
-    }, 500);
-  }
-
-  function checkPhoneDuplicate(phoneVal) {
-    if (phoneTimer.current) clearTimeout(phoneTimer.current);
-    const trimmed = phoneVal.trim();
-    if (trimmed.length < 10) {
-      setPhoneExists(false);
-      setCheckingPhone(false);
-      return;
-    }
-    setCheckingPhone(true);
-    phoneTimer.current = setTimeout(async () => {
-      try {
-        const existing = await FirebaseUser.findByPhone(trimmed);
-        setPhoneExists(!!existing);
-      } catch {
-        setPhoneExists(false);
-      } finally {
-        setCheckingPhone(false);
-      }
-    }, 500);
-  }
-
-  function validateForm() {
-    if (!fullName.trim() || fullName.trim().length < 2) {
-      setError('Full name must be at least 2 characters');
-      return false;
-    }
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Please enter a valid email address');
-      return false;
-    }
-    if (emailExists) {
-      setError('This email is already registered. Please use another email or login.');
-      return false;
-    }
-    if (!phoneNumber || !/^[6-9]\d{9}$/.test(phoneNumber)) {
-      setError('Please enter a valid 10-digit Indian mobile number');
-      return false;
-    }
-    if (phoneExists) {
-      setError('This mobile number is already registered.');
-      return false;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return false;
-    }
-    return true;
-  }
-
-  async function validateReferralCodeBeforePayment(code) {
-    if (!code || !code.trim()) return true;
-    try {
-      const { checkReferralLinkExpiry } = await import('../db/firebase-db.js');
-      const result = await checkReferralLinkExpiry(code.trim().toUpperCase());
-      if (!result.valid) {
-        if (result.reason === 'expired') setError('Referral link has expired. Please use a valid referral code.');
-        else if (result.reason === 'limit_reached') setError('Invalid Referral Code');
-        else setError('Invalid referral code');
-        return false;
-      }
-      if (!result.referrer || result.referrer.payment_status !== 'approved' || result.referrer.account_status !== 'active') {
-        setError('Referral code is no longer valid');
-        return false;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  async function handlePayWithRazorpay() {
+  async function handleTopup() {
+    if (loading) return;
     if (!razorpayLoaded) {
       setError('Razorpay is loading. Please wait...');
       return;
     }
-    if (!validateForm()) return;
 
-    const refCode = (manualReferralCode || referredBy || '').trim();
-    if (refCode) {
-      const validRef = await validateReferralCodeBeforePayment(refCode);
-      if (!validRef) return;
+    if (!topupAmount || Number(topupAmount) < 1) {
+      setError('Enter a valid topup amount');
+      return;
+    }
+    if (!topupUserId) {
+      setError('User session not found. Please login again.');
+      return;
     }
 
     const rl = checkRateLimit('payment_submit');
@@ -167,105 +114,59 @@ export default function PaymentPage() {
 
     setError('');
     setLoading(true);
-    try {
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out. Check your network or disable QUIC in chrome://flags')), 15000)
-      );
-      const session = await Promise.race([
-        FirebaseUser.createPaymentSession({
-          name: fullName.trim(),
-          email: email.trim().toLowerCase(),
-          phone: phoneNumber.trim(),
-          amount: AMOUNT,
-        }),
-        timeoutPromise,
-      ]);
-      setPaymentSessionId(session.sessionId);
 
-      const rzpOptions = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_xxxxxxxxxxxx',
-        amount: AMOUNT * 100,
-        currency: 'INR',
-        name: 'Starlight Ascent',
-        description: 'Registration Payment',
-        prefill: {
-          name: fullName.trim(),
-          email: email.trim().toLowerCase(),
-          contact: phoneNumber.trim(),
-        },
-        handler: async function (response) {
-          try {
-            const codePromise = FirebaseUser.generateVerificationCode(
-              session.sessionId,
-              response.razorpay_order_id,
-              response.razorpay_payment_id,
-            );
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Code generation timed out')), 10000)
-            );
-            const codeResult = await Promise.race([codePromise, timeoutPromise]);
-            setGeneratedCode(codeResult?.code || '');
-          } catch (codeErr) {
-            console.warn('Direct code generation failed, webhook may handle it:', codeErr);
-          }
-          setPaymentStep('verify');
-          setLoading(false);
-        },
-        modal: {
-          ondismiss: function () {
-            setLoading(false);
-            setError('Payment cancelled. Please try again when ready.');
-          },
-        },
-      };
-      if (session.razorpayOrderId) {
-        rzpOptions.order_id = session.razorpayOrderId;
-      }
-      const rzp = new window.Razorpay(rzpOptions);
-      rzp.on('payment.failed', function (response) {
-        setError('Payment failed: ' + (response.error?.description || 'Unknown error'));
-        setLoading(false);
-        setPaymentStep('form');
+    let session;
+
+    try {
+      const topupResp = await fetch(`${FUNCTIONS_BASE}/createTopupSessionHttp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: topupUserId,
+          amount: Number(topupAmount),
+        }),
+        signal: AbortSignal.timeout(15000),
       });
-      rzp.open();
-      setPaymentStep('pay');
+
+      if (!topupResp.ok) {
+        const errBody = await topupResp.json().catch(() => ({}));
+        throw new Error(errBody.error || `Backend error (${topupResp.status})`);
+      }
+      session = await topupResp.json();
     } catch (err) {
-      setError(err.message || 'Failed to initiate payment');
+      setError(`Payment service temporarily unavailable. ${err.message}`);
       setLoading(false);
       setPaymentStep('form');
-    }
-  }
-
-  async function handleVerifyAndRegister() {
-    const code = verificationCode.trim();
-    if (!code || !/^JTSB-[A-Z0-9]{6}$/i.test(code)) {
-      setError('Enter a valid verification code (format: JTSB-XXXXXX)');
       return;
     }
-    setError('');
-    setLoading(true);
-    try {
-      const result = await FirebaseUser.verifyPaymentCode(paymentSessionId, code.toUpperCase(), {
-        name: fullName.trim(),
-        email: email.trim().toLowerCase(),
-        phone: phoneNumber.trim(),
-        password: password,
-        referredBy: manualReferralCode || referredBy || null,
-      });
-      if (result.success) {
-        setSuccess('Payment verified! Creating your account...');
-        setPaymentStep('done');
-        setTimeout(() => {
-          navigate(`/fb/login?email=${encodeURIComponent(email.trim().toLowerCase())}`);
-        }, 2000);
-      } else {
-        setError(result.error || 'Verification failed. Please try again.');
-      }
-    } catch (err) {
-      setError(err.message || 'Verification failed');
-    } finally {
-      setLoading(false);
+
+    const rzpOptions = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: Number(topupAmount) * 100,
+      currency: 'INR',
+      name: 'Starlight Ascent',
+      description: 'Wallet Topup',
+      handler: function () {
+        setPaymentStep('confirming');
+      },
+      modal: {
+        ondismiss: function () {
+          setLoading(false);
+          setError('Payment cancelled. Please try again when ready.');
+        },
+      },
+    };
+    if (session.razorpayOrderId) {
+      rzpOptions.order_id = session.razorpayOrderId;
     }
+    const rzp = new window.Razorpay(rzpOptions);
+    rzp.on('payment.failed', function () {
+      setError('Payment failed. No amount was deducted. Please try again.');
+      setLoading(false);
+      setPaymentStep('form');
+    });
+    rzp.open();
+    setPaymentStep('pay');
   }
 
   return (
@@ -281,127 +182,36 @@ export default function PaymentPage() {
 
       <div className="card payment-card">
         <div className="payment-header">
-          <h1>Register - Starlight Ascent</h1>
-          <p className="muted">
-            One-time payment of ₹{AMOUNT} for lifetime access
-          </p>
+          <h1>Wallet Topup</h1>
+          <p className="muted">Add funds to your wallet via Razorpay</p>
         </div>
-
-        {referredBy && (
-          <div className="alert alert-success mb-md">
-            You were referred by someone! They will get credit for your signup.
-          </div>
-        )}
 
         {paymentStep === 'form' && (
           <>
+            {error && <div className="alert alert-error">{error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}</div>}
+            {success && <div className="alert alert-success">{success}</div>}
             <div className="payment-steps">
               <h3>How it works:</h3>
               <div className="step-item">
                 <div className="step-number">1</div>
-                <div className="step-text">
-                  <strong>Fill in</strong> your registration details below
-                </div>
+                <div className="step-text"><strong>Enter</strong> the topup amount below</div>
               </div>
               <div className="step-item">
                 <div className="step-number">2</div>
-                <div className="step-text">
-                  <strong>Pay ₹{AMOUNT}</strong> using UPI, card, or net banking via Razorpay
-                </div>
-              </div>
-              <div className="step-item">
-                <div className="step-number">3</div>
-                <div className="step-text">
-                  <strong>Enter the verification code</strong> from your payment confirmation to complete registration
-                </div>
+                <div className="step-text"><strong>Pay</strong> using UPI, card, or net banking via Razorpay</div>
               </div>
             </div>
-
-            {error && <div className="alert alert-error">{error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}</div>}
-            {success && <div className="alert alert-success">{success}</div>}
-
-            <form onSubmit={(e) => { e.preventDefault(); handlePayWithRazorpay(); }}>
-              <div className="field">
-                <label>Full Name *</label>
-                <input
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Enter your full name"
-                />
-              </div>
-
-              <div className="field">
-                <label>Email Address *</label>
-                <input
-                  required
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onBlur={(e) => checkEmailDuplicate(e.target.value)}
-                  placeholder="your.email@example.com"
-                  autoComplete="email"
-                  className={emailExists ? 'input-error' : ''}
-                />
-                {checkingEmail && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking email...</div>}
-                {emailExists && <div className="field-error">This email is already registered. Please use another email or login.</div>}
-              </div>
-
-              <div className="field">
-                <label>Phone Number *</label>
-                <input
-                  required
-                  inputMode="numeric"
-                  value={phoneNumber}
-                  onChange={(e) => {
-                    setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10));
-                    setPhoneExists(false);
-                  }}
-                  onBlur={(e) => checkPhoneDuplicate(e.target.value)}
-                  placeholder="10-digit mobile number"
-                  autoComplete="tel"
-                  className={phoneExists ? 'input-error' : ''}
-                />
-                {checkingPhone && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking mobile number...</div>}
-                {phoneExists && <div className="field-error">This mobile number is already registered.</div>}
-                <div className="hint">Example: 9876543210</div>
-              </div>
-
-              <div className="field">
-                <label>Password *</label>
-                <input
-                  required
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Create a password"
-                  minLength={6}
-                />
-                <div className="hint">Use this password to login</div>
-              </div>
-
-              <div className="field">
-                <label>Referral Code (optional)</label>
-                <input
-                  value={manualReferralCode || referredBy}
-                  onChange={(e) => {
-                    setManualReferralCode(e.target.value.toUpperCase().trim());
-                  }}
-                  placeholder="Enter referral code if you have one"
-                />
-                <div className="hint">
-                  Have a referral code? Enter it here to get bonus referrals
-                </div>
-              </div>
-
-              <button
-                className={`btn btn-primary${loading ? ' btn-loading' : ''} submit-btn-full`}
-                type="submit"
-                disabled={loading}
-              >
-                {loading ? 'Opening Razorpay...' : `Pay ₹${AMOUNT} with Razorpay →`}
-              </button>
-            </form>
+            <div className="field">
+              <label>Amount (INR) *</label>
+              <input type="number" value={topupAmount} onChange={e => setTopupAmount(e.target.value)} placeholder="Enter topup amount" min="1" />
+            </div>
+            <button
+              className={`btn btn-primary${loading ? ' btn-loading' : ''} submit-btn-full`}
+              onClick={handleTopup}
+              disabled={loading || !topupAmount || Number(topupAmount) < 1}
+            >
+              {loading ? 'Opening Razorpay...' : `Pay ₹${Number(topupAmount) || 0} with Razorpay →`}
+            </button>
           </>
         )}
 
@@ -417,69 +227,16 @@ export default function PaymentPage() {
               onClick={() => setPaymentStep('form')}
               disabled={loading}
             >
-              Back to Form
+              Back
             </button>
           </div>
         )}
 
-        {paymentStep === 'verify' && (
-          <div className="verify-section">
-            <h3>Enter Verification Code</h3>
-            <p className="muted">
-              A verification code has been sent to the payment confirmation screen.
-              Enter it below to complete your registration.
-            </p>
-
-            {error && <div className="alert alert-error">{error}</div>}
-            {success && <div className="alert alert-success">{success}</div>}
-
-            {generatedCode && (
-              <div className="alert alert-success" style={{ fontSize: '1.2rem', textAlign: 'center', padding: '1rem' }}>
-                Your verification code: <strong>{generatedCode}</strong>
-              </div>
-            )}
-
-            <div className="field">
-              <label>Verification Code *</label>
-              <input
-                required
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-                placeholder="JTSB-XXXXXX"
-                className="code-input"
-              />
-              <div className="hint">
-                Check your payment confirmation for the code (format: JTSB-XXXXXX)
-              </div>
-            </div>
-
-            <button
-              className={`btn btn-primary${loading ? ' btn-loading' : ''} submit-btn-full`}
-              onClick={handleVerifyAndRegister}
-              disabled={loading || !verificationCode.trim()}
-            >
-              {loading ? 'Verifying...' : 'Verify & Register →'}
-            </button>
-
-            <div className="verify-help">
-              <button
-                className="btn btn-link"
-                onClick={() => {
-                  setPaymentStep('form');
-                  setVerificationCode('');
-                  setError('');
-                }}
-              >
-                ← Start over
-              </button>
-            </div>
-          </div>
-        )}
-
-        {paymentStep === 'done' && (
-          <div className="payment-success-note">
-            <strong>Payment verified! Account created successfully.</strong><br />
-            You will be redirected to the login page shortly.
+        {paymentStep === 'confirming' && (
+          <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+            <div style={{ margin: '0 auto 1rem', width: 48, height: 48, border: '4px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <strong>Topup Confirmed!</strong><br />
+            <span style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>Updating your wallet and redirecting to dashboard...</span>
           </div>
         )}
       </div>

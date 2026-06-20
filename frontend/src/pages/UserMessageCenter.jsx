@@ -10,8 +10,8 @@ function getTypeLabel(type) {
     payment_rejected: 'Payment Rejected',
     topup_approved: 'Top-Up Approved',
     topup_rejected: 'Top-Up Rejected',
-    admin_approval_approved: 'Admin Access Approved',
-    admin_approval_rejected: 'Admin Access Rejected',
+    admin_approval_approved: 'Access Approved',
+    admin_approval_rejected: 'Access Rejected',
     general: 'Notification',
   };
   return labels[type] || type;

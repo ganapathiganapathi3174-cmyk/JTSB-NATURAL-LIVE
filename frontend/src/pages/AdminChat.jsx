@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 import { FirebaseUser, FirebaseChat } from '../db/firebase-db.js';
+import { checkRateLimit } from '../utils/rateLimiter.js';
 
 export default function AdminChat() {
   const navigate = useNavigate();
@@ -71,6 +72,10 @@ export default function AdminChat() {
   async function handleSend(e) {
     e.preventDefault();
     if (!inputText.trim() || !selectedUser || sending) return;
+    const rl = checkRateLimit('chat:admin:' + selectedUser.id, 10, 30000);
+    if (!rl.allowed) {
+      return;
+    }
     setSending(true);
     try {
       await FirebaseChat.send({

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config.js';
+import { checkRateLimit } from '../utils/rateLimiter.js';
 
 const ADMIN_KEY = 'fb_admin_token';
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || '';
@@ -19,6 +20,11 @@ export default function FirebaseAdminLoginPage() {
     e.preventDefault();
     setError('');
     setWarning('');
+    const rl = checkRateLimit('adminLogin:' + email.trim().toLowerCase());
+    if (!rl.allowed) {
+      setError(`Too many attempts. Try again in ${rl.retryAfter} seconds.`);
+      return;
+    }
     setLoading(true);
 
     try {
@@ -54,8 +60,10 @@ export default function FirebaseAdminLoginPage() {
         }
       }
 
-      // Set admin token
-      localStorage.setItem(ADMIN_KEY, 'admin-logged-in');
+      // Set admin token (short-lived, timestamped)
+      const now = Date.now();
+      localStorage.setItem(ADMIN_KEY, btoa(JSON.stringify({ loginAt: now, expiresAt: now + 7 * 3600000 })));
+      localStorage.setItem('fb_admin_login_at', String(now));
       navigate('/fb-admin/dashboard');
     } catch (err) {
       setError(err.message || 'Invalid credentials');

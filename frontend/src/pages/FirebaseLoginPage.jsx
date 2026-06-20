@@ -45,6 +45,7 @@ export default function FirebaseLoginPage() {
       await withTimeout(FirebaseUser.updatePassword(setPasswordFor.id, newPassword));
       // Login after setting password
       localStorage.setItem('fb_user_id', setPasswordFor.id);
+      localStorage.setItem('fb_login_at', String(Date.now()));
       navigate('/fb/dashboard');
     } catch (err) {
       setError(err.message);
@@ -69,44 +70,41 @@ export default function FirebaseLoginPage() {
 
     try {
       console.log('Login attempt:', inputVal);
-      // Try email and UTR in parallel with timeout
-      const [userByEmail, userByUtr] = await withTimeout(
-        Promise.all([
-          FirebaseUser.findByEmail(inputVal.toLowerCase()).catch(() => null),
-          /^\d{10,20}$/.test(inputVal) ? FirebaseUser.findByUtr(inputVal).catch(() => null) : Promise.resolve(null),
-        ]),
+      // Find user by email
+      const user = await withTimeout(
+        FirebaseUser.findByEmail(inputVal.toLowerCase()),
         LOGIN_TIMEOUT
-      );
-      
-      const user = userByEmail || userByUtr;
-      console.log('User found:', user?.email || user?.utr_number);
+      ).catch(() => null);
       
       if (!user) {
-        setError('No account found with this email or UTR. Please register first.');
+        setError('No account found with this email. Please register first.');
         setLoading(false);
         return;
       }
 
-      // [DEBUG] log all approval fields at login time
-      console.log('[AUTO APPROVAL DEBUG] login check fields:', JSON.stringify({
-        userId: user.id,
-        payment_status: user.payment_status,
-        account_status: user.account_status,
-        status: user.status,
-        admin_approval_status: user.admin_approval_status,
-        is_active: user.is_active,
-      }));
-      // Allow login if any approval indicator is positive
-      const canLogin = user.payment_status === 'approved' || user.account_status === 'active' || user.admin_approval_status === 'APPROVED';
+      const canLogin = user.membershipPaid === true || user.payment_status === 'approved' || user.payment_status === 'success';
+
+      if (user.account_status === 'blocked') {
+        setError('Your account has been blocked. Please contact admin.');
+        setLoading(false);
+        return;
+      }
+
+      if (user.account_status === 'suspended') {
+        setError('Your account has been suspended. Please contact admin.');
+        setLoading(false);
+        return;
+      }
+
       if (!canLogin) {
-        if (user.admin_approval_status === 'REJECTED') {
-          const reasons = user.failure_reasons || user.validation_details?.filter(d => d.passed !== true)?.map(d => d.reason) || [];
-          const msg = reasons.length > 0 ? 'Your account was rejected: ' + reasons.join('; ') : 'Your account has been rejected by admin';
-          setError(msg);
-        } else if (user.account_status === 'inactive' && (user.inactive_reason === 'own_topup_completed' || user.sponsor_awaiting_credit)) {
-          setError('Your account is inactive (own topup completed). Please contact admin for reactivation.');
+        if (user.account_status === 'inactive' && (user.inactive_reason === 'own_topup_completed' || user.sponsor_awaiting_credit || user.sponsorRenewalRequired)) {
+          setError('Your account requires sponsor renewal. Please complete a topup and contact admin for reactivation.');
+        } else if (user.reviewRequired) {
+          setError('Your account is under review. An administrator will review your account shortly.');
+        } else if (user.inactiveReason) {
+          setError('Account inactive: ' + user.inactiveReason);
         } else {
-          setError('Your account is pending approval. Please wait for admin to approve your payment.');
+          setError('Your payment is being processed. Please try logging in again in a few moments.');
         }
         setLoading(false);
         return;
@@ -130,6 +128,7 @@ export default function FirebaseLoginPage() {
 
       // Login success
       localStorage.setItem('fb_user_id', user.id);
+      localStorage.setItem('fb_login_at', String(Date.now()));
       navigate('/fb/dashboard');
       
     } catch (err) {
@@ -180,8 +179,8 @@ export default function FirebaseLoginPage() {
         
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label>Email or UTR Number</label>
-            <input required value={loginInput} onChange={e => setLoginInput(e.target.value)} placeholder="Enter email or UTR number" />
+            <label>Email</label>
+            <input required value={loginInput} onChange={e => setLoginInput(e.target.value)} placeholder="Enter your email" />
           </div>
           <div className="field">
             <label>Password</label>

@@ -1,14 +1,12 @@
-import jwt from '../utils/jwt.js';
 import { FirebaseUser, checkReferralLinkExpiry } from '../db/firebase-db.js';
-
-const JWT_SECRET = import.meta.env.VITE_JWT_SECRET;
-const TOKEN_MS = 7 * 24 * 60 * 60 * 1000;
 
 function generateReferralCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
+  const array = new Uint8Array(8);
+  crypto.getRandomValues(array);
   for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(array[i] % chars.length);
   }
   return code;
 }
@@ -26,12 +24,8 @@ async function simpleCompare(plaintext, hashed) {
   return hash === hashed;
 }
 
-function makeToken(user) {
-  return jwt.sign({
-    sub: user.id,
-    email: user.email,
-    exp: Math.floor((Date.now() + TOKEN_MS) / 1000),
-  }, JWT_SECRET);
+function makeToken() {
+  return crypto.randomUUID();
 }
 
 function safeUser(u) {
@@ -40,7 +34,7 @@ function safeUser(u) {
 }
 
 export async function register(req) {
-  const { name, email, password, referralCode } = req.body;
+  const { name, email, password, phone, referralCode } = req.body;
   const em = String(email || '').trim().toLowerCase();
 
   const existing = await FirebaseUser.findByEmail(em);
@@ -62,7 +56,7 @@ export async function register(req) {
   const user = await FirebaseUser.create({
     name: name.trim(),
     email: em,
-    phone: '',
+    phone: phone || '',
     password: hash,
     referredBy,
   });
@@ -84,8 +78,17 @@ export async function login(req) {
   const ok = await simpleCompare(password, user.password);
   if (!ok) throw { status: 401, message: 'Invalid email or password' };
 
-  if (user.payment_status !== 'approved') {
+  const membershipOk = user.membershipPaid === true || user.payment_status === 'approved' || user.payment_status === 'success';
+  if (!membershipOk) {
     throw { status: 403, message: 'Payment not approved' };
+  }
+
+  if (user.account_status === 'suspended') {
+    throw { status: 403, message: 'Account suspended. Contact admin.' };
+  }
+
+  if (user.account_status === 'blocked') {
+    throw { status: 403, message: 'Account blocked. Contact admin.' };
   }
 
   return { status: 200, data: { token: makeToken(user), user: safeUser(user) } };
@@ -97,8 +100,17 @@ export async function me(req, user) {
   const freshUser = await FirebaseUser.findById(user.id || user._id);
   if (!freshUser) throw { status: 404, message: 'User not found' };
 
-  if (freshUser.payment_status !== 'approved') {
+  const membershipOk = freshUser.membershipPaid === true || freshUser.payment_status === 'approved' || freshUser.payment_status === 'success';
+  if (!membershipOk) {
     throw { status: 403, message: 'Payment not approved' };
+  }
+
+  if (freshUser.account_status === 'suspended') {
+    throw { status: 403, message: 'Account suspended. Contact admin.' };
+  }
+
+  if (freshUser.account_status === 'blocked') {
+    throw { status: 403, message: 'Account blocked. Contact admin.' };
   }
 
   const totalUsers = await FirebaseUser.count();
@@ -154,15 +166,4 @@ export async function deleteReferralContact(req, user) {
   return { status: 200, data: { message: 'Contact deleted' } };
 }
 
-export async function uploadUpiQr(req, user) {
-  const { upiQrUrl } = req.body;
-  const userId = user.id || user._id;
 
-  if (!upiQrUrl) {
-    throw { status: 400, message: 'UPI QR image URL is required' };
-  }
-
-  await FirebaseUser.updateUpiScreenshot(userId, upiQrUrl);
-
-  return { status: 200, data: { message: 'UPI QR uploaded', upiQrUrl, upiQrStatus: 'pending' } };
-}

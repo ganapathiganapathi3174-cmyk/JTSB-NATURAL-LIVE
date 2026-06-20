@@ -1,18 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser, FirebaseNotification, FirebaseChat } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
 import { getDb } from '../firebase/config.js';
-import { doc, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
-
-const getImageUrl = (url) => {
-  if (!url) return null;
-  if (url.includes('alt=media')) return url;
-  if (url.startsWith('data:')) return url;
-  return url + (url.includes('?') ? '&' : '?') + 'alt=media';
-};
 
 function getLastActiveStatus(dateStr) {
   if (!dateStr) return 'inactive';
@@ -33,37 +26,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
   const [activateReason, setActivateReason] = useState('');
   const [activating, setActivating] = useState(false);
   const [activateMsg, setActivateMsg] = useState('');
-  const [adminApproving, setAdminApproving] = useState(false);
-  const [adminMessage, setAdminMessage] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  const currentAdminStatus = user.admin_approval_status || 'APPROVED';
-
-  async function handleAdminApproval(status) {
-    if (!adminMessage || !adminMessage.trim()) {
-      setAdminApproving(false);
-      return;
-    }
-    setAdminApproving(true);
-    try {
-      const adminName = getAdminName();
-      await FirebaseUser.updateAdminApproval(user.id, status, adminName);
-      await FirebaseNotification.send({
-        receiverId: user.id,
-        receiverName: user.name || '',
-        message: adminMessage,
-        type: status === 'APPROVED' ? 'admin_approval_approved' : 'admin_approval_rejected',
-        senderId: adminName,
-        senderName: adminName,
-      });
-      setAdminMessage('');
-      if (status === 'APPROVED' && onActivate) onActivate(user.id);
-      console.log(`[ADMIN APPROVAL] User ${user.id} ${status} by ${adminName}`);
-    } catch (err) {
-      console.error('Admin approval error:', err);
-    }
-    setAdminApproving(false);
-  }
 
   useEffect(() => {
     if (user?.id) {
@@ -108,19 +71,6 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
       setReferrals([]);
     } catch (err) {
       alert(err.message);
-    }
-  }
-
-  async function handleApproveReferral(referredUserId) {
-    setApproving(true);
-    try {
-      await FirebaseUser.approveReferral(referredUserId);
-      const updated = await FirebaseUser.getAllReferralsByReferrerCode(user.referral_code);
-      setReferrals(updated);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setApproving(false);
     }
   }
 
@@ -203,12 +153,8 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               <span className="detail-value">{user.phone || '—'}</span>
             </div>
             <div className="detail-row">
-              <span className="detail-label">UTR Number</span>
-              <span className="detail-value mono">{user.utr_number || '—'}</span>
-            </div>
-            <div className="detail-row">
               <span className="detail-label">Payment Status</span>
-              <span className={`badge ${user.payment_status === 'approved' ? 'badge-paid' : user.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+              <span className={`badge ${user.payment_status === 'approved' || user.payment_status === 'success' ? 'badge-paid' : user.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
                 {user.payment_status ? user.payment_status.charAt(0).toUpperCase() + user.payment_status.slice(1) : 'Pending'}
               </span>
             </div>
@@ -229,29 +175,6 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               <span className="detail-value text-xs">
                 {user.approvedDate ? new Date(user.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
               </span>
-            </div>
-            <div className="detail-row">
-              <span className="detail-label">Admin Approval</span>
-              <span className={`badge ${currentAdminStatus === 'APPROVED' ? 'badge-paid' : currentAdminStatus === 'REJECTED' ? 'badge-rejected' : 'badge-pending'}`}>
-                {currentAdminStatus}
-              </span>
-              {currentAdminStatus === 'PENDING' && (
-                <div style={{ marginTop: '0.3rem' }}>
-                  <textarea className="input w-full" placeholder="Message to user (required)"
-                    value={adminMessage} onChange={e => setAdminMessage(e.target.value)}
-                    rows={1} style={{ resize: 'vertical', fontSize: '0.78rem', marginBottom: '0.3rem' }} />
-                  <div className="flex-actions">
-                    <button className={`btn-modern btn-modern-success btn-modern-xs${adminApproving ? ' btn-loading' : ''}`}
-                      onClick={() => handleAdminApproval('APPROVED')} disabled={adminApproving}>
-                      Approve
-                    </button>
-                    <button className={`btn-modern btn-modern-danger btn-modern-xs${adminApproving ? ' btn-loading' : ''}`}
-                      onClick={() => handleAdminApproval('REJECTED')} disabled={adminApproving}>
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="detail-row">
               <span className="detail-label">Referral Code</span>
@@ -299,13 +222,6 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
                       </div>
                     </div>
                     <div className="flex-actions">
-                      {(ref.referred_by_status === 'pending' || !ref.referred_by_status) && (
-                        <button className={`btn-modern btn-modern-primary btn-modern-xs${approving ? ' btn-loading' : ''}`}
-                          onClick={() => handleApproveReferral(ref.id)}
-                          disabled={approving}>
-                          {approving ? '...' : 'Approve'}
-                        </button>
-                      )}
                       <button className="btn-modern btn-modern-danger btn-modern-xs"
                         onClick={() => handleDeleteReferral(ref)}>
                         Remove
@@ -325,24 +241,6 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           ) : (
             <div className="muted mb-md">No referrals yet</div>
           )}
-
-          <div className="mb-md">
-            <div className="detail-row">
-              <span className="detail-label">Payment Screenshot</span>
-              {user.upi_screenshot_url ? (
-                <div>
-                  <button className="btn-modern btn-modern-primary btn-modern-sm mb-sm"
-                    onClick={() => window.open(getImageUrl(user.upi_screenshot_url), '_blank', 'noopener,noreferrer')}>
-                    Open Image
-                  </button>
-                  <img src={getImageUrl(user.upi_screenshot_url)} alt="Payment"
-                    style={{ maxWidth: '100%', borderRadius: '8px', border: '1px solid var(--border)' }} />
-                </div>
-              ) : (
-                <span className="muted">No screenshot uploaded</span>
-              )}
-            </div>
-          </div>
 
           {user.activated_at && (
             <div className="verify-section mb-md">
@@ -590,12 +488,8 @@ export default function FirebaseAdminUsersPage() {
         filtered = filtered.filter(u => u.account_status === 'active');
       } else if (statusFilter === 'account_inactive') {
         filtered = filtered.filter(u => u.account_status === 'inactive');
-      } else if (statusFilter === 'admin_pending') {
-        filtered = filtered.filter(u => u.admin_approval_status === 'PENDING');
-      } else if (statusFilter === 'admin_approved') {
-        filtered = filtered.filter(u => u.admin_approval_status === 'APPROVED');
-      } else if (statusFilter === 'admin_rejected') {
-        filtered = filtered.filter(u => u.admin_approval_status === 'REJECTED');
+      } else if (statusFilter === 'approved') {
+        filtered = filtered.filter(u => u.payment_status === 'approved' || u.payment_status === 'success');
       } else {
         filtered = filtered.filter(u => u.payment_status === statusFilter);
       }
@@ -606,8 +500,7 @@ export default function FirebaseAdminUsersPage() {
       filtered = filtered.filter(u => 
         (u.name && u.name.toLowerCase().includes(ql)) ||
         (u.email && u.email.toLowerCase().includes(ql)) ||
-        (u.referral_code && u.referral_code.toLowerCase().includes(ql)) ||
-        (u.utr_number && u.utr_number.includes(q))
+        (u.referral_code && u.referral_code.toLowerCase().includes(ql))
       );
     }
     
@@ -623,13 +516,9 @@ export default function FirebaseAdminUsersPage() {
   };
 
   const pendingCounts = useMemo(() => ({
-    pendingPayments: users.filter(u => u.payment_status === 'pending' || u.cycle_payment_status === 'pending').length,
+    pendingPayments: users.filter(u => u.payment_status === 'pending').length,
     pendingTopups: 0,
   }), [users]);
-
-  const pendingApprovalCount = useMemo(() =>
-    users.filter(u => u.admin_approval_status === 'PENDING').length,
-  [users]);
 
   function getAdminName() {
     try {
@@ -650,7 +539,7 @@ export default function FirebaseAdminUsersPage() {
             </h1>
             <div className="admin-page-actions">
               <span className="muted text-sm">
-                {users.length} total &middot; {users.filter(u => u.payment_status === 'approved').length} approved &middot; {users.filter(u => u.account_status === 'active').length} active &middot; {pendingApprovalCount} pending approval
+                {users.length} total &middot; {users.filter(u => u.payment_status === 'approved' || u.payment_status === 'success').length} paid &middot; {users.filter(u => u.account_status === 'active').length} active
               </span>
             </div>
           </div>
@@ -661,7 +550,7 @@ export default function FirebaseAdminUsersPage() {
             </div>
             <div className="search-bar-modern">
               <input value={q} onChange={e => setQ(e.target.value)}
-                placeholder="Search by name, email, referral_code, or UTR..." />
+                placeholder="Search by name, email, or referral_code..." />
               <select value={statusFilter} onChange={e => updateStatusFilter(e.target.value)}>
                 <option value="">All Users</option>
                 <option value="pending">Payment: Pending</option>
@@ -670,10 +559,6 @@ export default function FirebaseAdminUsersPage() {
                 <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>
                 <option value="account_active">Account: Active</option>
                 <option value="account_inactive">Account: Inactive</option>
-                <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>
-                <option value="admin_pending">Admin: Pending Approval</option>
-                <option value="admin_approved">Admin: Approved</option>
-                <option value="admin_rejected">Admin: Rejected</option>
               </select>
             </div>
           </div>
@@ -691,7 +576,6 @@ export default function FirebaseAdminUsersPage() {
                     <th>Phone</th>
                     <th>Payment</th>
                     <th>Account</th>
-                    <th>Admin</th>
                     <th>Topup</th>
                     <th>Referrals</th>
                     <th>Joined</th>
@@ -702,7 +586,6 @@ export default function FirebaseAdminUsersPage() {
                 </thead>
                 <tbody onMouseMove={handleDragMove} onMouseUp={handleDragEnd} onTouchEnd={handleDragEnd}>
                   {filteredUsers.map((u) => {
-                    const adminStatus = u.admin_approval_status || 'APPROVED';
                     return (
                     <React.Fragment key={u.id}>
                       <tr className="draggable-row"
@@ -716,18 +599,13 @@ export default function FirebaseAdminUsersPage() {
                         </td>
                         <td data-label="Phone">{u.phone || '—'}</td>
                         <td data-label="Payment">
-                          <span className={`badge ${u.payment_status === 'approved' ? 'badge-paid' : u.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+                          <span className={`badge ${u.payment_status === 'approved' || u.payment_status === 'success' ? 'badge-paid' : u.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
                             {u.payment_status ? u.payment_status.charAt(0).toUpperCase() + u.payment_status.slice(1) : 'Pending'}
                           </span>
                         </td>
                         <td data-label="Account">
                           <span className={`status-badge status-${u.account_status || 'inactive'}`}>
                             {(u.account_status || 'inactive').charAt(0).toUpperCase() + (u.account_status || 'inactive').slice(1)}
-                          </span>
-                        </td>
-                        <td data-label="Admin">
-                          <span className={`badge ${adminStatus === 'APPROVED' ? 'badge-paid' : adminStatus === 'REJECTED' ? 'badge-rejected' : 'badge-pending'} badge-xs`}>
-                            {adminStatus}
                           </span>
                         </td>
                         <td data-label="Topup">
@@ -877,7 +755,7 @@ export default function FirebaseAdminUsersPage() {
               onDelete={handleDelete}
               onDeleteReferral={handleDeleteReferral}
               onActivate={(userId) => {
-                setUsers(prev => prev.map(u => u.id === userId ? { ...u, account_status: 'active', admin_approval_status: 'APPROVED' } : u));
+                setUsers(prev => prev.map(u => u.id === userId ? { ...u, account_status: 'active' } : u));
               }}
             />
           )}

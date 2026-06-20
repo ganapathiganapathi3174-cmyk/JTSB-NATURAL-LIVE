@@ -145,7 +145,7 @@ export default function FirebaseAdminStatusPage() {
     function deriveStatus(u) {
       if (u.admin_status) return u.admin_status;
       if (u.account_status === 'inactive') return 'inactive';
-      if (u.payment_status === 'approved' && u.account_status === 'active') return 'active';
+      if ((u.payment_status === 'approved' || u.payment_status === 'success') && u.account_status === 'active') return 'active';
       return 'pending';
     }
 
@@ -158,8 +158,7 @@ export default function FirebaseAdminStatusPage() {
           (u.name && u.name.toLowerCase().includes(q)) ||
           (u.email && u.email.toLowerCase().includes(q)) ||
           (u.phone && u.phone.includes(q)) ||
-          (u.referral_code && u.referral_code.toLowerCase().includes(q)) ||
-          (u.utr_number && u.utr_number.includes(q));
+          (u.referral_code && u.referral_code.toLowerCase().includes(q));
         if (!match) return;
       }
 

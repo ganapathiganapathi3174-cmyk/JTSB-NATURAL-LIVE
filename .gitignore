@@ -6,6 +6,10 @@ dist/
 uploads/
 frontend/dist/
 backend/dist/
+api/node_modules/
 *.zip
 .vercel
 .env*.local
+
+# Legacy
+my-worker/

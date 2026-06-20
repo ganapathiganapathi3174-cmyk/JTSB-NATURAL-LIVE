@@ -11,25 +11,22 @@ const routes = {
   'GET /auth/referral-contacts': authController.listReferralContacts,
   'POST /auth/referral-contacts': authController.addReferralContact,
   'DELETE /auth/referral-contacts/:contactId': authController.deleteReferralContact,
-  // ===== NEW: UPI QR Upload =====
-  'POST /auth/upi-qr': authController.uploadUpiQr,
-  'GET /payments/config': paymentController.getPaymentConfig,
-  'POST /payments/submit': paymentController.submitPayment,
-  'GET /payments/status': paymentController.checkPaymentStatus,
   'POST /admin/login': adminController.adminLogin,
   'GET /admin/stats': adminController.dashboardStats,
   'GET /admin/users': adminController.listUsers,
   'DELETE /admin/users/:id': adminController.deleteUser,
   'DELETE /admin/users/:id/permanent': adminController.permanentDeleteUser,
   'GET /admin/payments': adminController.listPayments,
-  'PATCH /admin/payments/:id/verify': adminController.verifyPayment,
   'GET /admin/referrals': adminController.referralTree,
   'GET /admin/referrals/:id': adminController.getUserReferrals,
   'GET /admin/users/filter': adminController.filterUsersByReferral,
-  // ===== NEW: Admin UPI QR & Contacts =====
-  'PATCH /admin/users/:id/upi-qr': adminController.updateUserUpiQr,
-  'PATCH /admin/users/:id/upi-qr/verify': adminController.verifyUpiQr,
   'GET /admin/users/:userId/referral-contacts': adminController.getUserReferralContacts,
+  'POST /admin/activate-sponsor': adminController.activateSponsor,
+  'POST /admin/reactivate-sponsor': adminController.reactivateSponsor,
+  'POST /admin/suspend-user': adminController.suspendUser,
+  'POST /admin/block-user': adminController.blockUser,
+  'GET /wallet/balance': paymentController.getWalletBalance,
+  'GET /wallet/transactions': paymentController.getWalletTransactions,
 };
 
 // ===== Create client =====

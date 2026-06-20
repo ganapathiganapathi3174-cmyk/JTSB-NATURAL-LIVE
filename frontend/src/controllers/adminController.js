@@ -1,21 +1,11 @@
 // Admin controller using Firebase
-import jwt from '../utils/jwt.js';
-import { FirebaseUser, FirebaseStorage, FirebaseNewReferral } from '../db/firebase-db.js';
-
-const ADMIN_JWT_SECRET = import.meta.env.VITE_ADMIN_JWT_SECRET || import.meta.env.VITE_JWT_SECRET;
+import { FirebaseUser, FirebaseNewReferral } from '../db/firebase-db.js';
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 
-function signAdminToken(admin) {
-  const expiresInMs = 7 * 24 * 60 * 60 * 1000;
-  const payload = {
-    sub: admin.id,
-    email: admin.email,
-    role: 'admin',
-    exp: Math.floor((Date.now() + expiresInMs) / 1000),
-  };
-  return jwt.sign(payload, ADMIN_JWT_SECRET);
+function signAdminToken() {
+  return crypto.randomUUID();
 }
 
 export async function adminLogin(req) {
@@ -61,13 +51,18 @@ export async function listUsers(req) {
     phone: u.phone,
     status: u.status,
     paymentStatus: u.payment_status,
-    upiQrUrl: u.upi_screenshot_url,
-    upiQrStatus: u.payment_status,
+    membershipStatus: u.membershipStatus || 'inactive',
+    accountStatus: u.account_status,
     referralCode: u.referral_code,
     referredBy: u.referred_by,
+    sponsorId: u.sponsorId || null,
     referralsCount: u.referrals_count,
     referralLimitReached: u.referral_limit_reached,
-    paymentApproved: u.payment_status === 'approved',
+    paymentApproved: u.membershipPaid === true || u.payment_status === 'approved' || u.payment_status === 'success',
+    membershipPaid: u.membershipPaid,
+    sponsorRenewalRequired: u.sponsorRenewalRequired || false,
+    reviewRequired: u.reviewRequired || false,
+    inactiveReason: u.inactive_reason || null,
     createdAt: u.created_at,
   }));
 
@@ -108,10 +103,6 @@ export async function permanentDeleteUser(req) {
     throw { status: 404, message: 'User not found' };
   }
   
-  if (user.upi_screenshot_url) {
-    await FirebaseStorage.deletePaymentScreenshot(user.upi_screenshot_url);
-  }
-  
   await FirebaseNewReferral.deleteByUserId(id);
   
   if (user.referred_by) {
@@ -138,63 +129,145 @@ export async function dashboardStats() {
   const usersWithoutReferrals = allUsers.filter(u => u.referrals_count === 0).length;
   const usersWhoWereReferred = allUsers.filter(u => u.referred_by !== null).length;
   const usersWhoJoinedAlone = allUsers.filter(u => u.referred_by === null).length;
-  const pendingPayments = allUsers.filter(u => u.payment_status === 'pending').length;
-  const approvedPayments = allUsers.filter(u => u.payment_status === 'approved').length;
+  const approvedPayments = allUsers.filter(u => u.membershipPaid === true || u.payment_status === 'approved' || u.payment_status === 'success').length;
+  const activeUsers = allUsers.filter(u => u.account_status === 'active').length;
+  const inactiveUsers = allUsers.filter(u => u.account_status === 'inactive').length;
+  const pendingUsers = allUsers.filter(u => u.payment_status === 'pending' || u.account_status === 'inactive').length;
+  const suspendedUsers = allUsers.filter(u => u.account_status === 'suspended').length;
+  const blockedUsers = allUsers.filter(u => u.account_status === 'blocked').length;
+  const sponsorsAwaitingRenewal = allUsers.filter(u => u.sponsorRenewalRequired === true).length;
+  const usersNeedingReview = allUsers.filter(u => u.reviewRequired === true).length;
 
   return {
     status: 200,
     data: {
       totalUsers,
-      totalPayments: pendingPayments + approvedPayments,
-      paymentsByStatus: { pending: pendingPayments, approved: approvedPayments, rejected: 0, suspicious: 0 },
+      activeUsers,
+      inactiveUsers,
+      pendingUsers,
+      suspendedUsers,
+      blockedUsers,
+      totalPayments: approvedPayments,
+      paymentsByStatus: { success: approvedPayments },
       totalReferrals,
       usersWithReferrals,
       usersWithoutReferrals,
       usersWhoWereReferred,
       usersWhoJoinedAlone,
+      sponsorsAwaitingRenewal,
+      usersNeedingReview,
     },
   };
 }
 
+export async function activateSponsor(req) {
+  const { userId, adminName } = req.body;
+  if (!userId) throw { status: 400, message: 'userId is required' };
+
+  const user = await FirebaseUser.findById(userId);
+  if (!user) throw { status: 404, message: 'User not found' };
+
+  const db = (await import('../db/firebase-db.js')).FirebaseUser;
+  const updateData = {
+    account_status: 'active',
+    sponsorRenewalRequired: false,
+    sponsor_awaiting_credit: false,
+    inactive_reason: null,
+    activated_by: adminName || 'Unknown Admin',
+    activated_at: new Date().toISOString(),
+  };
+
+  const { getDb } = await import('../firebase/config.js');
+  const { doc, updateDoc } = await import('firebase/firestore');
+  const firestoreDb = getDb();
+  await updateDoc(doc(firestoreDb, 'users_new', userId), updateData);
+
+  return { status: 200, data: { message: 'Sponsor activated', userId } };
+}
+
+export async function reactivateSponsor(req) {
+  const { userId, adminName } = req.body;
+  if (!userId) throw { status: 400, message: 'userId is required' };
+
+  const user = await FirebaseUser.findById(userId);
+  if (!user) throw { status: 404, message: 'User not found' };
+
+  const { getDb } = await import('../firebase/config.js');
+  const { doc, updateDoc } = await import('firebase/firestore');
+  const firestoreDb = getDb();
+  await updateDoc(doc(firestoreDb, 'users_new', userId), {
+    account_status: 'active',
+    reviewRequired: false,
+    referral_limit_reached: false,
+    referrals_count: 0,
+    is_qualified: false,
+    referral_active: true,
+    activated_by: adminName || 'Unknown Admin',
+    activated_at: new Date().toISOString(),
+  });
+
+  return { status: 200, data: { message: 'Sponsor reactivated', userId } };
+}
+
+export async function suspendUser(req) {
+  const { userId, reason, adminName } = req.body;
+  if (!userId) throw { status: 400, message: 'userId is required' };
+
+  const user = await FirebaseUser.findById(userId);
+  if (!user) throw { status: 404, message: 'User not found' };
+
+  const { getDb } = await import('../firebase/config.js');
+  const { doc, updateDoc } = await import('firebase/firestore');
+  const firestoreDb = getDb();
+  await updateDoc(doc(firestoreDb, 'users_new', userId), {
+    account_status: 'suspended',
+    suspended_by: adminName || 'Unknown Admin',
+    suspended_at: new Date().toISOString(),
+    suspension_reason: reason || 'Suspended by admin',
+  });
+
+  return { status: 200, data: { message: 'User suspended', userId } };
+}
+
+export async function blockUser(req) {
+  const { userId, reason, adminName } = req.body;
+  if (!userId) throw { status: 400, message: 'userId is required' };
+
+  const user = await FirebaseUser.findById(userId);
+  if (!user) throw { status: 404, message: 'User not found' };
+
+  const { getDb } = await import('../firebase/config.js');
+  const { doc, updateDoc } = await import('firebase/firestore');
+  const firestoreDb = getDb();
+  await updateDoc(doc(firestoreDb, 'users_new', userId), {
+    account_status: 'blocked',
+    admin_status: 'suspicious',
+    blocked_by: adminName || 'Unknown Admin',
+    blocked_at: new Date().toISOString(),
+    block_reason: reason || 'Blocked by admin',
+  });
+
+  return { status: 200, data: { message: 'User blocked', userId } };
+}
+
 export async function listPayments(req) {
   const allUsers = await FirebaseUser.findAll();
-  const payments = allUsers
-    .filter(u => u.upi_screenshot_url)
-    .map(u => ({
-      _id: u.id,
-      name: u.name,
-      email: u.email,
-      phoneNumber: u.phone,
-      screenshot: u.upi_screenshot_url,
-      status: u.payment_status,
-      amount: Number(import.meta.env.VITE_PAYMENT_AMOUNT) || 120,
-      createdAt: u.created_at,
-    }));
+  const payments = allUsers.map(u => ({
+    _id: u.id,
+    name: u.name,
+    email: u.email,
+    phoneNumber: u.phone,
+    status: u.payment_status,
+    membershipPaid: u.membershipPaid,
+    razorpay_payment_id: u.razorpay_payment_id,
+    razorpay_order_id: u.razorpay_order_id,
+    amount: u.paymentAmount || Number(import.meta.env.VITE_PAYMENT_AMOUNT) || 120,
+    createdAt: u.created_at,
+  }));
 
   return {
     status: 200,
     data: { payments },
-  };
-}
-
-export async function verifyPayment(req) {
-  const { id } = req.params;
-  const { action } = req.body;
-
-  if (!['approved', 'rejected', 'pending'].includes(action)) {
-    throw { status: 400, message: 'action must be approved, rejected, or pending' };
-  }
-
-  const user = await FirebaseUser.findById(id);
-  if (!user) {
-    throw { status: 404, message: 'User not found' };
-  }
-
-  await FirebaseUser.updatePaymentStatusById(id, action);
-
-  return {
-    status: 200,
-    data: { message: `Payment marked ${action}` },
   };
 }
 
@@ -222,7 +295,7 @@ export async function referralTree(req) {
       referralsCount: user.referrals_count || 0,
       referredUsers: [],
       createdAt: user.created_at,
-      paymentApproved: user.payment_status === 'approved',
+      paymentApproved: user.payment_status === 'approved' || user.payment_status === 'success',
     };
   });
 
@@ -291,8 +364,6 @@ export async function filterUsersByReferral(req) {
     phone: u.phone,
     status: u.status,
     paymentStatus: u.payment_status,
-    upiQrUrl: u.upi_screenshot_url,
-    upiQrStatus: u.payment_status,
     referralCode: u.referral_code,
     referredBy: u.referred_by,
     referralsCount: u.referrals_count,
@@ -303,44 +374,6 @@ export async function filterUsersByReferral(req) {
   return {
     status: 200,
     data: { users: safeUsers, total: safeUsers.length, filter },
-  };
-}
-
-export async function updateUserUpiQr(req) {
-  const { id } = req.params;
-  const { upiQrUrl } = req.body;
-
-  const user = await FirebaseUser.findById(id);
-  if (!user) {
-    throw { status: 404, message: 'User not found' };
-  }
-
-  await FirebaseUser.updateUpiQrUrl(id, upiQrUrl);
-
-  return {
-    status: 200,
-    data: { message: 'UPI QR updated', upiQrUrl, upiQrStatus: 'pending' },
-  };
-}
-
-export async function verifyUpiQr(req) {
-  const { id } = req.params;
-  const { status } = req.body;
-
-  if (!['approved', 'rejected', 'pending'].includes(status)) {
-    throw { status: 400, message: 'status must be approved, rejected, or pending' };
-  }
-
-  const user = await FirebaseUser.findById(id);
-  if (!user) {
-    throw { status: 404, message: 'User not found' };
-  }
-
-  await FirebaseUser.updatePaymentStatusById(id, status);
-
-  return {
-    status: 200,
-    data: { message: `UPI QR ${status}`, upiQrStatus: status },
   };
 }
 

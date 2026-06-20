@@ -17,7 +17,21 @@ const FirebaseAdminUsersPage = lazy(() => import('./pages/FirebaseAdminUsersPage
 const ReferralGraphPage = lazy(() => import('./pages/ReferralGraphPage.jsx'));
 const FirebaseAdminStatusPage = lazy(() => import('./pages/FirebaseAdminStatusPage.jsx'));
 const FirebaseAdminTopupsPage = lazy(() => import('./pages/FirebaseAdminTopupsPage.jsx'));
-const AdminClaimPage = lazy(() => import('./pages/AdminClaimPage.jsx'));
+
+const SESSION_DURATION = 7 * 3600 * 1000;
+
+function isSessionExpired(key) {
+  const loginAt = parseInt(localStorage.getItem(key), 10);
+  if (!loginAt) return true;
+  return Date.now() - loginAt > SESSION_DURATION;
+}
+
+function clearSession() {
+  localStorage.removeItem('fb_user_id');
+  localStorage.removeItem('fb_login_at');
+  localStorage.removeItem('fb_admin_token');
+  localStorage.removeItem('fb_admin_login_at');
+}
 
 function LoadingFallback() {
   return (
@@ -33,6 +47,11 @@ function ProtectedFirebase({ children }) {
   const userId = localStorage.getItem('fb_user_id');
   useEffect(() => {
     if (!userId) { setVerified(false); return; }
+    if (isSessionExpired('fb_login_at')) {
+      clearSession();
+      setVerified(false);
+      return;
+    }
     let cancelled = false;
     import('./db/firebase-db.js').then(({ FirebaseUser }) => {
       FirebaseUser.findById(userId).then(user => {
@@ -49,6 +68,10 @@ function ProtectedFirebase({ children }) {
 function ProtectedFirebaseAdmin({ children }) {
   const adminToken = localStorage.getItem('fb_admin_token');
   if (!adminToken) return <Navigate to="/fb-admin" replace />;
+  if (isSessionExpired('fb_admin_login_at')) {
+    clearSession();
+    return <Navigate to="/fb-admin" replace />;
+  }
   return children;
 }
 
@@ -58,10 +81,8 @@ export default function App() {
       <Routes>
         <Route path="/test" element={<TestPage />} />
         <Route path="/" element={<Navigate to="/fb/register" replace />} />
-        <Route path="/payment" element={<Navigate to="/fb/register" replace />} />
-        
-        {/* Firebase User routes */}
-        <Route path="/fb/register" element={<PaymentPage />} />
+        <Route path="/payment" element={<PaymentPage />} />
+        <Route path="/fb/register" element={<FirebaseRegisterPage />} />
         <Route path="/fb/login" element={<FirebaseLoginPage />} />
         <Route path="/fb/dashboard" element={<ProtectedFirebase><FirebaseUserDashboard /></ProtectedFirebase>} />
         <Route path="/fb/messages" element={<ProtectedFirebase><UserMessageCenter /></ProtectedFirebase>} />
@@ -77,9 +98,8 @@ export default function App() {
         <Route path="/fb-admin/messages" element={<ProtectedFirebaseAdmin><AdminMessageHistory /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/chat" element={<ProtectedFirebaseAdmin><AdminChat /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/topups" element={<ProtectedFirebaseAdmin><FirebaseAdminTopupsPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/claims" element={<ProtectedFirebaseAdmin><AdminClaimPage /></ProtectedFirebaseAdmin>} />
 
-        <Route path="*" element={<Navigate to="/payment" replace />} />
+        <Route path="*" element={<Navigate to="/fb/register" replace />} />
       </Routes>
     </Suspense>
   );

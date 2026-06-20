@@ -1,54 +1,9 @@
-import { useEffect, useState, useMemo, memo, useRef } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import QRCode from 'qrcode';
-import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess, FirebaseTopup, FirebaseTopupReferral, FirebaseNotification } from '../db/firebase-db.js';
-import { ClaimEngine } from '../db/firebase-claim-engine.js';
+import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess, FirebaseTopup, FirebaseTopupReferral, FirebaseNotification, FirebaseWallet } from '../db/firebase-db.js';
 const QUOTA_KEY = 'fb_quota_exhausted';
 
-const UPI_VPA = import.meta.env.VITE_UPI_VPA || 'jayarajj126-3@okicici';
-const UPI_PAYEE_NAME = import.meta.env.VITE_UPI_PAYEE_NAME || 'Community';
 
-function buildUpiUri() {
-  const pa = encodeURIComponent(UPI_VPA);
-  const pn = encodeURIComponent(UPI_PAYEE_NAME);
-  return `upi://pay?pa=${pa}&pn=${pn}&am=&cu=INR`;
-}
-
-function loadRazorpayScript() {
-  return new Promise((resolve) => {
-    if (window.Razorpay) { resolve(true); return; }
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
-
-const UpiQrDisplay = memo(function UpiQrDisplay() {
-  const [qrDataUrl, setQrDataUrl] = useState('');
-  const [qrError, setQrError] = useState('');
-
-  useEffect(() => {
-    QRCode.toDataURL(buildUpiUri(), { width: 200, margin: 2 }).then(setQrDataUrl).catch(() => setQrError('Failed to generate QR'));
-  }, []);
-
-  return (
-    <div className="upi-qr-section">
-      {qrError ? (
-        <div className="muted" style={{ padding: '1rem' }}>{qrError}</div>
-      ) : qrDataUrl ? (
-        <img src={qrDataUrl} alt="UPI QR" style={{ borderRadius: '8px', border: '1px solid var(--border)', maxWidth: '100%' }} />
-      ) : (
-        <div className="muted" style={{ padding: '1rem' }}>Loading QR...</div>
-      )}
-      <div className="upi-id-box" style={{ marginTop: '0.75rem' }}>
-        <div className="label">UPI ID / VPA</div>
-        <code style={{ fontSize: '1rem' }}>{UPI_VPA}</code>
-      </div>
-    </div>
-  );
-});
 
 function getLastActiveStatus(dateStr) {
   if (!dateStr) return 'inactive';
@@ -65,10 +20,7 @@ export default function FirebaseUserDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [topupSuccessMsg, setTopupSuccessMsg] = useState('');
-  const [topupAudit, setTopupAudit] = useState(null);
-  const [topupOcrDebug, setTopupOcrDebug] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  
+
   // Referral form state
   const [showReferralForm, setShowReferralForm] = useState(false);
   const [refName, setRefName] = useState('');
@@ -85,51 +37,30 @@ export default function FirebaseUserDashboard() {
   const [referrerInfo, setReferrerInfo] = useState(null);
   const [viewCount, setViewCount] = useState(0);
 
-  // Payment upload state
-  const [paymentFile, setPaymentFile] = useState(null);
-  const [paymentUtr, setPaymentUtr] = useState('');
-  const [paymentPreview, setPaymentPreview] = useState(null);
-  const [showPaymentUpload, setShowPaymentUpload] = useState(false);
-
-  // Cycle payment state
-  const [cyclePaymentFile, setCyclePaymentFile] = useState(null);
-  const [cycleUtr, setCycleUtr] = useState('');
-  const [cyclePaymentPreview, setCyclePaymentPreview] = useState(null);
-  const [showCyclePaymentForm, setShowCyclePaymentForm] = useState(false);
-  const [cycleUtrExists, setCycleUtrExists] = useState(false);
-  const [checkingCycleUtr, setCheckingCycleUtr] = useState(false);
-  const cycleUtrTimer = useRef(null);
-
   // Topup state
   const [topups, setTopups] = useState([]);
-  const [topupAmount, setTopupAmount] = useState('');
-  const [showTopupForm, setShowTopupForm] = useState(false);
-  const [submittingTopup, setSubmittingTopup] = useState(false);
   const [topupIncome, setTopupIncome] = useState([]);
   const [claimingId, setClaimingId] = useState(null);
-  const [topupPaymentStep, setTopupPaymentStep] = useState('init');
-  const [topupVerificationCode, setTopupVerificationCode] = useState('');
-  const [generatedTopupCode, setGeneratedTopupCode] = useState('');
-  const [topupPaymentSessionId, setTopupPaymentSessionId] = useState('');
-  const [topupRazorpayLoaded, setTopupRazorpayLoaded] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
   const [profilePicFile, setProfilePicFile] = useState(null);
   const [profilePicPreview, setProfilePicPreview] = useState(null);
   const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
-  const [claims, setClaims] = useState([]);
-  const [claimAmount, setClaimAmount] = useState('');
-  const [claimTransactionId, setClaimTransactionId] = useState('');
-  const [claimFile, setClaimFile] = useState(null);
-  const [claimPreview, setClaimPreview] = useState(null);
-  const [showClaimForm, setShowClaimForm] = useState(false);
-  const [submittingClaim, setSubmittingClaim] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   const userId = localStorage.getItem('fb_user_id');
 
   useEffect(() => {
     if (!userId) {
+      navigate('/fb/login', { replace: true });
+      return;
+    }
+
+    const loginAt = parseInt(localStorage.getItem('fb_login_at'), 10);
+    if (!loginAt || Date.now() - loginAt > 7 * 3600 * 1000) {
+      localStorage.removeItem('fb_user_id');
+      localStorage.removeItem('fb_login_at');
       navigate('/fb/login', { replace: true });
       return;
     }
@@ -143,6 +74,7 @@ export default function FirebaseUserDashboard() {
       clearTimeout(timeoutId);
       if (!data) {
         localStorage.removeItem('fb_user_id');
+        localStorage.removeItem('fb_login_at');
         navigate('/fb/login');
         return;
       }
@@ -219,23 +151,19 @@ export default function FirebaseUserDashboard() {
     return () => { if (unsub) unsub(); };
   }, [userId]);
 
-  // Load claims
+  // Subscribe to wallet balance
   useEffect(() => {
     if (!userId) return;
-    const unsub = ClaimEngine.subscribeToClaims(userId, (data) => {
-      setClaims(data || []);
+    const unsub = FirebaseWallet.subscribeToWallet(userId, (data) => {
+      if (data) setWalletBalance(data.balance || 0);
     });
     return () => { if (unsub) unsub(); };
   }, [userId]);
 
-  useEffect(() => {
-    loadRazorpayScript().then(setTopupRazorpayLoaded);
-    FirebaseUser.ping?.();
-  }, []);
-
   async function handleLogout() {
     await FirebaseAuth.logout();
     localStorage.removeItem('fb_user_id');
+    localStorage.removeItem('fb_login_at');
     navigate('/fb/login');
   }
 
@@ -243,7 +171,7 @@ export default function FirebaseUserDashboard() {
     e.preventDefault();
     
     if (referralCount >= MAX_REFERRALS) {
-      setError('Referral limit reached. Complete cycle payment to refer more.');
+      setError('You have reached the maximum number of referrals.');
       return;
     }
     
@@ -277,127 +205,6 @@ export default function FirebaseUserDashboard() {
       await FirebaseNewReferral.delete(referralId);
     } catch (err) {
       setError(err.message);
-    }
-  }
-
-  function handleFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) {
-      setPaymentFile(file);
-      const reader = new FileReader();
-      reader.onload = () => setPaymentPreview(reader.result);
-      reader.readAsDataURL(file);
-    }
-  }
-
-  async function handleUploadPayment() {
-    if (!paymentFile || !paymentUtr.trim()) return;
-    if (!user) return;
-
-    setUploading(true);
-
-    const currentCount = user.referrals_count || 0;
-    if (currentCount < MAX_REFERRALS && !user.is_qualified) {
-      setError(`Complete ${MAX_REFERRALS} referrals before making payment`);
-      return;
-    }
-
-    const trimmedUtr = paymentUtr.trim();
-    try {
-      const dupCheck = await FirebaseUser.checkUtrExists(trimmedUtr);
-      if (dupCheck) {
-        setError('This UTR ID has already been used.');
-        setUploading(false);
-        return;
-      }
-    } catch {
-      setError('Could not verify UTR. Try again later.');
-      setUploading(false);
-      return;
-    }
-
-    try {
-      const uploadResult = await FirebaseStorage.uploadPaymentScreenshot(userId, paymentFile);
-      const url = typeof uploadResult === 'string' ? uploadResult : uploadResult.url;
-      await FirebaseUser.updateUpiScreenshot(userId, url, trimmedUtr);
-      
-      setPaymentFile(null);
-      setPaymentPreview(null);
-      setPaymentUtr('');
-      setShowPaymentUpload(false);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  function handleCycleFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) {
-      setCyclePaymentFile(file);
-      const reader = new FileReader();
-      reader.onload = () => setCyclePaymentPreview(reader.result);
-      reader.readAsDataURL(file);
-    }
-  }
-
-  function checkCycleUtrDuplicate(val) {
-    if (cycleUtrTimer.current) clearTimeout(cycleUtrTimer.current);
-    if (!val) {
-      setCycleUtrExists(false);
-      setCheckingCycleUtr(false);
-      return;
-    }
-    setCheckingCycleUtr(true);
-    cycleUtrTimer.current = setTimeout(async () => {
-      try {
-        const exists = await FirebaseUser.checkUtrExists(val.trim());
-        setCycleUtrExists(exists);
-      } catch {
-        setCycleUtrExists(false);
-      } finally {
-        setCheckingCycleUtr(false);
-      }
-    }, 500);
-  }
-
-  async function handleUploadCyclePayment() {
-    if (!cyclePaymentFile || !cycleUtr.trim()) {
-      setError('Screenshot and UTR are required');
-      return;
-    }
-    const trimmedUtr = cycleUtr.trim();
-    const dupCheck = await FirebaseUser.checkUtrExists(trimmedUtr);
-    if (dupCheck) {
-      setError('This UTR ID has already been used.');
-      return;
-    }
-    setUploading(true);
-    setError('');
-    try {
-      const url = await FirebaseStorage.uploadCyclePaymentScreenshot(userId, cyclePaymentFile);
-      await FirebaseUser.updateCyclePayment(userId, url, cycleUtr.trim());
-      setCyclePaymentFile(null);
-      setCyclePaymentPreview(null);
-      setCycleUtr('');
-      setCycleUtrExists(false);
-      setShowCyclePaymentForm(false);
-    } catch (err) {
-      console.error('Cycle payment error:', err);
-      setError(err.message);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  function handleClaimFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) {
-      setClaimFile(file);
-      const reader = new FileReader();
-      reader.onload = () => setClaimPreview(reader.result);
-      reader.readAsDataURL(file);
     }
   }
 
@@ -453,404 +260,9 @@ export default function FirebaseUserDashboard() {
     }
   }
 
-  function withTimeout(promise, ms) {
-    return Promise.race([
-      promise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out — Firestore daily quota is exhausted. Upgrade to Blaze plan at https://console.firebase.google.com or try again tomorrow.')), ms))
-    ]);
-  }
-
-  function preprocessImage(imgSrc, opts = {}) {
-    const { crop = true, denoise = true, scale = 2, contrast = 1.8, quality = 0.9 } = opts;
-    return new Promise((resolve, reject) => {
-      const img = new window.Image();
-      img.onload = () => {
-        try {
-          const c = document.createElement('canvas');
-          const ctx = c.getContext('2d');
-          c.width = img.width; c.height = img.height;
-          ctx.drawImage(img, 0, 0);
-          let iData = ctx.getImageData(0, 0, img.width, img.height);
-          let pix = iData.data;
-          let cropX = 0, cropY = 0, cropW = img.width, cropH = img.height;
-          if (crop) {
-            const thr = 30;
-            let mnX = img.width, mnY = img.height, mxX = 0, mxY = 0;
-            for (let y = 0; y < img.height; y++) {
-              for (let x = 0; x < img.width; x++) {
-                const idx = (y * img.width + x) * 4;
-                if (pix[idx] > thr && pix[idx] < 255 - thr) {
-                  if (x < mnX) mnX = x; if (x > mxX) mxX = x;
-                  if (y < mnY) mnY = y; if (y > mxY) mxY = y;
-                }
-              }
-            }
-            if (mnX < mxX && mnY < mxY) {
-              const pad = 10;
-              cropX = Math.max(0, mnX - pad); cropY = Math.max(0, mnY - pad);
-              cropW = Math.min(img.width - cropX, mxX - mnX + pad * 2);
-              cropH = Math.min(img.height - cropY, mxY - mnY + pad * 2);
-            }
-          }
-          const tw = cropW * scale, th = cropH * scale;
-          c.width = tw; c.height = th;
-          ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-          ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, tw, th);
-          iData = ctx.getImageData(0, 0, tw, th);
-          pix = iData.data;
-          for (let i = 0; i < pix.length; i += 4) {
-            const gray = 0.299 * pix[i] + 0.587 * pix[i+1] + 0.114 * pix[i+2];
-            let v = contrast * (gray - 128) + 128;
-            pix[i] = pix[i+1] = pix[i+2] = Math.max(0, Math.min(255, v));
-          }
-          if (denoise) {
-            const den = new Uint8ClampedArray(pix.length);
-            for (let y = 1; y < th - 1; y++) {
-              for (let x = 1; x < tw - 1; x++) {
-                const ns = [];
-                for (let dy = -1; dy <= 1; dy++) {
-                  for (let dx = -1; dx <= 1; dx++) {
-                    ns.push(pix[((y+dy)*tw+(x+dx))*4]);
-                  }
-                }
-                ns.sort((a,b)=>a-b);
-                const med = ns[4];
-                const idx = (y*tw+x)*4;
-                den[idx]=den[idx+1]=den[idx+2]=med; den[idx+3]=255;
-              }
-            }
-            for (let y = 1; y < th - 1; y++) {
-              for (let x = 1; x < tw - 1; x++) {
-                const idx = (y*tw+x)*4;
-                const vv = -den[((y-1)*tw+(x-1))*4] - den[((y-1)*tw+x)*4] - den[((y-1)*tw+(x+1))*4] - den[(y*tw+(x-1))*4] + 9*den[idx] - den[(y*tw+(x+1))*4] - den[((y+1)*tw+(x-1))*4] - den[((y+1)*tw+x)*4] - den[((y+1)*tw+(x+1))*4];
-                pix[idx]=Math.max(0,Math.min(255,vv)); pix[idx+1]=pix[idx]; pix[idx+2]=pix[idx];
-              }
-            }
-          }
-          ctx.putImageData(iData, 0, 0);
-          resolve(c.toDataURL('image/jpeg', quality));
-        } catch (e) { reject(e); }
-      };
-      img.onerror = reject;
-      img.src = imgSrc;
-    });
-  }
-
-  async function runOcr(imageUrl) {
-    const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker('eng');
-    try {
-      await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
-      // Multi-pass OCR: run 3 sequential passes on the same worker (Tesseract is not reentrant)
-      const passOpts = [
-        { crop: true, denoise: true, scale: 2, contrast: 1.8 },
-        { crop: true, denoise: true, scale: 3, contrast: 2.5 },
-        { crop: true, denoise: false, scale: 2, contrast: 1.2 },
-      ];
-      const passes = [];
-      for (const opts of passOpts) {
-        const url = await preprocessImage(imageUrl, opts);
-        const r = await worker.recognize(url);
-        passes.push({ text: r.data.text || '', conf: Math.round(r.data.confidence || 0) });
-      }
-      // Merge all unique lines from all passes (sequential, no corruption)
-      const allLines = [];
-      const seen = new Set();
-      for (const pass of passes) {
-        for (const line of pass.text.split('\n')) {
-          const trimmed = line.trim();
-          if (trimmed && !seen.has(trimmed.toLowerCase())) {
-            allLines.push(trimmed);
-            seen.add(trimmed.toLowerCase());
-          }
-        }
-      }
-      const rawText = allLines.join('\n');
-      // Use overall best confidence for display
-      let confidence = Math.max(...passes.map(p => p.conf));
-      console.log('[OCR] Best confidence:', confidence, '| Total unique lines:', allLines.length);
-
-      // Remove hidden/unprintable characters that break regex matching
-      const text = rawText.replace(/[\u200B-\u200D\uFEFF\u00A0\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
-
-      let amount = null;
-      const amountWithSymbol = text.match(/(?:₹|Rs\.?|INR)\s*(\d+)/i);
-      if (amountWithSymbol) {
-        amount = amountWithSymbol[1];
-      } else {
-        const plainAmount = text.match(/\b(\d{2,6}(?:\.\d{1,2})?)\b/);
-        if (plainAmount) {
-          amount = plainAmount[1];
-        }
-      }
-
-      // Prefer label-based extraction for UPI transaction ID
-      let detected_upi_transaction_id = null;
-      const upiTxnPatterns = [
-        /UPI\s*(?:transaction|txn)\s*(?:id|no|number)?[:\s\-]+([A-Za-z0-9\s]{4,30})/i,
-        /UPI\s*(?:ref(?:erence)?)\s*(?:id|no|number)?[:\s\-]+([A-Za-z0-9\s]{4,30})/i,
-        /(?:Txn\s*ID|Transaction\s*(?:ID|No|Number))[:\s\-]+([A-Za-z0-9\s]{4,30})/i,
-        /UTR[:\s\-]+([A-Za-z0-9\s]{4,30})/i,
-      ];
-      for (const pattern of upiTxnPatterns) {
-        const match = text.match(pattern);
-        if (match) {
-          detected_upi_transaction_id = match[1].trim().replace(/\s+/g, '');
-          break;
-        }
-      }
-
-      // Detect Google transaction ID separately (for debug display only, NOT used for UTR validation)
-      let detected_google_transaction_id = null;
-      const googleMatch = text.match(/Google\s*(?:transaction|txn|play)\s*(?:id|no|number)?[:\s\-]+([A-Za-z0-9.\-_]{4,40})/i);
-      if (googleMatch) {
-        detected_google_transaction_id = googleMatch[1].trim();
-      }
-
-      // UTR = detected UPI transaction ID (label-based), fallback to any 12-22 digit sequence
-      let utr = detected_upi_transaction_id;
-      if (!utr) {
-        const digitsOnly = text.replace(/\D/g, '');
-        const utrMatch = digitsOnly.match(/\d{12,22}/);
-        utr = utrMatch ? utrMatch[0] : null;
-      }
-
-      const selected_for_validation = utr;
-
-      // Extract receiver UPI from 'To' section first, fallback to any UPI
-      let upi_id = null;
-      const toSection = text.match(/(?:To|Paid\s*to|Receiver|Beneficiary|Transfer\s*to|Pay\s*to)[:\s\-]*([a-zA-Z0-9._\-]+@[a-zA-Z]{3,})/i);
-      if (toSection) {
-        upi_id = toSection[1].trim();
-      }
-      if (!upi_id) {
-        const upiMatch = text.match(/[a-zA-Z0-9._-]+@[a-zA-Z]{3,}/);
-        upi_id = upiMatch ? upiMatch[0] : null;
-      }
-      let date = null;
-      // Try YYYY-MM-DD (ISO format) first
-      let dateMatch = text.match(/\b(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/);
-      if (dateMatch) {
-        date = `${dateMatch[3]}/${dateMatch[2]}/${dateMatch[1]}`;
-      }
-      // Try DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
-      if (!date) {
-        dateMatch = text.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/);
-        if (dateMatch) {
-          date = `${dateMatch[1]}/${dateMatch[2]}/${dateMatch[3]}`;
-        }
-      }
-      // Try DD/MM/YY, DD-MM-YY with 2-digit year
-      if (!date) {
-        dateMatch = text.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})\b(?!\d)/);
-        if (dateMatch) {
-          const year = '20' + dateMatch[3];
-          date = `${dateMatch[1]}/${dateMatch[2]}/${year}`;
-        }
-      }
-      if (!date) {
-        const textDate = text.match(/\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{2,4})\b/i);
-        if (textDate) {
-          const months = { jan:'01', feb:'02', mar:'03', apr:'04', may:'05', jun:'06', jul:'07', aug:'07', sep:'09', oct:'10', nov:'11', dec:'12' };
-          const month = months[textDate[2].toLowerCase().slice(0, 3)];
-          const year = textDate[3].length === 2 ? '20' + textDate[3] : textDate[3];
-          if (month) date = `${textDate[1]}/${month}/${year}`;
-        }
-      }
-      let statusText = (text.match(/(Completed|Success|Failed|Pending|Paid)/i) || [])[0] || null;
-      if (!statusText && /[✓✔☑✅]/.test(text)) statusText = 'Success';
-
-      console.log('[OCR EXTRACT] UPI ID:', upi_id);
-      console.log('[OCR EXTRACT] UPI Transaction ID:', utr);
-      console.log('[OCR EXTRACT] Amount:', amount);
-      console.log('[OCR EXTRACT] Date:', date);
-      console.log('[OCR EXTRACT] Status:', statusText);
-      console.log('[OCR EXTRACT] Confidence:', confidence);
-
-      return {
-        raw: text,
-        ocr_confidence: confidence,
-        utr,
-        amount,
-        upi_id,
-        sender_upi: null,
-        receiver_upi: upi_id,
-        sender_name: null,
-        receiver_name: null,
-        date,
-        time: null,
-        payment_status: statusText,
-        bank_name: null,
-        ref_number: utr,
-        transaction_id: utr,
-        detected_upi_transaction_id,
-        detected_google_transaction_id,
-        selected_for_validation,
-      };
-    } finally {
-      await worker.terminate();
-    }
-  }
-
-  async function handlePayTopup() {
-    console.log('[TOPUP] Button clicked');
-    if (!topupAmount || Number(topupAmount) < 1) {
-      setError('Enter a valid topup amount');
-      return;
-    }
-    if (!topupRazorpayLoaded) {
-      setError('Razorpay is loading. Please wait...');
-      return;
-    }
-    setError('');
-    setSubmittingTopup(true);
-    try {
-      console.log('[TOPUP] Creating payment order');
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out. Check your network connection.')), 15000)
-      );
-      const session = await Promise.race([
-        FirebaseUser.createPaymentSession(userId, 'topup', Number(topupAmount)),
-        timeoutPromise,
-      ]);
-      console.log('[TOPUP] Order created successfully', session?.sessionId);
-      setTopupPaymentSessionId(session.sessionId);
-
-      const rzpOptions = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_xxxxxxxxxxxx',
-        amount: Number(topupAmount) * 100,
-        currency: 'INR',
-        name: 'Starlight Ascent',
-        description: 'Wallet Topup',
-        prefill: {
-          name: user?.name || '',
-          email: user?.email || '',
-          contact: user?.phone || '',
-        },
-        handler: async function (response) {
-          console.log('[TOPUP] Payment success', response.razorpay_payment_id);
-          try {
-            const codePromise = FirebaseUser.generateVerificationCode(
-              session.sessionId,
-              response.razorpay_order_id,
-              response.razorpay_payment_id,
-            );
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Code generation timed out')), 10000)
-            );
-            const codeResult = await Promise.race([codePromise, timeoutPromise]);
-            setGeneratedTopupCode(codeResult?.code || '');
-          } catch (codeErr) {
-            console.warn('[TOPUP] Direct code generation failed, webhook may handle it:', codeErr);
-          }
-          setTopupPaymentStep('verify');
-          setSubmittingTopup(false);
-        },
-        modal: {
-          ondismiss: function () {
-            setSubmittingTopup(false);
-            setError('Payment cancelled. Please try again when ready.');
-            console.log('[TOPUP] Modal dismissed');
-          },
-        },
-      };
-      if (session.razorpayOrderId) {
-        rzpOptions.order_id = session.razorpayOrderId;
-      }
-      console.log('[TOPUP] Payment page opening');
-      const rzp = new window.Razorpay(rzpOptions);
-      rzp.on('payment.failed', function (response) {
-        console.log('[TOPUP] Payment failed', response.error?.description);
-        setError('Payment failed: ' + (response.error?.description || 'Unknown error'));
-        setSubmittingTopup(false);
-        setTopupPaymentStep('init');
-      });
-      rzp.open();
-      setTopupPaymentStep('pay');
-    } catch (err) {
-      console.log('[TOPUP] Error:', err.message);
-      setError(err.message || 'Failed to initiate payment');
-      setSubmittingTopup(false);
-      setTopupPaymentStep('init');
-    }
-  }
-
-  async function handleVerifyTopupCode() {
-    const code = topupVerificationCode.trim();
-    if (!code || !/^JTSB-[A-Z0-9]{6}$/i.test(code)) {
-      setError('Enter a valid verification code (format: JTSB-XXXXXX)');
-      return;
-    }
-    setError('');
-    setSubmittingTopup(true);
-    try {
-      const result = await FirebaseUser.verifyPaymentCode(topupPaymentSessionId, code.toUpperCase(), {
-        name: user?.name || 'User',
-        email: user?.email || '',
-        phone: user?.phone || '',
-        isTopup: true,
-        amount: Number(topupAmount),
-      });
-      if (result.success) {
-        setTopupSuccessMsg('Topup verified! ₹' + Number(topupAmount) + ' will be credited to your wallet.');
-        setTopupPaymentStep('done');
-        setShowTopupForm(false);
-        setTopupAmount('');
-        setTopupVerificationCode('');
-      } else {
-        setError(result.error || 'Verification failed. Please try again.');
-      }
-    } catch (err) {
-      setError(err.message || 'Verification failed');
-    } finally {
-      setSubmittingTopup(false);
-    }
-  }
-
-  async function handleSubmitClaim() {
-    if (!claimAmount || !claimTransactionId.trim() || !claimFile) {
-      setError('Amount, transaction ID, and screenshot are required');
-      return;
-    }
-    const trimmedTxId = claimTransactionId.trim();
-    let dupCheck = false;
-    try {
-      dupCheck = await withTimeout(FirebaseUser.checkUtrExists(trimmedTxId), 10000);
-    } catch (e) {
-      setError('Could not verify transaction ID. Try again later.');
-      return;
-    }
-    if (dupCheck) {
-      setError('This UTR ID has already been used.');
-      return;
-    }
-    setSubmittingClaim(true);
-    setError('');
-    setTopupSuccessMsg('');
-    try {
-      const url = await withTimeout(FirebaseStorage.uploadTopupScreenshot(userId, claimFile), 10000);
-      const claimResult = await withTimeout(ClaimEngine.submitClaim(userId, user?.name || 'User', user?.email || '', Number(claimAmount), trimmedTxId, url), 15000);
-      localStorage.removeItem(QUOTA_KEY);
-      setClaimAmount('');
-      setClaimTransactionId('');
-      setClaimFile(null);
-      setClaimPreview(null);
-      setShowClaimForm(false);
-      if (claimResult === 'pending' || claimResult.needsReview) {
-        setTopupSuccessMsg('Claim submitted for review. Admin will verify shortly.');
-      } else if (claimResult.approved) {
-        setTopupSuccessMsg('Claim approved and ₹' + Number(claimAmount) + ' credited to your wallet!');
-      } else if (claimResult.rejected) {
-        setTopupSuccessMsg('Claim was auto-rejected: ' + (claimResult.reason || 'verification failed') + '. Admin may still review.');
-      } else {
-        setTopupSuccessMsg('Claim submitted successfully. Awaiting admin review.');
-      }
-    } catch (err) {
-      console.error('Claim submission error:', err);
-      setError(err.message);
-    } finally {
-      setSubmittingClaim(false);
-    }
+  function handleGoToTopupPayment() {
+    localStorage.setItem('fb_user_id', userId);
+    navigate('/payment?mode=topup');
   }
 
   async function handleClaimIncome(incomeId) {
@@ -905,11 +317,7 @@ const userHasOwnTopup = useMemo(() => {
   const canAddMoreReferrals = approvedReferralCount < MAX_REFERRALS;
   const referralCount = user?.referrals_count || 0;
   const isQualified = useMemo(() => approvedReferralCount >= 2 || user?.is_qualified === true, [approvedReferralCount, user?.is_qualified]);
-  const isActive = useMemo(() => user?.account_status === 'active' && user?.payment_status === 'approved', [user?.account_status, user?.payment_status]);
-  const isSuspicious = user?.admin_status === 'suspicious';
-  const cyclePending = user?.cycle_payment_status === 'pending';
-  const cycleApproved = user?.cycle_payment_status === 'approved';
-  const needsCyclePayment = isQualified && !cycleApproved;
+  const isActive = useMemo(() => user?.account_status === 'active' && (user?.payment_status === 'approved' || user?.payment_status === 'success'), [user?.account_status, user?.payment_status]);
 
   if (loading) {
     return (
@@ -1060,66 +468,6 @@ return (
 
       {error && <div className="alert alert-error mb-md">{error}</div>}
 {topupSuccessMsg && <div className="alert alert-success mb-md">{topupSuccessMsg}</div>}
-{topupAudit && (() => {
-  const checks = [topupAudit.utr, topupAudit.date, topupAudit.upi].filter(Boolean);
-  const allPassed = checks.every(c => c.passed === true);
-  const anyFailed = checks.some(c => c.passed === false);
-  const anyUnavailable = checks.some(c => c.passed === null);
-  const d = topupOcrDebug || {};
-  const bannerBg = allPassed ? '#28a745' : (anyFailed ? '#dc3545' : '#ffc107');
-  const bannerText = allPassed ? 'APPROVED' : (anyFailed ? 'REJECTED' : 'NEEDS REVIEW');
-  return (
-    <div className="validation-audit" style={{ border: '1px solid var(--border, #ddd)', borderRadius: '6px', padding: '0.6rem', marginBottom: '1rem' }}>
-      <div style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.5rem', padding: '0.3rem 0.5rem', borderRadius: '4px', color: '#fff', background: bannerBg, textAlign: 'center' }}>
-        {bannerText}
-      </div>
-
-      {!allPassed && checks.filter(c => c.passed === false).length > 0 && (
-        <div style={{ fontSize: '0.8rem', marginBottom: '0.5rem', padding: '0.3rem 0.5rem', borderRadius: '4px', background: '#fff0f0', border: '1px solid #dc3545' }}>
-          <div style={{ fontWeight: 700, color: '#dc3545', marginBottom: '0.2rem' }}>FAILED VALIDATION</div>
-          {checks.filter(c => c.passed === false).map((check, i) => (
-            <div key={i} style={{ marginBottom: '0.3rem', padding: '0.2rem', borderBottom: i < checks.length - 1 ? '1px dashed #e0c0c0' : 'none' }}>
-              <div><strong>Check:</strong> {check.label}</div>
-              <div><strong>Reason:</strong> <span style={{ color: '#dc3545' }}>{check.reason}</span></div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {[
-        { ...topupAudit.utr, lbl: topupAudit.utr?.label || 'UTR Validation', exp: `User: "${topupAudit.utr?.userEntered || '—'}"`, act: `OCR: "${topupAudit.utr?.ocrDetected || '—'}"` },
-        { ...topupAudit.date, lbl: topupAudit.date?.label || 'Current Date', exp: topupAudit.date?.expected || '—', act: topupAudit.date?.actual || '—' },
-        { ...topupAudit.upi, lbl: topupAudit.upi?.label || 'Admin UPI', exp: topupAudit.upi?.expected || '—', act: topupAudit.upi?.actual || '—' },
-      ].filter(Boolean).map((c, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.77rem', padding: '0.3rem 0', borderBottom: '1px solid var(--border, #eee)' }}>
-          <div style={{ flex: 1 }}>
-            <span style={{ fontWeight: 600 }}>{c.lbl}</span>
-            <div style={{ fontSize: '0.68rem', color: '#666' }}>
-              Expected: {c.exp} &nbsp;|&nbsp; Actual: {c.act}
-            </div>
-          </div>
-          <span style={{ fontWeight: 700, fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '3px', color: '#fff', background: c.passed === true ? '#28a745' : (c.passed === false ? '#dc3545' : '#ffc107'), whiteSpace: 'nowrap' }}>
-            {c.passed === true ? 'PASS' : (c.passed === false ? 'FAIL' : 'N/A')}
-          </span>
-        </div>
-      ))}
-
-      {d && Object.keys(d).length > 0 && (
-        <>
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', marginBottom: '0.3rem', padding: '0.2rem 0', borderBottom: '2px solid var(--border, #ddd)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            OCR EXTRACTED DATA
-          </div>
-          <div style={{ fontSize: '0.73rem', padding: '0.3rem', background: 'var(--bg-soft, #f5f7fa)', borderRadius: '4px' }}>
-            <div style={{ marginBottom: '0.2rem' }}><strong>UPI Transaction ID:</strong> {d.detected_upi_transaction_id || d.selected_for_validation || 'Not detected'}</div>
-            <div style={{ marginBottom: '0.2rem' }}><strong>Receiver UPI ID:</strong> {d.upi_id || 'Not detected'}</div>
-            <div style={{ marginBottom: '0.2rem' }}><strong>Date:</strong> {d.date || 'Not detected'}</div>
-            <div style={{ marginBottom: '0.2rem' }}><strong>OCR Confidence:</strong> {d.ocr_confidence != null ? `${d.ocr_confidence}%` : 'Not detected'}</div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-})()}
 
       <div className="user-dashboard-wrap">
         <div className="profile-card">
@@ -1193,7 +541,7 @@ return (
                 </div>
                 <div className="quick-stat-info">
                   <span className="quick-stat-value">{approvedReferralCount}</span>
-                  <span className="quick-stat-label">Approved Referrals</span>
+                  <span className="quick-stat-label">Completed Referrals</span>
                 </div>
               </div>
               <div className="quick-stat-card">
@@ -1206,6 +554,19 @@ return (
                 <div className="quick-stat-info">
                   <span className="quick-stat-value">₹{totalTopupIncome.toFixed(2)}</span>
                   <span className="quick-stat-label">Total Rewards</span>
+                </div>
+              </div>
+              <div className="quick-stat-card">
+                <div className="quick-stat-icon stat-icon-income">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="M12 9v6" />
+                    <path d="M9 12h6" />
+                  </svg>
+                </div>
+                <div className="quick-stat-info">
+                  <span className="quick-stat-value">₹{walletBalance.toFixed(2)}</span>
+                  <span className="quick-stat-label">Wallet Balance</span>
                 </div>
               </div>
               <div className="quick-stat-card">
@@ -1297,12 +658,12 @@ return (
             )}
             {user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
               <div className="alert alert-warning text-sm mt-sm">
-                ⏳ Your own topup is approved. Account set to Inactive. Awaiting admin credit of <strong>₹{Number(user?.sponsor_topup_amount || 0).toFixed(2)}</strong>.
+                ⏳ Your own topup is approved. Account set to Inactive. Awaiting credit of <strong>₹{Number(user?.sponsor_topup_amount || 0).toFixed(2)}</strong>.
               </div>
             )}
             {user?.sponsor_credited && (
               <div className="alert alert-success text-sm mt-sm">
-                ✅ Admin credited <strong>₹{Number(user?.sponsor_credited_amount || 0).toFixed(2)}</strong> to your account.
+                ✅ Sponsor bonus of <strong>₹{Number(user?.sponsor_credited_amount || 0).toFixed(2)}</strong> credited to your account.
               </div>
             )}
 
@@ -1363,7 +724,7 @@ return (
                     <span className={`referral-stat-value ${approvedReferralCount >= MAX_REFERRALS ? 'danger' : 'success'}`}>
                       {approvedReferralCount}
                     </span>
-                    <span className="referral-stat-label">/ {MAX_REFERRALS} Approved</span>
+                    <span className="referral-stat-label">/ {MAX_REFERRALS} Completed</span>
                   </div>
                   {pendingReferralCount > 0 && (
                     <div className="referral-stat-item">
@@ -1383,13 +744,13 @@ return (
                   <p className="muted">Your account is currently suspended.</p>
                 ) : pendingReferralCount > 0 ? (
                   <>
-                    <p className="muted">Waiting for admin approval of {pendingReferralCount} referral(s).</p>
-                    <p className="muted">Payment cycle will unlock after 2 admin-approved referrals.</p>
+                    <p className="muted">Waiting for {pendingReferralCount} referral(s) to complete registration.</p>
+                    <p className="muted">Sponsor benefits unlock after 2 completed referrals.</p>
                   </>
                 ) : user?.account_status === 'inactive' ? (
                   <p className="muted">Your account is currently inactive.</p>
                 ) : (
-                  <p className="muted">Referral access will be enabled after admin approval.</p>
+                  <p className="muted">Referral access requires an active account.</p>
                 )}
               </div>
               )
@@ -1506,161 +867,18 @@ return (
         {!isQualified && !isActive && !user?.is_first_payment_done && (
           <div className="card mb-lg">
             <h2>Complete Referrals to Unlock Payment</h2>
-            <p className="muted">Payment cycle will unlock after 2 admin-approved referrals.</p>
+            <p className="muted">Sponsor benefits unlock after 2 completed referrals.</p>
             {pendingReferralCount > 0 && (
               <div className="alert alert-info text-sm mb-sm">
-                {pendingReferralCount} referral(s) pending admin approval. Only approved referrals count.
+                {pendingReferralCount} referral(s) pending completion. Only completed referrals count.
               </div>
             )}
             <div className="progress-container">
               <div className="progress-bar-wrap">
                 <div className="progress-bar-fill" style={{ width: `${Math.min((approvedReferralCount / 2) * 100, 100)}%` }}></div>
               </div>
-              <span className="progress-label">{approvedReferralCount} / 2 approved</span>
+              <span className="progress-label">{approvedReferralCount} / 2 completed</span>
             </div>
-          </div>
-        )}
-
-        {/* First-time payment for qualified users */}
-        {isQualified && !isActive && !user?.is_first_payment_done && (
-          <div className="card mb-lg" style={{ border: '2px solid var(--success)' }}>
-            <div className="alert alert-success mb-md">
-              <strong>Referral Target Completed!</strong> Your payment is now unlocked.
-            </div>
-            <h2>Complete Your Payment</h2>
-            <p>Please submit your payment to activate your account.</p>
-            <UpiQrDisplay />
-            
-            {!showPaymentUpload ? (
-              <button 
-                className="btn btn-primary mt-md"
-                onClick={() => setShowPaymentUpload(true)}
-              >
-                Submit Payment Details
-              </button>
-            ) : (
-              user?.payment_status === 'pending' ? (
-                <div className="alert alert-info mt-md">
-                  <strong>Payment submitted.</strong> Waiting for admin approval.
-                </div>
-              ) : (
-                <div className="surface-card mt-md">
-                  <div className="field">
-                    <label>UTR Number *</label>
-                    <input 
-                      type="text" 
-                      value={paymentUtr || ''} 
-                      onChange={e => setPaymentUtr(e.target.value)} 
-                      placeholder="Enter UTR from payment confirmation"
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Payment Screenshot *</label>
-                    <input type="file" accept="image/*" onChange={handleFileSelect} />
-                    {paymentPreview && (
-                      <img 
-                        src={paymentPreview} 
-                        alt="Preview" 
-                        className="screenshot-preview"
-                      />
-                    )}
-                  </div>
-                  <div className="flex-row mt-sm">
-                    <button 
-                      className={`btn btn-primary${uploading ? ' btn-loading' : ''}`}
-                      onClick={handleUploadPayment}
-                      disabled={uploading || !paymentFile || !paymentUtr.trim()}
-                    >
-                      {uploading ? 'Submitting...' : 'Submit Payment'}
-                    </button>
-                    <button 
-                      className="btn btn-ghost" 
-                      onClick={() => setShowPaymentUpload(false)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        )}
-
-        {/* Qualified Banner - only for active users who reached limit */}
-        {isQualified && isActive && (
-          <div className="alert alert-warning mb-lg">
-            <strong>Referral Limit Reached!</strong> Complete the cycle payment to continue referring members.
-          </div>
-        )}
-
-        {/* Cycle Payment Card (only after first payment is done) */}
-        {isQualified && user?.is_first_payment_done && (
-          <div className="card mb-lg" style={{ border: '2px solid var(--warning)' }}>
-            <h2>Referral Limit Reached</h2>
-            <p>Complete payment to continue referring members.</p>
-            <UpiQrDisplay />
-
-            {cyclePending ? (
-              <div className="alert alert-info mt-md">
-                <strong>Waiting for admin approval.</strong> Your payment is being reviewed.
-              </div>
-            ) : !showCyclePaymentForm ? (
-              <button
-                className="btn btn-primary mt-md"
-                onClick={() => setShowCyclePaymentForm(true)}
-              >
-                Submit Payment Details
-              </button>
-            ) : (
-              <div className="mt-md">
-                <div className="surface-card">
-                  <div className="field">
-                    <label>UTR Number *</label>
-                    <input
-                      type="text"
-                      value={cycleUtr}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setCycleUtr(val);
-                        checkCycleUtrDuplicate(val);
-                      }}
-                      className={cycleUtrExists ? 'input-error' : ''}
-                      placeholder="Enter UTR from payment confirmation"
-                    />
-                    {checkingCycleUtr && <div className="hint" style={{ color: 'var(--accent)', marginTop: '0.25rem' }}>Checking UTR...</div>}
-                    {cycleUtrExists && <div className="field-error">This UTR ID has already been used.</div>}
-                  </div>
-                  <div className="field">
-                    <label>Payment Screenshot *</label>
-                    <input type="file" accept="image/*" onChange={handleCycleFileSelect} />
-                    {cyclePaymentPreview && (
-                      <img
-                        src={cyclePaymentPreview}
-                        alt="Preview"
-                        className="screenshot-preview"
-                      />
-                    )}
-                  </div>
-                  <div className="flex-row mt-sm">
-                    <button
-                      type="button"
-                      className={`btn btn-primary${uploading ? ' btn-loading' : ''}`}
-                      onClick={() => handleUploadCyclePayment()}
-                      disabled={uploading || !cyclePaymentFile || !cycleUtr.trim() || cycleUtrExists}
-                    >
-                      {uploading ? 'Submitting...' : 'Submit Payment'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => { setShowCyclePaymentForm(false); setCycleUtrExists(false); }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -1673,7 +891,7 @@ return (
             Topup
           </h2>
           <p className="muted mb-md">
-            Submit a topup payment request. Once approved by admin, your sponsor will receive a referral benefit.
+            Add funds to your wallet via Razorpay. Payment is verified automatically via webhook.
           </p>
 
             <div className="stats-grid-modern mb-md">
@@ -1704,74 +922,9 @@ return (
               </div>
             </div>
 
-          {!showTopupForm ? (
-            <button className="btn btn-primary mb-md" onClick={() => { setShowTopupForm(true); setTopupPaymentStep('init'); }}>
-              Submit Topup Request
-            </button>
-          ) : (
-            <div className="surface-card mb-md">
-              {topupPaymentStep === 'init' && (
-                <>
-                  <div className="field">
-                    <label>Amount (INR) *</label>
-                    <input type="number" value={topupAmount} onChange={e => setTopupAmount(e.target.value)} placeholder="Enter topup amount" min="1" />
-                  </div>
-                  <div className="flex-row">
-                    <button className={`btn btn-primary${submittingTopup ? ' btn-loading' : ''}`} onClick={handlePayTopup} disabled={submittingTopup || !topupAmount || Number(topupAmount) < 1}>
-                      {submittingTopup ? 'Opening Razorpay...' : `Pay with Razorpay →`}
-                    </button>
-                    <button className="btn btn-ghost" onClick={() => { setShowTopupForm(false); setTopupAmount(''); setError(''); }}>
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {topupPaymentStep === 'pay' && (
-                <>
-                  {error && <div className="alert alert-error">{error}</div>}
-                  <div className="alert alert-info">
-                    <strong>Payment window opened!</strong><br />
-                    Complete the payment in the Razorpay popup to continue.
-                  </div>
-                </>
-              )}
-
-              {topupPaymentStep === 'verify' && (
-                <>
-                  {generatedTopupCode && (
-                    <div className="alert alert-success" style={{ fontSize: '1.2rem', textAlign: 'center', padding: '1rem' }}>
-                      Your verification code: <strong>{generatedTopupCode}</strong>
-                    </div>
-                  )}
-                  <div className="field">
-                    <label>Verification Code *</label>
-                    <input
-                      required
-                      value={topupVerificationCode}
-                      onChange={e => setTopupVerificationCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-                      placeholder="JTSB-XXXXXX"
-                    />
-                    <div className="hint">Enter the verification code from your payment confirmation</div>
-                  </div>
-                  <div className="flex-row">
-                    <button className={`btn btn-primary${submittingTopup ? ' btn-loading' : ''}`} onClick={handleVerifyTopupCode} disabled={submittingTopup || !topupVerificationCode.trim()}>
-                      {submittingTopup ? 'Verifying...' : 'Verify Topup'}
-                    </button>
-                    <button className="btn btn-ghost" onClick={() => { setTopupPaymentStep('init'); setTopupVerificationCode(''); setError(''); }}>
-                      Back
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {topupPaymentStep === 'done' && (
-                <div className="alert alert-success">
-                  <strong>Topup verified successfully!</strong>
-                </div>
-              )}
-            </div>
-          )}
+          <button className="btn btn-primary mb-md" onClick={handleGoToTopupPayment}>
+            Submit Topup Request
+          </button>
 
           {topups.length > 0 && (
             <div className="mt-sm">
@@ -1882,7 +1035,7 @@ return (
                           </button>
                         )}
                         {inc.status === 'eligible' && user?.sponsor_awaiting_credit && (
-                          <span className="badge badge-pending text-xs">Pending Admin Credit</span>
+                          <span className="badge badge-pending text-xs">Pending Credit</span>
                         )}
                         {inc.status === 'locked' && (
                           <span className="muted text-xs">Locked</span>
@@ -1902,106 +1055,8 @@ return (
           </div>
         </div>
 
-        {/* ===== CLAIM SECTION ===== */}
-        <div className="card mb-lg">
-          <h2 className="flex-row gap-sm">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-            </svg>
-            Top-Up Claim Request
-          </h2>
-          <p className="muted mb-md">
-            Already paid and need wallet credit? Submit a claim request with proof of payment. Once verified, funds are credited to your wallet.
-          </p>
-
-          {!showClaimForm ? (
-            <button className="btn btn-primary" onClick={() => setShowClaimForm(true)}>
-              {'\u2795'} Submit Claim
-            </button>
-          ) : (
-            <div className="form-section">
-              <div className="field">
-                <label>Amount *</label>
-                <select value={claimAmount} onChange={e => setClaimAmount(e.target.value)}>
-                  <option value="">Select amount</option>
-                  <option value="120">₹120 — Starter</option>
-                  <option value="500">₹500 — Silver</option>
-                  <option value="1000">₹1,000 — Gold</option>
-                  <option value="2000">₹2,000 — Premium</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>Transaction ID / UTR *</label>
-                <input type="text" value={claimTransactionId} onChange={e => setClaimTransactionId(e.target.value)} placeholder="Enter transaction reference number" />
-              </div>
-              <div className="field">
-                <label>Payment Screenshot *</label>
-                <input type="file" accept="image/*" onChange={handleClaimFileSelect} />
-                {claimPreview && (
-                  <img src={claimPreview} alt="Preview" className="screenshot-preview" />
-                )}
-              </div>
-              <div className="flex-row">
-                <button className={`btn btn-primary${submittingClaim ? ' btn-loading' : ''}`} onClick={handleSubmitClaim} disabled={submittingClaim || !claimAmount || !claimTransactionId.trim() || !claimFile}>
-                  {submittingClaim ? 'Submitting...' : 'Submit Claim'}
-                </button>
-                <button className="btn btn-ghost" onClick={() => { setShowClaimForm(false); setClaimPreview(null); setClaimFile(null); }}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {claims.filter(c => c.status === 'approved' || c.status === 'rejected' || c.status === 'pending' || c.status === 'manual_review').length > 0 && (
-            <div className="mt-sm">
-              <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Claim History</h3>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Amount</th>
-                      <th>Transaction ID</th>
-                      <th>Status</th>
-                      <th>Wallet</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {claims.map(c => (
-                      <tr key={c.id}>
-                        <td data-label="Date" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                          {c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}
-                        </td>
-                        <td data-label="Amount" className="font-bold">₹{Number(c.amount || 0).toFixed(2)}</td>
-                        <td data-label="TX ID" className="font-mono" style={{ fontSize: '0.75rem' }}>{c.transactionId || '—'}</td>
-                        <td data-label="Status">
-                          <span className={`badge ${c.status === 'approved' ? 'badge-paid' : c.status === 'rejected' ? 'badge-rejected' : c.status === 'manual_review' ? 'badge-warning' : 'badge-pending'} badge-xs`}>
-                            {c.status === 'approved' ? 'Approved' : c.status === 'rejected' ? 'Rejected' : c.status === 'manual_review' ? 'Manual Review' : 'Pending'}
-                          </span>
-                        </td>
-                        <td data-label="Wallet">
-                          {c.wallet_credited ? (
-                            <span className="badge badge-paid badge-xs">Credited</span>
-                          ) : c.status === 'rejected' ? (
-                            <span className="badge badge-rejected badge-xs">—</span>
-                          ) : (
-                            <span className="badge badge-pending badge-xs">Pending</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Referrals Card - only show after payment approval */}
-        {user?.payment_status === 'approved' && (
+        {(user?.payment_status === 'approved' || user?.payment_status === 'success') && (
         <div className={`card${isQualified ? ' card-dim' : ''}`}>
           <div className="flex-row-wrap refer-header">
             <h2 className="refer-header-title">My Referrals ({approvedReferralCount})</h2>
@@ -2012,7 +1067,7 @@ return (
 
           {pendingReferralCount > 0 && (
             <div className="alert alert-info text-sm mt-sm">
-              Waiting for admin approval of {pendingReferralCount} referral(s).
+              Waiting for {pendingReferralCount} referral(s) to complete registration.
             </div>
           )}
 
@@ -2034,7 +1089,7 @@ return (
 
           {!canAddMoreReferrals && isActive && (
             <p className="muted mt-md">
-              You have reached the maximum of {MAX_REFERRALS} referrals. Complete cycle payment to refer more.
+              You have reached the maximum of {MAX_REFERRALS} referrals.
             </p>
           )}
         </div>
@@ -2077,13 +1132,13 @@ return (
           )}
         </div>
 
-        {/* Approval Timeline */}
+        {/* Activity Timeline */}
         <div className="card mb-lg">
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
             </svg>
-            Approval Timeline
+            Activity Timeline
           </h2>
           {recentNotifications.length === 0 ? (
             <p className="muted" style={{ fontSize: '0.85rem' }}>No timeline events yet.</p>
@@ -2106,7 +1161,7 @@ return (
                 </div>
               ))}
               {recentNotifications.filter(n => n.type && (n.type.includes('approv') || n.type.includes('reject') || n.type.includes('activat'))).length === 0 && (
-                <p className="muted" style={{ fontSize: '0.85rem' }}>No approval events yet.</p>
+                <p className="muted" style={{ fontSize: '0.85rem' }}>No timeline events yet.</p>
               )}
             </div>
           )}

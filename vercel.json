@@ -1,9 +1,12 @@
 {
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
-  "framework": "vite",
+  "functions": {
+    "api/preRegister.js": { "maxDuration": 30 },
+    "api/createTopupSessionHttp.js": { "maxDuration": 30 },
+    "api/razorpayWebhook.js": { "maxDuration": 30 }
+  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/appwrite/[...slug].js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
