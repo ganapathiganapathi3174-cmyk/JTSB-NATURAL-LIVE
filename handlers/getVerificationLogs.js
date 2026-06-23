@@ -1,5 +1,5 @@
-const { COL_VERIFICATION_LOGS } = require('../_shared.js');
-const { runQuery } = require('../_supabase.js');
+const { COL_VERIFICATION_LOGS } = require('../api/_shared.js');
+const { runQuery } = require('../api/_supabase.js');
 
 module.exports = async (req, res) => {
   try {

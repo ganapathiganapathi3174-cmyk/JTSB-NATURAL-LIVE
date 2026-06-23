@@ -2,8 +2,8 @@ const {
   COL_USERS, COL_PENDING_REGS, COL_TOPUPS, COL_SESSIONS,
   COL_RAZORPAY_ORDERS, COL_PROCESSED_PAYMENTS, COL_WALLET_BALANCES, COL_WALLET_TX,
   MAX_REFERRALS, randomString, hashPassword, crypto
-} = require('../_shared.js');
-const { getDoc, deleteDoc, runQuery, writeDoc, updateDoc, addDoc } = require('../_supabase.js');
+} = require('../api/_shared.js');
+const { getDoc, deleteDoc, runQuery, writeDoc, updateDoc, addDoc } = require('../api/_supabase.js');
 
 module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
