@@ -12,6 +12,8 @@ const handlers = {
   getVerificationLogs: require('../handlers/getVerificationLogs.js'),
   adminDeleteRecord: require('../handlers/adminDeleteRecord.js'),
   getHealthStatus: require('../handlers/getHealthStatus.js'),
+  supabaseProxy: require('../handlers/supabaseProxy.js'),
+  getAdminDashboardData: require('../handlers/getAdminDashboardData.js'),
 };
 
 module.exports = async (req, res) => {

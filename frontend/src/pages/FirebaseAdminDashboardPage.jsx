@@ -1,8 +1,10 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FirebaseUser, FirebaseTopup, FirebaseNotification } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
 import { computePaymentAnalytics } from '../db/payment-analytics.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
+
+const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 
 const ADMIN_KEY = 'fb_admin_token';
 
@@ -237,6 +239,22 @@ export default function FirebaseAdminDashboardPage() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [users]);
 
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/getAdminDashboardData`, {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
+      if (result.success) {
+        setUsers(result.users || []);
+        setTopups(result.topups || []);
+      }
+    } catch (err) {
+      console.error('[ADMIN DASHBOARD] Failed to fetch data:', err);
+    }
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
     if (!token) {
@@ -244,19 +262,12 @@ export default function FirebaseAdminDashboardPage() {
       return;
     }
 
-    const unsubUsers = FirebaseUser.subscribeToUsers((allUsers) => {
-      setUsers(allUsers);
-    });
+    fetchData();
 
-    const unsubTopups = FirebaseTopup.subscribeToTopups((data) => {
-      setTopups(data || []);
-    });
+    const interval = setInterval(fetchData, 30000);
 
-    return () => {
-      if (unsubUsers) unsubUsers();
-      if (unsubTopups) unsubTopups();
-    };
-  }, [navigate]);
+    return () => clearInterval(interval);
+  }, [navigate, fetchData]);
 
   function logout() {
     localStorage.removeItem(ADMIN_KEY);
