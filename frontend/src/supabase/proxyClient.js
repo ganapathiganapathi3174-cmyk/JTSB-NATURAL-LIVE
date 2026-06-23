@@ -87,6 +87,10 @@ function makeQueryBuilder(table) {
       isSingle = true;
       return builder;
     },
+    maybeSingle() {
+      isSingle = true;
+      return builder;
+    },
     then(resolve, reject) {
       return buildSelectThenable().then(resolve, reject);
     },
