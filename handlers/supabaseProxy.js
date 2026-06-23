@@ -41,6 +41,30 @@ module.exports = async (req, res) => {
       const { count, error } = await query;
       if (error) throw new Error(error.message);
       result = { count: count || 0 };
+    } else if (method === 'update') {
+      if (!id && !filters.length) { res.writeHead(400); res.end(JSON.stringify({ error: 'id or filters required for update' })); return; }
+      let query = supabase.from(table).update(data || {});
+      if (id) query = query.eq('id', id);
+      for (const f of filters) query = query.eq(f.field, f.value);
+      const { error } = await query;
+      if (error) throw new Error(error.message);
+      result = { success: true };
+    } else if (method === 'upsert') {
+      const { data: upserted, error } = await supabase.from(table).upsert(data || {}, { onConflict: options.onConflict || 'id' }).select('id').single();
+      if (error) throw new Error(error.message);
+      result = upserted;
+    } else if (method === 'insert') {
+      const { data: inserted, error } = await supabase.from(table).insert(data || {}).select('id');
+      if (error) throw new Error(error.message);
+      result = inserted;
+    } else if (method === 'delete') {
+      if (!id && !filters.length) { res.writeHead(400); res.end(JSON.stringify({ error: 'id or filters required for delete' })); return; }
+      let query = supabase.from(table).delete();
+      if (id) query = query.eq('id', id);
+      for (const f of filters) query = query.eq(f.field, f.value);
+      const { error } = await query;
+      if (error) throw new Error(error.message);
+      result = { success: true };
     } else {
       res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid method' })); return;
     }

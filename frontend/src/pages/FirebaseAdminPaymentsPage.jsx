@@ -5,6 +5,7 @@ import { FirebaseUser } from '../db/firebase-db.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
+const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 
 function getRelativeTime(dateStr) {
   if (!dateStr) return '';
@@ -115,14 +116,29 @@ export default function FirebaseAdminPaymentsPage() {
     };
   }, []);
 
+  const fetchPayments = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/getAdminDashboardData`, {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
+      if (result.success) {
+        const withPayment = (result.users || []).filter(u => u.payment_status || u.razorpay_payment_id);
+        setUsers(withPayment);
+      }
+    } catch (err) {
+      console.error('[ADMIN PAYMENTS] Failed to fetch:', err);
+    }
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
     if (!token) { navigate('/fb-admin', { replace: true }); return; }
-    const unsubscribe = FirebaseUser.subscribeToPayments((usersWithPayment) => {
-      setUsers(usersWithPayment);
-    });
-    return () => { if (unsubscribe) unsubscribe(); };
-  }, [navigate]);
+    fetchPayments();
+    const interval = setInterval(fetchPayments, 30000);
+    return () => clearInterval(interval);
+  }, [navigate, fetchPayments]);
 
   useEffect(() => {
     const status = searchParams.get('status');
