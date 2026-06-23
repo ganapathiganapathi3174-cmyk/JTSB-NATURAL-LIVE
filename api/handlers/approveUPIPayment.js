@@ -1,5 +1,5 @@
-const { randomString } = require('./_shared.js');
-const { runQuery, writeDoc, updateDoc, addDoc, deleteDoc } = require('./_supabase.js');
+const { randomString } = require('../_shared.js');
+const { runQuery, writeDoc, updateDoc, addDoc, deleteDoc } = require('../_supabase.js');
 
 const COL_UPI_PAYMENTS = 'upi_payments';
 const COL_USERS = 'users';

@@ -1,5 +1,5 @@
-const { COL_DELETION_AUDIT_LOGS, COL_USERS, COL_UPI_PAYMENTS, COL_TOPUPS, COL_VERIFICATION_LOGS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_TOPUP_INCOME, COL_REFERRALS, COL_NOTIFICATIONS, COL_CHAT_MESSAGES, COL_CHAT_CONVOS, COL_UNIQUES } = require('./_shared.js');
-const { deleteDoc, getDoc, runQuery, addDoc, updateDoc } = require('./_supabase.js');
+const { COL_DELETION_AUDIT_LOGS, COL_USERS, COL_UPI_PAYMENTS, COL_TOPUPS, COL_VERIFICATION_LOGS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_TOPUP_INCOME, COL_REFERRALS, COL_NOTIFICATIONS, COL_CHAT_MESSAGES, COL_CHAT_CONVOS, COL_UNIQUES } = require('../_shared.js');
+const { deleteDoc, getDoc, runQuery, addDoc, updateDoc } = require('../_supabase.js');
 
 const SIMPLE_TYPES = { topup: COL_TOPUPS, pending_payment: COL_UPI_PAYMENTS, rejected_payment: COL_UPI_PAYMENTS, verification_log: COL_VERIFICATION_LOGS, test_record: COL_UPI_PAYMENTS, upi_payment: COL_UPI_PAYMENTS };
 const LABELS = { topup: 'Topup', upi_payment: 'UPI Payment', verification_log: 'Verification Log', user: 'User' };

@@ -3,9 +3,9 @@ const crypto = require('crypto');
 const {
   COL_USERS, COL_PENDING_REGS, COL_TOPUPS, COL_WALLET_BALANCES, COL_WALLET_TX,
   COL_UPI_PAYMENTS, COL_TOPUP_INCOME, COL_VERIFICATION_LOGS, MAX_REFERRALS, randomString,
-} = require('./_shared.js');
-const { getDoc, deleteDoc, runQuery, writeDoc, updateDoc, addDoc } = require('./_supabase.js');
-const { analyzeScreenshot } = require('./_vision.js');
+} = require('../_shared.js');
+const { getDoc, deleteDoc, runQuery, writeDoc, updateDoc, addDoc } = require('../_supabase.js');
+const { analyzeScreenshot } = require('../_vision.js');
 
 const DEFAULT_UPI_ID = 'jayarajj126-3@okicici';
 const ALLOWED_AMOUNTS = [120, 500, 1000];

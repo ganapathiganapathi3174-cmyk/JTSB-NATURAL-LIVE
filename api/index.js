@@ -1,17 +1,17 @@
 const handlers = {
-  preRegister: require('./preRegister.js'),
-  createTopupSessionHttp: require('./createTopupSessionHttp.js'),
-  verifyUPIPayment: require('./verifyUPIPayment.js'),
-  uploadScreenshot: require('./uploadScreenshot.js'),
-  getUPIPayments: require('./getUPIPayments.js'),
-  getUPIDashboardStats: require('./getUPIDashboardStats.js'),
-  processPendingPayments: require('./processPendingPayments.js'),
-  deleteUPIPayment: require('./deleteUPIPayment.js'),
-  approveUPIPayment: require('./approveUPIPayment.js'),
-  rejectUPIPayment: require('./rejectUPIPayment.js'),
-  getVerificationLogs: require('./getVerificationLogs.js'),
-  adminDeleteRecord: require('./adminDeleteRecord.js'),
-  getHealthStatus: require('./getHealthStatus.js'),
+  preRegister: require('./handlers/preRegister.js'),
+  createTopupSessionHttp: require('./handlers/createTopupSessionHttp.js'),
+  verifyUPIPayment: require('./handlers/verifyUPIPayment.js'),
+  uploadScreenshot: require('./handlers/uploadScreenshot.js'),
+  getUPIPayments: require('./handlers/getUPIPayments.js'),
+  getUPIDashboardStats: require('./handlers/getUPIDashboardStats.js'),
+  processPendingPayments: require('./handlers/processPendingPayments.js'),
+  deleteUPIPayment: require('./handlers/deleteUPIPayment.js'),
+  approveUPIPayment: require('./handlers/approveUPIPayment.js'),
+  rejectUPIPayment: require('./handlers/rejectUPIPayment.js'),
+  getVerificationLogs: require('./handlers/getVerificationLogs.js'),
+  adminDeleteRecord: require('./handlers/adminDeleteRecord.js'),
+  getHealthStatus: require('./handlers/getHealthStatus.js'),
 };
 
 module.exports = async (req, res) => {
@@ -23,7 +23,6 @@ module.exports = async (req, res) => {
     res.end(JSON.stringify({ error: 'Not found: ' + path }));
     return;
   }
-  // Parse body for POST/PUT
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
     let body = '';
     req.on('data', c => body += c);
