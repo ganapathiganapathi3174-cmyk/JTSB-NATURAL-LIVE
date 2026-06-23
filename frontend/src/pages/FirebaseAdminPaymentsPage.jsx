@@ -125,7 +125,9 @@ export default function FirebaseAdminPaymentsPage() {
       const result = await res.json();
       if (result.success) {
         const withPayment = (result.users || []).filter(u => u.payment_status || u.razorpay_payment_id);
-        setUsers(withPayment);
+        const allPayments = [...(result.pendingPayments || []), ...withPayment];
+        allPayments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setUsers(allPayments);
       }
     } catch (err) {
       console.error('[ADMIN PAYMENTS] Failed to fetch:', err);
