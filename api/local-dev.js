@@ -32,19 +32,19 @@ function wrapHandler(handler) {
 }
 
 const handlers = {
-  preRegister: require('./handlers/preRegister.js'),
-  createTopupSessionHttp: require('./handlers/createTopupSessionHttp.js'),
-  verifyUPIPayment: require('./handlers/verifyUPIPayment.js'),
-  uploadScreenshot: require('./handlers/uploadScreenshot.js'),
-  getUPIPayments: require('./handlers/getUPIPayments.js'),
-  getUPIDashboardStats: require('./handlers/getUPIDashboardStats.js'),
-  processPendingPayments: require('./handlers/processPendingPayments.js'),
-  deleteUPIPayment: require('./handlers/deleteUPIPayment.js'),
-  approveUPIPayment: require('./handlers/approveUPIPayment.js'),
-  rejectUPIPayment: require('./handlers/rejectUPIPayment.js'),
-  getVerificationLogs: require('./handlers/getVerificationLogs.js'),
-  adminDeleteRecord: require('./handlers/adminDeleteRecord.js'),
-  getHealthStatus: require('./handlers/getHealthStatus.js'),
+  preRegister: require('../handlers/preRegister.js'),
+  createTopupSessionHttp: require('../handlers/createTopupSessionHttp.js'),
+  verifyUPIPayment: require('../handlers/verifyUPIPayment.js'),
+  uploadScreenshot: require('../handlers/uploadScreenshot.js'),
+  getUPIPayments: require('../handlers/getUPIPayments.js'),
+  getUPIDashboardStats: require('../handlers/getUPIDashboardStats.js'),
+  processPendingPayments: require('../handlers/processPendingPayments.js'),
+  deleteUPIPayment: require('../handlers/deleteUPIPayment.js'),
+  approveUPIPayment: require('../handlers/approveUPIPayment.js'),
+  rejectUPIPayment: require('../handlers/rejectUPIPayment.js'),
+  getVerificationLogs: require('../handlers/getVerificationLogs.js'),
+  adminDeleteRecord: require('../handlers/adminDeleteRecord.js'),
+  getHealthStatus: require('../handlers/getHealthStatus.js'),
 };
 
 const routeMap = {};
