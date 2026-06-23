@@ -14,10 +14,23 @@ Refactor, optimize and stabilize the entire website to production-ready state wi
 8. **Fixed duplicate exports (build failure)**: `supabase-db.js` — removed duplicate `checkReferralLinkExpiry` and `seedDefaultAdmin` from re-export line.
 9. **Removed console.log from production API files**: `_cleanup.js`, `_health.js`, `_queue.js` — all info-level logs stripped.
 10. **Audited throw patterns in controllers**: All `throw {status, message}` handled correctly by `api/client.js:121`.
+11. **Created Supabase project + DB tables**: 20 tables migrated, default admin seeded.
+12. **Fixed API deployment (500 errors)**:
+    - Removed `"type": "module"` from root `package.json` — was breaking CJS `require()` in handlers
+    - Moved all API deps (`@libsql/client`, `pg`, `razorpay`, `@aws-sdk/client-s3`) to root `package.json` — deps installed from `api/package.json` weren't resolvable by modules outside `api/`
+    - Consolidated 23 handlers into `handlers/` directory, single `api/index.js` entry point to avoid Vercel Hobby 12-function limit
+    - Utility files (`_shared.js`, `_supabase.js`, etc.) kept in `api/` directory, referenced via `../api/` from handlers
+
+## Verified
+- `GET /api/getHealthStatus` → `{"success":true,...}`
+- `POST /api/preRegister` → `{"pendingRegId":"...","referrer":null}`
+- Frontend build: `cd frontend && npm run build` passes cleanly in 3s
+- Vercel deploy: build 18s, total 46s, production URL: `https://starlightascent.vercel.app`
 
 ## Running
 - Dev server: `http://localhost:5173/`
-- Production build: `cd frontend && npm run build` passes cleanly
+- Production: `https://starlightascent.vercel.app`
 
 ## To Do
-- None — all tasks complete.
+- End-to-end test the full user flow: register → UPI payment → screenshot upload → admin approval
+- Set up Turso/Neon/R2 env vars for backup/analytics/file-storage resilience (non-blocking)
