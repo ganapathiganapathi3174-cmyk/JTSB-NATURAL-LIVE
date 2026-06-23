@@ -1,5 +1,5 @@
-const { COL_USERS, COL_UNIQUES, COL_PENDING_REGS, randomString, hashPassword } = require('../api/_shared.js');
-const { runQuery, addDoc, writeDoc } = require('../api/_supabase.js');
+const { COL_USERS, COL_UNIQUES, COL_PENDING_REGS, randomString, hashPassword } = require('../_shared.js');
+const { runQuery, addDoc, writeDoc } = require('../_supabase.js');
 
 module.exports = async (req, res) => {
   try {

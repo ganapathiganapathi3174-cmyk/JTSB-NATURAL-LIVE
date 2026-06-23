@@ -1,8 +1,8 @@
 const http = require('http');
-const turso = require('./_turso.js');
-const queue = require('./_queue.js');
-const health = require('./_health.js');
-const cleanup = require('./_cleanup.js');
+const turso = require('../_turso.js');
+const queue = require('../_queue.js');
+const health = require('../_health.js');
+const cleanup = require('../_cleanup.js');
 
 // Initialize on startup
 turso.ensureBackupTables().catch(err => console.warn('[TURSO] Init warning:', err.message));

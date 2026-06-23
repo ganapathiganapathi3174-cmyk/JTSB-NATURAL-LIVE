@@ -1,5 +1,5 @@
-const { COL_UPI_PAYMENTS } = require('../api/_shared.js');
-const { runQuery, deleteDoc } = require('../api/_supabase.js');
+const { COL_UPI_PAYMENTS } = require('../_shared.js');
+const { runQuery, deleteDoc } = require('../_supabase.js');
 
 module.exports = async (req, res) => {
   try {

@@ -1,5 +1,5 @@
-const { COL_UPI_PAYMENTS, COL_PENDING_REGS } = require('../api/_shared.js');
-const { deleteDoc, runQuery, writeDoc, addDoc } = require('../api/_supabase.js');
+const { COL_UPI_PAYMENTS, COL_PENDING_REGS } = require('../_shared.js');
+const { deleteDoc, runQuery, writeDoc, addDoc } = require('../_supabase.js');
 
 const VALID_TYPES = { registration: [120, 500, 1000], topup: [120, 500, 1000] };
 const ACCEPTED_UPI = 'jayarajj126-3@okicici';

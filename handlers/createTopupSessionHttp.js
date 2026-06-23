@@ -1,5 +1,5 @@
-const { randomString } = require('../api/_shared.js');
-const { writeDoc } = require('../api/_supabase.js');
+const { randomString } = require('../_shared.js');
+const { writeDoc } = require('../_supabase.js');
 
 const COL_SESSIONS = 'payment_sessions';
 
