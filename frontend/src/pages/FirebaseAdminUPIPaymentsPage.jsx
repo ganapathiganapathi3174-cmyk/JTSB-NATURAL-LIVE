@@ -94,7 +94,12 @@ export default function FirebaseAdminUPIPaymentsPage() {
       if (!payRes.ok) throw new Error(payData.error || 'Failed to load payments');
       const statsData = await statsRes.json();
       if (!statsRes.ok) throw new Error(statsData.error || 'Failed to load stats');
-      setPayments(payData.payments || []);
+      const raw = Array.isArray(payData) ? payData : (payData.payments || []);
+      setPayments(raw.map(p => ({
+        ...p, userId: p.userId || p.user_id, type: p.type || p.payment_type,
+        paymentDate: p.paymentDate || p.payment_date, screenshotUrl: p.screenshotUrl || p.screenshot_url,
+        rejectionReasons: p.rejectionReasons || p.rejection_reasons || [],
+      })));
       setStats(statsData);
     } catch (e) {
       setError(e.message);
