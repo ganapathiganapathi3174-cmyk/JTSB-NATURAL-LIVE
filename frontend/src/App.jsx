@@ -17,6 +17,7 @@ const FirebaseAdminUsersPage = lazy(() => import('./pages/FirebaseAdminUsersPage
 const ReferralGraphPage = lazy(() => import('./pages/ReferralGraphPage.jsx'));
 const FirebaseAdminStatusPage = lazy(() => import('./pages/FirebaseAdminStatusPage.jsx'));
 const FirebaseAdminTopupsPage = lazy(() => import('./pages/FirebaseAdminTopupsPage.jsx'));
+const FirebaseAdminUPIPaymentsPage = lazy(() => import('./pages/FirebaseAdminUPIPaymentsPage.jsx'));
 
 const SESSION_DURATION = 7 * 3600 * 1000;
 
@@ -98,6 +99,7 @@ export default function App() {
         <Route path="/fb-admin/messages" element={<ProtectedFirebaseAdmin><AdminMessageHistory /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/chat" element={<ProtectedFirebaseAdmin><AdminChat /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/topups" element={<ProtectedFirebaseAdmin><FirebaseAdminTopupsPage /></ProtectedFirebaseAdmin>} />
+        <Route path="/fb-admin/upi-payments" element={<ProtectedFirebaseAdmin><FirebaseAdminUPIPaymentsPage /></ProtectedFirebaseAdmin>} />
 
         <Route path="*" element={<Navigate to="/fb/register" replace />} />
       </Routes>

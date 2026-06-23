@@ -1,0 +1,349 @@
+-- Supabase Migration: Replace Firebase with Supabase
+-- Run this in Supabase SQL Editor
+
+-- ==================== EXTENSIONS ====================
+create extension if not exists "uuid-ossp";
+create extension if not exists "pgcrypto";
+
+-- ==================== USERS TABLE ====================
+create table if not exists public.users (
+  id uuid primary key default uuid_generate_v4(),
+  email text unique not null,
+  phone text,
+  name text,
+  password_hash text,
+  referral_code text unique,
+  referred_by text,
+  referred_by_status text default 'pending',
+  account_status text default 'inactive',
+  payment_status text default 'pending',
+  membership_type text default 'basic',
+  membership_paid boolean default false,
+  active boolean default false,
+  approved boolean default false,
+  approved_date timestamptz,
+  joined_date timestamptz,
+  last_active_at timestamptz,
+  referral_limit_reached boolean default false,
+  referrals_count integer default 0,
+  total_referral_count integer default 0,
+  sponsor_topup_completed boolean default false,
+  topup_referral_qualified boolean default false,
+  sponsor_credited boolean default false,
+  locked_income numeric(12,2) default 0,
+  activated_at timestamptz,
+  activated_by text,
+  activation_reason text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_users_email on public.users(email);
+create index if not exists idx_users_phone on public.users(phone);
+create index if not exists idx_users_referral_code on public.users(referral_code);
+create index if not exists idx_users_referred_by on public.users(referred_by);
+create index if not exists idx_users_account_status on public.users(account_status);
+create index if not exists idx_users_payment_status on public.users(payment_status);
+
+-- ==================== UNIQUES TABLE (email/phone uniqueness) ====================
+create table if not exists public.uniques (
+  id text primary key,
+  user_id uuid references public.users(id) on delete cascade,
+  created_at timestamptz default now()
+);
+
+-- ==================== PENDING REGISTRATIONS ====================
+create table if not exists public.pending_registrations (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete set null,
+  name text,
+  email text,
+  phone text,
+  password_hash text,
+  referral_code text,
+  utr text,
+  amount numeric(12,2),
+  status text default 'pending',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_pending_reg_email on public.pending_registrations(email);
+create index if not exists idx_pending_reg_status on public.pending_registrations(status);
+
+-- ==================== UPI PAYMENTS ====================
+create table if not exists public.upi_payments (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete set null,
+  utr text,
+  upi_id text,
+  amount numeric(12,2),
+  amount_option text,
+  payment_type text,
+  screenshot_url text,
+  status text default 'pending',
+  rejection_reasons jsonb,
+  ocr_result jsonb,
+  final_score numeric(5,2),
+  payment_date timestamptz,
+  verified_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_upi_user_id on public.upi_payments(user_id);
+create index if not exists idx_upi_utr on public.upi_payments(utr);
+create index if not exists idx_upi_status on public.upi_payments(status);
+
+-- ==================== PROCESSED PAYMENTS ====================
+create table if not exists public.processed_payments (
+  id uuid primary key default uuid_generate_v4(),
+  user_id text,
+  utr text,
+  amount numeric(12,2),
+  type text,
+  status text,
+  screenshot_hash text,
+  created_at timestamptz default now()
+);
+
+-- ==================== WALLET BALANCES ====================
+create table if not exists public.wallet_balances (
+  id uuid primary key references public.users(id) on delete cascade,
+  balance numeric(12,2) default 0,
+  total_earned numeric(12,2) default 0,
+  total_withdrawn numeric(12,2) default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- ==================== WALLET TRANSACTIONS ====================
+create table if not exists public.wallet_transactions (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete cascade,
+  type text,
+  amount numeric(12,2),
+  balance_before numeric(12,2) default 0,
+  balance_after numeric(12,2) default 0,
+  description text,
+  reference_type text,
+  reference_id text,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_wallet_tx_user on public.wallet_transactions(user_id);
+
+-- ==================== TOPUPS ====================
+create table if not exists public.topups (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete cascade,
+  amount numeric(12,2),
+  status text default 'pending',
+  utr text,
+  screenshot_url text,
+  verified_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_topups_user on public.topups(user_id);
+create index if not exists idx_topups_status on public.topups(status);
+
+-- ==================== TOPUP REFERRAL INCOME ====================
+create table if not exists public.topup_referral_income (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete cascade,
+  from_user_id uuid references public.users(id) on delete cascade,
+  topup_id uuid references public.topups(id) on delete cascade,
+  amount numeric(12,2),
+  level integer default 1,
+  status text default 'locked',
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_topup_income_user on public.topup_referral_income(user_id);
+create index if not exists idx_topup_income_from on public.topup_referral_income(from_user_id);
+
+-- ==================== REFERRALS ====================
+create table if not exists public.referrals (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete cascade,
+  referral_code text,
+  referred_email text,
+  referred_name text,
+  referred_phone text,
+  status text default 'pending',
+  reward_claimed boolean default false,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_referrals_user on public.referrals(user_id);
+create index if not exists idx_referrals_code on public.referrals(referral_code);
+
+-- ==================== NOTIFICATIONS ====================
+create table if not exists public.notifications (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete cascade,
+  sender_id text,
+  sender_name text,
+  message text,
+  type text,
+  is_read boolean default false,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_notifications_user on public.notifications(user_id);
+create index if not exists idx_notifications_read on public.notifications(is_read);
+
+-- ==================== CHAT CONVERSATIONS ====================
+create table if not exists public.chat_conversations (
+  id text primary key,
+  user_id uuid references public.users(id) on delete cascade,
+  user_name text,
+  last_message text,
+  last_message_at timestamptz,
+  is_read boolean default false,
+  created_at timestamptz default now()
+);
+
+-- ==================== CHAT MESSAGES ====================
+create table if not exists public.chat_messages (
+  id uuid primary key default uuid_generate_v4(),
+  convo_id text references public.chat_conversations(id) on delete cascade,
+  sender text,
+  message text,
+  is_read boolean default false,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_chat_convo on public.chat_messages(convo_id);
+
+-- ==================== ADMINS ====================
+create table if not exists public.admins (
+  id uuid primary key default uuid_generate_v4(),
+  email text unique not null,
+  password_hash text,
+  name text default 'Admin',
+  role text default 'admin',
+  created_at timestamptz default now()
+);
+
+-- ==================== DELETION AUDIT LOGS ====================
+create table if not exists public.deletion_audit_logs (
+  id uuid primary key default uuid_generate_v4(),
+  admin_id text,
+  admin_name text,
+  deleted_record_id text,
+  record_type text,
+  reason text,
+  collection text,
+  deleted_count integer,
+  deleted_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+-- ==================== SPONSOR DATA ====================
+create table if not exists public.sponsor_data (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete cascade,
+  sponsor_id text,
+  topup_amount numeric(12,2),
+  status text,
+  qualified boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- ==================== ROW LEVEL SECURITY ====================
+alter table public.users enable row level security;
+alter table public.uniques enable row level security;
+alter table public.pending_registrations enable row level security;
+alter table public.upi_payments enable row level security;
+alter table public.verification_logs enable row level security;
+alter table public.processed_payments enable row level security;
+alter table public.wallet_balances enable row level security;
+alter table public.wallet_transactions enable row level security;
+alter table public.topups enable row level security;
+alter table public.topup_referral_income enable row level security;
+alter table public.referrals enable row level security;
+alter table public.notifications enable row level security;
+alter table public.chat_conversations enable row level security;
+alter table public.chat_messages enable row level security;
+alter table public.admins enable row level security;
+alter table public.deletion_audit_logs enable row level security;
+alter table public.sponsor_data enable row level security;
+
+-- ==================== RLS POLICIES ====================
+
+-- Users: can read own data; admin can read all
+create policy "Users can read own data"
+  on public.users for select
+  using (auth.uid() = id);
+
+-- Service role bypass (handled by SUPABASE_SERVICE_KEY)
+-- Anonymous access for registration checks
+create policy "Allow registration email check"
+  on public.users for select
+  using (true);
+
+-- UPI Payments: users can see own; admin all
+create policy "Users can view own payments"
+  on public.upi_payments for select
+  using (auth.uid() = user_id);
+
+-- Wallet: users see own
+create policy "Users can view own wallet"
+  on public.wallet_balances for select
+  using (auth.uid() = id);
+
+-- Notifications: users see own
+create policy "Users can view own notifications"
+  on public.notifications for select
+  using (auth.uid() = user_id);
+
+-- ==================== DEFAULT ADMIN ====================
+-- Insert default admin (password: jayaraj7523)
+insert into public.admins (email, password_hash, name)
+values ('jayaraj@gmail.com', crypt('jayaraj7523', gen_salt('bf')), 'Admin')
+on conflict (email) do nothing;
+
+-- ==================== HELPER FUNCTIONS ====================
+
+-- Function to auto-create wallet on user creation
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.wallet_balances (id, balance, total_earned, total_withdrawn)
+  values (new.id, 0, 0, 0);
+  return new;
+end;
+$$;
+
+-- Trigger to create wallet for new users
+drop trigger if exists on_user_created on public.users;
+create trigger on_user_created
+  after insert on public.users
+  for each row execute function public.handle_new_user();
+
+-- Function to generate unique referral code
+create or replace function public.generate_referral_code()
+returns text
+language plpgsql
+as $$
+declare
+  code text;
+  chars text := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+begin
+  loop
+    code := '';
+    for i in 1..8 loop
+      code := code || substr(chars, floor(random() * length(chars) + 1)::integer, 1);
+    end loop;
+    exit when not exists (select 1 from public.users where referral_code = code);
+  end loop;
+  return code;
+end;
+$$;

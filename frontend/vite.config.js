@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://starlightascent.vercel.app',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },
@@ -22,7 +22,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          firebase: ['firebase/app', 'firebase/firestore', 'firebase/storage', 'firebase/auth'],
           vendor: ['react', 'react-dom', 'react-router-dom'],
         },
       },
@@ -30,6 +29,6 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
   },
   optimizeDeps: {
-    include: ['firebase/app', 'firebase/firestore'],
+    include: [],
   },
 });

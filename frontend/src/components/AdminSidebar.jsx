@@ -72,6 +72,16 @@ function IconChat() {
   );
 }
 
+function IconUPI() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <line x1="2" y1="10" x2="22" y2="10" />
+      <polyline points="16 14 18 16 20 14" />
+    </svg>
+  );
+}
+
 function IconLogout() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -86,6 +96,7 @@ const navItems = [
   { path: '/fb-admin/dashboard', label: 'Dashboard', icon: IconDashboard },
   { path: '/fb-admin/payments', label: 'Payments', icon: IconPayments },
   { path: '/fb-admin/topups', label: 'Topups', icon: IconTopups },
+  { path: '/fb-admin/upi-payments', label: 'UPI Payments', icon: IconUPI },
   { path: '/fb-admin/users', label: 'Users', icon: IconUsers },
   { path: '/fb-admin/status', label: 'Status Board', icon: IconStatus },
   { path: '/fb-admin/messages', label: 'Messages', icon: IconMessages },

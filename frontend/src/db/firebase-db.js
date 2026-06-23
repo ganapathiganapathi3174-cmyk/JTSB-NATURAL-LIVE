@@ -1,21 +1,14 @@
-/**
- * Database Layer — Firebase Firestore direct.
- *
- * All existing imports (from 'firebase-db.js') continue to work.
- * No UI, route, or workflow changes needed.
- */
-
 import {
-  FirebaseAuth as Auth,
-  FirebaseUser as User,
-  FirebaseStorage as Storage,
-  FirebaseTopup as Topup,
-  FirebaseTopupReferral as TopupReferral,
-  FirebaseReferralAccess as ReferralAccess,
-  FirebaseNewReferral as NewReferral,
-  FirebaseNotification as Notification,
-  FirebaseChat as Chat,
-  FirebaseWallet as Wallet,
+  SupabaseAuth as Auth,
+  SupabaseUser as User,
+  SupabaseStorage as Storage,
+  SupabaseTopup as Topup,
+  SupabaseTopupReferral as TopupReferral,
+  SupabaseTopupReferral as ReferralAccess,
+  SupabaseTopupReferral as NewReferral,
+  SupabaseNotification as Notification,
+  SupabaseChat as Chat,
+  SupabaseWallet as Wallet,
   generateReferralCode,
   hashPassword,
   hashPasswordCached,
@@ -25,7 +18,7 @@ import {
   seedDefaultAdmin,
   MAX_REFERRALS,
   REFERRAL_EXPIRY_DAYS,
-} from './firebase-db-impl.js';
+} from './supabase-db.js';
 
 const FirebaseAuth = Auth;
 const FirebaseUser = User;

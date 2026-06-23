@@ -1,47 +1,37 @@
-const { COL_USERS, COL_PENDING_REGS, COL_RAZORPAY_ORDERS, randomString, hashPassword, getProjectId } = require('./_shared.js');
-const { runQuery, writeDoc } = require('./_firestoreRest.js');
-const Razorpay = require('razorpay');
-const PAYMENT_AMOUNT = Number(process.env.PAYMENT_AMOUNT) || 120;
+const { COL_USERS, COL_UNIQUES, COL_PENDING_REGS, randomString, hashPassword } = require('./_shared.js');
+const { runQuery, addDoc, writeDoc } = require('./_supabase.js');
+
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-razorpay-signature');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const { name, email, phone, password, referralCode } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
-    const projectId = getProjectId();
-    const emailLower = email.toLowerCase().trim();
-    const existing = await runQuery(projectId, COL_USERS, [{ field: { fieldPath: 'email' }, op: 'EQUAL', value: { stringValue: emailLower } }], 1);
-    if (existing.length) return res.status(409).json({ error: 'An account with this email already exists' });
-    const pendingRegId = 'REG_' + randomString(12);
-    const hashedPw = hashPassword(password);
-    await writeDoc(projectId, COL_PENDING_REGS, pendingRegId, {
-      email: emailLower, name: name || '', phone: phone || '',
-      password: hashedPw, referralCode: referralCode || null,
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    });
-    const razorpayKeyId = process.env.VITE_RAZORPAY_KEY_ID;
-    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
-    if (!razorpayKeyId || !razorpayKeySecret) return res.status(500).json({ error: 'Razorpay not configured' });
-    let razorpayOrderId = null;
-    try {
-      const instance = new Razorpay({ key_id: razorpayKeyId, key_secret: razorpayKeySecret });
-      const order = await instance.orders.create({
-        amount: PAYMENT_AMOUNT * 100, currency: 'INR', receipt: pendingRegId,
-        notes: { pendingRegId, email: emailLower, name: name || '', phone: phone || '', referralCode: referralCode || '', paymentType: 'registration' },
-      });
-      razorpayOrderId = order.id;
-      await writeDoc(projectId, COL_RAZORPAY_ORDERS, order.id, {
-        pendingRegId, userEmail: emailLower, paymentType: 'registration',
-        amount: PAYMENT_AMOUNT, status: 'created',
-      });
-    } catch (err) {
-      return res.status(500).json({ error: 'Failed to create payment order' });
+
+    const errors = [];
+    if (!name || !name.trim()) errors.push('Name is required');
+    if (!email || !email.trim()) errors.push('Email is required');
+    if (!phone || !phone.trim()) errors.push('Phone is required');
+    if (!password || password.length < 6) errors.push('Password must be at least 6 characters');
+    const refCode = referralCode && referralCode.trim() ? referralCode.trim().toUpperCase() : null;
+    if (errors.length) { res.writeHead(400); res.end(JSON.stringify({ error: errors.join('. ') })); return; }
+
+    const existingEmail = await runQuery(COL_USERS, [{ field: 'email', op: 'EQUAL', value: email.toLowerCase().trim() }]);
+    if (existingEmail.length) { res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered. Please login.' })); return; }
+
+    const existingPhone = await runQuery(COL_USERS, [{ field: 'phone', op: 'EQUAL', value: phone.trim() }]);
+    if (existingPhone.length) { res.writeHead(409); res.end(JSON.stringify({ error: 'Phone already registered. Please login.' })); return; }
+
+    let referrer = null;
+    if (refCode) {
+      const refs = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: refCode }]);
+      if (refs.length) referrer = refs[0];
     }
-    return res.status(200).json({ pendingRegId, razorpayOrderId, razorpayKeyId, amount: PAYMENT_AMOUNT });
+
+    const pendingReg = await addDoc(COL_PENDING_REGS, {
+      name: name.trim(), email: email.toLowerCase().trim(), phone: phone.trim(),
+      password_hash: hashPassword(password), referral_code: refCode,
+    });
+
+    res.writeHead(200); res.end(JSON.stringify({ pendingRegId: pendingReg.id, referrer: referrer ? { name: referrer.name, code: referrer.referral_code } : null }));
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
   }
 };

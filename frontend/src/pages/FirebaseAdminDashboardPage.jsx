@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FirebaseUser, FirebaseTopup, FirebaseNotification } from '../db/firebase-db.js';
 import { computePaymentAnalytics } from '../db/payment-analytics.js';
@@ -98,6 +98,13 @@ export default function FirebaseAdminDashboardPage() {
   const [actionMessage, setActionMessage] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
+  const actionMsgTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (actionMsgTimeoutRef.current) clearTimeout(actionMsgTimeoutRef.current);
+    };
+  }, []);
 
   function getAdminName() {
     try {
@@ -117,7 +124,8 @@ export default function FirebaseAdminDashboardPage() {
       setActionMsg('✓ User permanently deleted');
       setActionUser(null);
       setActionMessage('');
-      setTimeout(() => { setActionMsg(''); }, 3000);
+      if (actionMsgTimeoutRef.current) clearTimeout(actionMsgTimeoutRef.current);
+      actionMsgTimeoutRef.current = setTimeout(() => { setActionMsg(''); }, 3000);
     } catch (err) {
       console.error('[DELETE ERROR]', err);
       const detail = err.response?.data?.message || err.message || 'Failed to delete user';

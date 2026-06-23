@@ -1,4 +1,4 @@
-// Admin controller using Firebase
+import { getSupabase } from '../supabase/config.js';
 import { FirebaseUser, FirebaseNewReferral } from '../db/firebase-db.js';
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
@@ -177,10 +177,8 @@ export async function activateSponsor(req) {
     activated_at: new Date().toISOString(),
   };
 
-  const { getDb } = await import('../firebase/config.js');
-  const { doc, updateDoc } = await import('firebase/firestore');
-  const firestoreDb = getDb();
-  await updateDoc(doc(firestoreDb, 'users_new', userId), updateData);
+  const supabase = getSupabase();
+  await supabase.from('users').update(updateData).eq('id', userId);
 
   return { status: 200, data: { message: 'Sponsor activated', userId } };
 }
@@ -192,10 +190,8 @@ export async function reactivateSponsor(req) {
   const user = await FirebaseUser.findById(userId);
   if (!user) throw { status: 404, message: 'User not found' };
 
-  const { getDb } = await import('../firebase/config.js');
-  const { doc, updateDoc } = await import('firebase/firestore');
-  const firestoreDb = getDb();
-  await updateDoc(doc(firestoreDb, 'users_new', userId), {
+  const supabase = getSupabase();
+  await supabase.from('users').update({
     account_status: 'active',
     reviewRequired: false,
     referral_limit_reached: false,
@@ -204,7 +200,7 @@ export async function reactivateSponsor(req) {
     referral_active: true,
     activated_by: adminName || 'Unknown Admin',
     activated_at: new Date().toISOString(),
-  });
+  }).eq('id', userId);
 
   return { status: 200, data: { message: 'Sponsor reactivated', userId } };
 }
@@ -216,15 +212,13 @@ export async function suspendUser(req) {
   const user = await FirebaseUser.findById(userId);
   if (!user) throw { status: 404, message: 'User not found' };
 
-  const { getDb } = await import('../firebase/config.js');
-  const { doc, updateDoc } = await import('firebase/firestore');
-  const firestoreDb = getDb();
-  await updateDoc(doc(firestoreDb, 'users_new', userId), {
+  const supabase = getSupabase();
+  await supabase.from('users').update({
     account_status: 'suspended',
     suspended_by: adminName || 'Unknown Admin',
     suspended_at: new Date().toISOString(),
     suspension_reason: reason || 'Suspended by admin',
-  });
+  }).eq('id', userId);
 
   return { status: 200, data: { message: 'User suspended', userId } };
 }
@@ -236,16 +230,14 @@ export async function blockUser(req) {
   const user = await FirebaseUser.findById(userId);
   if (!user) throw { status: 404, message: 'User not found' };
 
-  const { getDb } = await import('../firebase/config.js');
-  const { doc, updateDoc } = await import('firebase/firestore');
-  const firestoreDb = getDb();
-  await updateDoc(doc(firestoreDb, 'users_new', userId), {
+  const supabase = getSupabase();
+  await supabase.from('users').update({
     account_status: 'blocked',
     admin_status: 'suspicious',
     blocked_by: adminName || 'Unknown Admin',
     blocked_at: new Date().toISOString(),
     block_reason: reason || 'Blocked by admin',
-  });
+  }).eq('id', userId);
 
   return { status: 200, data: { message: 'User blocked', userId } };
 }

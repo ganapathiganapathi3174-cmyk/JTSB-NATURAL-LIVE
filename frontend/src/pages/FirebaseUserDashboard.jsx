@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess, FirebaseTopup, FirebaseTopupReferral, FirebaseNotification, FirebaseWallet } from '../db/firebase-db.js';
 const QUOTA_KEY = 'fb_quota_exhausted';
@@ -36,6 +36,15 @@ export default function FirebaseUserDashboard() {
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [referrerInfo, setReferrerInfo] = useState(null);
   const [viewCount, setViewCount] = useState(0);
+  const copyCodeTimeoutRef = useRef(null);
+  const copyLinkTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyCodeTimeoutRef.current) clearTimeout(copyCodeTimeoutRef.current);
+      if (copyLinkTimeoutRef.current) clearTimeout(copyLinkTimeoutRef.current);
+    };
+  }, []);
 
   // Topup state
   const [topups, setTopups] = useState([]);
@@ -318,6 +327,7 @@ const userHasOwnTopup = useMemo(() => {
   const referralCount = user?.referrals_count || 0;
   const isQualified = useMemo(() => approvedReferralCount >= 2 || user?.is_qualified === true, [approvedReferralCount, user?.is_qualified]);
   const isActive = useMemo(() => user?.account_status === 'active' && (user?.payment_status === 'approved' || user?.payment_status === 'success'), [user?.account_status, user?.payment_status]);
+  const isSuspicious = useMemo(() => user?.admin_status === 'suspicious', [user?.admin_status]);
 
   if (loading) {
     return (
@@ -353,18 +363,24 @@ const userHasOwnTopup = useMemo(() => {
   async function copyReferralCode() {
     const code = user?.referral_code;
     if (code) {
-      await navigator.clipboard.writeText(code);
+      try {
+        await navigator.clipboard.writeText(code);
+      } catch {}
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyCodeTimeoutRef.current) clearTimeout(copyCodeTimeoutRef.current);
+      copyCodeTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
     }
   }
 
   async function copyReferralLink() {
     const link = window.location.origin + '/fb/register?ref=' + user?.referral_code;
     if (link) {
-      await navigator.clipboard.writeText(link);
+      try {
+        await navigator.clipboard.writeText(link);
+      } catch {}
       setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
+      if (copyLinkTimeoutRef.current) clearTimeout(copyLinkTimeoutRef.current);
+      copyLinkTimeoutRef.current = setTimeout(() => setCopiedLink(false), 2000);
     }
   }
 
@@ -375,11 +391,14 @@ const userHasOwnTopup = useMemo(() => {
       if (navigator.share) {
         await navigator.share({ title: 'Join with my referral', text: text, url: link });
       } else {
-        await navigator.clipboard.writeText(link);
+        try {
+          await navigator.clipboard.writeText(link);
+        } catch {}
         setCopiedLink(true);
-        setTimeout(() => setCopiedLink(false), 2000);
+        if (copyLinkTimeoutRef.current) clearTimeout(copyLinkTimeoutRef.current);
+        copyLinkTimeoutRef.current = setTimeout(() => setCopiedLink(false), 2000);
       }
-    } catch (err) {
+    } catch {
       // Share cancelled or failed
     }
   }
@@ -891,7 +910,7 @@ return (
             Topup
           </h2>
           <p className="muted mb-md">
-            Add funds to your wallet via Razorpay. Payment is verified automatically via webhook.
+            Add funds to your wallet via UPI. Payment is verified automatically.
           </p>
 
             <div className="stats-grid-modern mb-md">

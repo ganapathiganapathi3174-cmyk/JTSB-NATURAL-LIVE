@@ -231,6 +231,11 @@ a:hover {
   color: #ff6b9d;
   border: 1px solid rgba(243, 18, 96, 0.35);
 }
+.btn-success {
+  background: rgba(52, 199, 89, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(52, 199, 89, 0.35);
+}
 
 .field {
   display: flex;
@@ -364,6 +369,18 @@ tr:last-child td {
 .badge-rejected {
   background: rgba(243, 18, 96, 0.12);
   color: var(--danger);
+}
+.badge-success {
+  background: rgba(52, 199, 89, 0.15);
+  color: var(--success);
+}
+.badge-error {
+  background: rgba(243, 18, 96, 0.12);
+  color: var(--danger);
+}
+.badge-warning {
+  background: rgba(255, 149, 0, 0.15);
+  color: #f97316;
 }
 
 /* Status badges for account statuses */
@@ -8452,6 +8469,30 @@ html {
 }
 .last-active-indicator.inactive {
   color: #9ca3af;
+}
+
+/* ===== UPI Payment Component ===== */
+
+.upi-payment-wrap {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0.5rem 0;
+}
+
+.upi-amount-selector {
+  margin-bottom: 0.5rem;
+}
+
+.upi-amount-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+}
+
+@media (max-width: 400px) {
+  .upi-amount-grid {
+    gap: 0.4rem;
+  }
 }
 
 /* --- End of all CSS --- */

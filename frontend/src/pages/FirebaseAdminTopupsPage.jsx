@@ -4,6 +4,7 @@ import { FirebaseTopup } from '../db/firebase-db.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
+const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL || '';
 
 function formatDateTime(dateStr) {
   if (!dateStr) return '—';
@@ -22,7 +23,7 @@ function getRelativeTime(dateStr) {
   return `${Math.floor(diffHours / 24)}d ago`;
 }
 
-function DeleteConfirmModal({ topup, onConfirm, onClose, loading }) {
+function DeleteConfirmModal({ topup, onConfirm, onClose, loading, errorMsg }) {
   const [reason, setReason] = useState('');
   if (!topup) return null;
   return (
@@ -34,20 +35,20 @@ function DeleteConfirmModal({ topup, onConfirm, onClose, loading }) {
         </div>
         <div className="modal-modern-body">
           <div className="alert alert-error">
-            <strong>Soft Delete Only</strong><br />
-            This topup will be hidden from dashboards and revenue calculations. The database record is NOT permanently removed.
+            <strong>{'\u26A0\uFE0F'} Warning:</strong> This will permanently delete this topup record from the database.
           </div>
           <div className="detail-grid-sm" style={{ marginBottom: '1rem' }}>
             <div><span className="muted text-sm">User</span><div className="font-semibold">{topup.userName}</div></div>
             <div><span className="muted text-sm">Amount</span><div className="font-bold">₹{Number(topup.amount || 0).toFixed(2)}</div></div>
           </div>
           <div className="field">
-            <label>Reason for deletion (optional)</label>
+            <label>Reason for deletion *</label>
             <textarea className="input" value={reason} onChange={e => setReason(e.target.value)} placeholder="Why is this topup being deleted?" rows={3} />
           </div>
+          {errorMsg && <div className="alert alert-error" style={{ marginTop: '0.5rem' }}>{errorMsg}</div>}
         </div>
         <div className="modal-modern-footer">
-          <button className={`btn-modern btn-modern-danger${loading ? ' btn-loading' : ''}`} onClick={() => onConfirm(reason)} disabled={loading}>
+          <button className={`btn-modern btn-modern-danger${loading ? ' btn-loading' : ''}`} onClick={() => onConfirm(reason)} disabled={loading || !reason.trim()}>
             {loading ? 'Deleting...' : 'Delete Topup'}
           </button>
           <button className="btn-modern btn-modern-ghost" onClick={onClose} disabled={loading}>Cancel</button>
@@ -146,16 +147,21 @@ export default function FirebaseAdminTopupsPage() {
   const [restoreTarget, setRestoreTarget] = useState(null);
   const [auditTarget, setAuditTarget] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
-    if (!token) {
-      navigate('/fb-admin', { replace: true });
-      return;
-    }
+    if (!token) { navigate('/fb-admin', { replace: true }); return; }
+    try {
+      const d = JSON.parse(atob(token));
+      if (!d.expiresAt || Date.now() > d.expiresAt) {
+        localStorage.removeItem(ADMIN_KEY);
+        navigate('/fb-admin', { replace: true }); return;
+      }
+    } catch { navigate('/fb-admin', { replace: true }); return; }
     const unsubscribe = FirebaseTopup.subscribeToTopups((data) => {
       setTopups(data || []);
     });
@@ -195,13 +201,49 @@ export default function FirebaseAdminTopupsPage() {
 
   async function handleDelete(reason) {
     if (!deleteTarget) return;
+    if (!reason.trim()) {
+      setDeleteError('Please enter a reason for deletion');
+      return;
+    }
     setActionLoading(true);
+    setDeleteError('');
     try {
-      const adminName = getAdminName();
-      await FirebaseTopup.softDelete(deleteTarget.id, adminName, reason);
+      const adminToken = localStorage.getItem(ADMIN_KEY);
+      if (!adminToken) {
+        setDeleteError('Session expired. Please re-login.');
+        setActionLoading(false);
+        return;
+      }
+      const res = await fetch(`${FUNCTIONS_URL}/adminDeleteRecord`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recordId: deleteTarget.id,
+          recordType: 'topup',
+          reason: reason.trim(),
+          adminToken,
+        }),
+      });
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Server returned an empty response. Check that the API server is running (port 3001).');
+      }
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      setTopups(prev => prev.filter(t => t.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err) {
-      alert('Delete failed: ' + (err.message || 'Unknown error'));
+      const msg = err.message || 'Unknown error';
+      if (msg.includes('Authentication required') || msg.includes('Token verification failed')) {
+        setDeleteError('Authentication error. Please re-login as admin.');
+      } else if (msg.includes('Permission denied')) {
+        setDeleteError('Permission denied. Only admins can delete records.');
+      } else if (msg.includes('not found')) {
+        setDeleteError('Record not found. It may have been already deleted.');
+      } else {
+        setDeleteError(msg);
+      }
     } finally {
       setActionLoading(false);
     }
@@ -294,7 +336,7 @@ export default function FirebaseAdminTopupsPage() {
               <h2 className="card-modern-title">{'\u{1F4CB}'} Topup History ({filteredTopups.length})</h2>
             </div>
             <p className="muted text-sm mb-md">
-              Topups are auto-approved via Razorpay. Deleted topups use soft delete — records are never permanently removed.
+              Topups are auto-approved. Deleted topups use soft delete — records are never permanently removed.
             </p>
 
             <div className="table-wrap-modern">
@@ -367,8 +409,9 @@ export default function FirebaseAdminTopupsPage() {
             <DeleteConfirmModal
               topup={deleteTarget}
               onConfirm={handleDelete}
-              onClose={() => setDeleteTarget(null)}
+              onClose={() => { setDeleteTarget(null); setDeleteError(''); }}
               loading={actionLoading}
+              errorMsg={deleteError}
             />
           )}
 

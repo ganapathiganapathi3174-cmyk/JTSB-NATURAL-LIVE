@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FirebaseUser } from '../db/firebase-db.js';
 
@@ -107,6 +107,13 @@ export default function FirebaseAdminPaymentsPage() {
   const [deleteConfirmUser, setDeleteConfirmUser] = useState(null);
   const [deleteSuccessMsg, setDeleteSuccessMsg] = useState('');
   const [deletingUser, setDeletingUser] = useState(false);
+  const deleteMsgTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (deleteMsgTimeoutRef.current) clearTimeout(deleteMsgTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
@@ -172,7 +179,8 @@ export default function FirebaseAdminPaymentsPage() {
       setUsers(prev => prev.filter(u => u.id !== userId));
       setDeleteConfirmUser(null);
       setDeleteSuccessMsg('User permanently deleted');
-      setTimeout(() => setDeleteSuccessMsg(''), 3000);
+      if (deleteMsgTimeoutRef.current) clearTimeout(deleteMsgTimeoutRef.current);
+      deleteMsgTimeoutRef.current = setTimeout(() => setDeleteSuccessMsg(''), 3000);
     } catch (err) {
       console.error('[DELETE ERROR]', err);
       setDeleteSuccessMsg('');
