@@ -120,7 +120,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
     setDeleteError('');
     setDeleting(true);
     try {
-      await onDelete(user.id, deleteReason.trim());
+      await onDelete(user.id, deleteReason.trim(), user);
       setShowDeleteConfirm(false);
       onClose();
     } catch (err) {
@@ -443,20 +443,21 @@ export default function FirebaseAdminUsersPage() {
     if (status) setStatusFilter(status);
   }, [searchParams]);
 
-  const handleDelete = async (userId, reason) => {
+  const handleDelete = async (userId, reason, deleteUser) => {
     const adminToken = localStorage.getItem('fb_admin_token');
     if (!adminToken) throw new Error('Admin session not found. Please re-login.');
+    const recordType = deleteUser?._source === 'pending_registration' ? 'pending_registration' : 'user';
     const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL || '';
     const url = FUNCTIONS_URL ? `${FUNCTIONS_URL}/adminDeleteRecord` : '/api/adminDeleteRecord';
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recordId: userId, recordType: 'user', reason, adminToken }),
+      body: JSON.stringify({ recordId: userId, recordType, reason, adminToken }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Delete failed');
     setUsers(prev => prev.filter(u => u.id !== userId));
-    setDeleteSuccessMsg('User permanently deleted');
+    setDeleteSuccessMsg(recordType === 'pending_registration' ? 'Registration deleted successfully' : 'User permanently deleted');
     if (deleteSuccessTimeoutRef.current) clearTimeout(deleteSuccessTimeoutRef.current);
     deleteSuccessTimeoutRef.current = setTimeout(() => setDeleteSuccessMsg(''), 3000);
   };
@@ -744,7 +745,7 @@ export default function FirebaseAdminUsersPage() {
                       const u = deleteConfirmUser;
                       setDeletingUser(true);
                       try {
-                        await handleDelete(u.id, deleteReason.trim());
+                        await handleDelete(u.id, deleteReason.trim(), u);
                         setDeleteConfirmUser(null);
                         setDeleteReason('');
                       } catch (e) {
