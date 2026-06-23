@@ -3,21 +3,10 @@
   "outputDirectory": "frontend/dist",
   "devCommand": null,
   "functions": {
-    "api/preRegister.js": { "maxDuration": 30 },
-    "api/createTopupSessionHttp.js": { "maxDuration": 30 },
-    "api/razorpayWebhook.js": { "maxDuration": 30 },
-    "api/verifyUPIPayment.js": { "maxDuration": 30 },
-    "api/getUPIPayments.js": { "maxDuration": 30 },
-    "api/getUPIDashboardStats.js": { "maxDuration": 30 },
-    "api/processPendingPayments.js": { "maxDuration": 30 },
-    "api/deleteUPIPayment.js": { "maxDuration": 30 },
-    "api/approveUPIPayment.js": { "maxDuration": 30 },
-    "api/rejectUPIPayment.js": { "maxDuration": 30 },
-    "api/uploadScreenshot.js": { "maxDuration": 30 },
-    "api/getVerificationLogs.js": { "maxDuration": 30 },
-    "api/adminDeleteRecord.js": { "maxDuration": 30 }
+    "api/index.js": { "maxDuration": 30 }
   },
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
