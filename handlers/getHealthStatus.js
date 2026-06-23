@@ -1,5 +1,5 @@
-const health = require('./_health.js');
-const queue = require('../_queue.js');
+const health = require('../api/_health.js');
+const queue = require('../api/_queue.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');

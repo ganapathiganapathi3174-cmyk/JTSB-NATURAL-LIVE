@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const r2 = require('../_r2.js');
+const r2 = require('../api/_r2.js');
 
 const LOCAL_DIR = path.join(__dirname, '..', 'public', 'uploads');
 
