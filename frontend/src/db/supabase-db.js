@@ -417,8 +417,47 @@ export const SupabaseUser = {
 
   async getAllUsers() {
     const supabase = getSupabase();
-    const { data } = await supabase.from('users').select('*').order('created_at', { ascending: false });
-    return data || [];
+    const [usersRes, pendingRes] = await Promise.all([
+      supabase.from('users').select('*').order('created_at', { ascending: false }),
+      supabase.from('pending_registrations').select('*').order('created_at', { ascending: false }),
+    ]);
+    const normalizeDates = (u) => {
+      if (u.joined_date && !u.joinedDate) u.joinedDate = u.joined_date;
+      if (u.approved_date && !u.approvedDate) u.approvedDate = u.approved_date;
+      if (u.last_active_at && !u.lastActiveAt) u.lastActiveAt = u.last_active_at;
+      return u;
+    };
+    const users = (usersRes.data || []).map(normalizeDates);
+    const pending = (pendingRes.data || []).map(r => ({
+      id: r.id,
+      name: r.name || 'Unknown',
+      email: r.email || '',
+      phone: r.phone || '',
+      referral_code: r.referral_code || '',
+      payment_status: 'pending',
+      account_status: 'inactive',
+      active: false,
+      approved: false,
+      membership_paid: false,
+      referrals_count: 0,
+      total_referral_count: 0,
+      referral_limit_reached: false,
+      referred_by: null,
+      referred_by_status: null,
+      sponsor_topup_completed: false,
+      topup_referral_qualified: false,
+      created_at: r.created_at,
+      joined_date: r.created_at,
+      joinedDate: r.created_at,
+      approved_date: null,
+      approvedDate: null,
+      last_active_at: null,
+      lastActiveAt: null,
+      _source: 'pending_registration',
+    }));
+    const merged = [...users, ...pending];
+    merged.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return merged;
   },
 
   async findAll() { return this.getAllUsers(); },
