@@ -49,7 +49,7 @@ module.exports = async (req, res) => {
       if (!pendingRegId) return res.status(200).json({ status: 'ignored', reason: 'no pendingRegId' });
       const pendingReg = await getDoc(COL_PENDING_REGS, pendingRegId);
       if (!pendingReg) return res.status(200).json({ status: 'ignored', reason: 'pending_reg not found' });
-      const newUserId = 'U' + randomString(16);
+      const newUserId = crypto.randomUUID();
       let referredBy = null;
       const refCode = pendingReg.referralCode;
       if (refCode) {

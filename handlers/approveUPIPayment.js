@@ -1,4 +1,4 @@
-const { randomString } = require('../api/_shared.js');
+const { randomString, crypto } = require('../api/_shared.js');
 const { runQuery, writeDoc, updateDoc, addDoc, deleteDoc } = require('../api/_supabase.js');
 
 const COL_UPI_PAYMENTS = 'upi_payments';
@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
       if (!pendingRegs.length) { res.writeHead(400); res.end(JSON.stringify({ error: 'Registration session not found' })); return; }
       const pendingReg = pendingRegs[0];
 
-      const newUserId = 'U' + randomString(16);
+      const newUserId = crypto.randomUUID();
       const refCode = pendingReg.referral_code;
 
       let referredBy = null;

@@ -403,7 +403,7 @@ module.exports = async (req, res) => {
             results.rejected++; continue;
           }
 
-          const newUserId = 'U' + randomString(16);
+          const newUserId = crypto.randomUUID();
           let referredByUserId = null;
           let referredByCode = null;
           const refCode = pendingReg.referral_code;
