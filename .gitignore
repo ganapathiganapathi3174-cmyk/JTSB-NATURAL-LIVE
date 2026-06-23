@@ -13,3 +13,5 @@ api/node_modules/
 
 # Legacy
 my-worker/
+
+.env.vercel
