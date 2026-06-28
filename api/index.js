@@ -1,38 +1,101 @@
+const { requireAdmin } = require('./_auth.js');
+const metrics = require('./_metrics.js');
+
+// Simple in-memory rate limiter for API
+const rateLimitStore = new Map();
+function rateLimit(key, maxRequests = 30, windowMs = 60000) {
+  const now = Date.now();
+  const entry = rateLimitStore.get(key) || { count: 0, resetAt: now + windowMs };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + windowMs; }
+  entry.count++;
+  rateLimitStore.set(key, entry);
+  if (entry.count > maxRequests) return { limited: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  return { limited: false };
+}
+
 const handlers = {
+  adminLogin: require('../handlers/adminLogin.js'),
   preRegister: require('../handlers/preRegister.js'),
   createTopupSessionHttp: require('../handlers/createTopupSessionHttp.js'),
   verifyUPIPayment: require('../handlers/verifyUPIPayment.js'),
   uploadScreenshot: require('../handlers/uploadScreenshot.js'),
-  getUPIPayments: require('../handlers/getUPIPayments.js'),
-  getUPIDashboardStats: require('../handlers/getUPIDashboardStats.js'),
-  processPendingPayments: require('../handlers/processPendingPayments.js'),
-  deleteUPIPayment: require('../handlers/deleteUPIPayment.js'),
-  approveUPIPayment: require('../handlers/approveUPIPayment.js'),
-  rejectUPIPayment: require('../handlers/rejectUPIPayment.js'),
-  getVerificationLogs: require('../handlers/getVerificationLogs.js'),
-  adminDeleteRecord: require('../handlers/adminDeleteRecord.js'),
+  getUPIPayments: requireAdmin(require('../handlers/getUPIPayments.js')),
+  getUPIDashboardStats: requireAdmin(require('../handlers/getUPIDashboardStats.js')),
+  processPendingPayments: requireAdmin(require('../handlers/processPendingPayments.js')),
+  deleteUPIPayment: requireAdmin(require('../handlers/deleteUPIPayment.js')),
+  approveUPIPayment: requireAdmin(require('../handlers/approveUPIPayment.js')),
+  rejectUPIPayment: requireAdmin(require('../handlers/rejectUPIPayment.js')),
+  restoreUPIPayment: requireAdmin(require('../handlers/restoreUPIPayment.js')),
+  getVerificationLogs: requireAdmin(require('../handlers/getVerificationLogs.js')),
+  adminDeleteRecord: requireAdmin(require('../handlers/adminDeleteRecord.js')),
   getHealthStatus: require('../handlers/getHealthStatus.js'),
-  supabaseProxy: require('../handlers/supabaseProxy.js'),
-  getAdminDashboardData: require('../handlers/getAdminDashboardData.js'),
+  supabaseProxy: requireAdmin(require('../handlers/supabaseProxy.js')),
+  getAdminDashboardData: requireAdmin(require('../handlers/getAdminDashboardData.js')),
+  cleanupDemoData: requireAdmin(require('../handlers/cleanupDemoData.js')),
+  approvePendingRegistration: requireAdmin(require('../handlers/approvePendingRegistration.js')),
+  bulkDeleteUsers: requireAdmin(require('../handlers/bulkDeleteUsers.js')),
+  getRecentActivity: requireAdmin(require('../handlers/getRecentActivity.js')),
+  updateUserStatus: requireAdmin(require('../handlers/updateUserStatus.js')),
+  createPaymentSession: require('../handlers/createPaymentSession.js'),
+  paymentConfirm: require('../handlers/paymentConfirm.js'),
+  createSmsSession: require('../handlers/createSmsSession.js'),
+  smsPaymentConfirm: require('../handlers/smsPaymentConfirm.js'),
 };
 
 module.exports = async (req, res) => {
   const url = req.url.split('?')[0];
   const path = url.replace(/^\/api\//, '').replace(/^\//, '');
   const handler = handlers[path];
+
+  // Rate limiting by IP
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  const rl = rateLimit(ip, 60, 60000);
+  if (rl.limited) {
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Too many requests. Try again in ' + rl.retryAfter + 's.' }));
+    return;
+  }
+
   if (!handler) {
+    metrics.trackAPICall(path, req.method, 404);
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found: ' + path }));
     return;
   }
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
     let body = '';
-    req.on('data', c => body += c);
-    req.on('end', () => {
-      try { req.body = body ? JSON.parse(body) : {}; } catch { req.body = {}; }
-      handler(req, res);
+    await new Promise((resolve, reject) => {
+      req.on('data', c => body += c);
+      req.on('end', () => {
+        try { req.body = body ? JSON.parse(body) : {}; } catch { req.body = {}; }
+        resolve();
+      });
+      req.on('error', reject);
     });
-  } else {
-    handler(req, res);
   }
+  // Per-request timeout (30 seconds) — prevents indefinite hangs
+  const REQUEST_TIMEOUT_MS = 30000;
+  const abortTimer = setTimeout(() => {
+    if (!res.headersSent) {
+      res.writeHead(504, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Request timed out' }));
+    }
+  }, REQUEST_TIMEOUT_MS);
+  const origEnd = res.end.bind(res);
+  res.end = function (...args) { clearTimeout(abortTimer); return origEnd(...args); };
+
+  const origWriteHead = res.writeHead.bind(res);
+  res.writeHead = function (statusCode, ...args) {
+    clearTimeout(abortTimer);
+    metrics.trackAPICall(path, req.method, statusCode);
+    return origWriteHead(statusCode, ...args);
+  };
+  await handler(req, res).catch(err => {
+    clearTimeout(abortTimer);
+    metrics.trackAPICall(path, req.method, 500);
+    if (!res.headersSent) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message || 'Internal error' }));
+    }
+  });
 };

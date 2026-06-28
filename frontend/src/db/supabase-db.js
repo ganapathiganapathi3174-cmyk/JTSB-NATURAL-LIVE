@@ -638,41 +638,6 @@ export const SupabaseWallet = {
     return data?.balance || 0;
   },
 
-  async creditBalance(userId, amount, metadata = {}) {
-    const supabase = getSupabase();
-    const { data: existing } = await supabase.from('wallet_balances').select().eq('id', userId).maybeSingle();
-    const cb = existing?.balance || 0;
-    const nb = cb + Number(amount);
-    await supabase.from('wallet_balances').upsert({ id: userId, userId, balance: nb, updatedAt: new Date().toISOString() });
-    const tx = await SupabaseWallet.createTransaction(userId, { type: 'credit', amount: Number(amount), balanceAfter: nb, description: metadata.description || 'Credit', razorpay_payment_id: metadata.razorpay_payment_id || '', razorpay_order_id: metadata.razorpay_order_id || '' });
-    return { balance: nb, transaction: tx };
-  },
-
-  async debitBalance(userId, amount, metadata = {}) {
-    const supabase = getSupabase();
-    const { data: existing } = await supabase.from('wallet_balances').select().eq('id', userId).maybeSingle();
-    if (!existing) throw new Error('Wallet not found');
-    const cb = existing.balance || 0;
-    if (cb < amount) throw new Error('Insufficient balance');
-    const nb = cb - Number(amount);
-    await supabase.from('wallet_balances').update({ balance: nb, updatedAt: new Date().toISOString() }).eq('id', userId);
-    const tx = await SupabaseWallet.createTransaction(userId, { type: 'debit', amount: Number(amount), balanceAfter: nb, description: metadata.description || 'Debit', razorpay_payment_id: metadata.razorpay_payment_id || '', razorpay_order_id: metadata.razorpay_order_id || '' });
-    return { balance: nb, transaction: tx };
-  },
-
-  async createTransaction(userId, data) {
-    const supabase = getSupabase();
-    const { data: tx, error } = await supabase.from('wallet_transactions').insert({
-      userId, type: data.type || 'credit', amount: Number(data.amount),
-      balanceAfter: data.balanceAfter || 0, description: data.description || '',
-      razorpay_payment_id: data.razorpay_payment_id || '',
-      razorpay_order_id: data.razorpay_order_id || '',
-      createdAt: new Date().toISOString(),
-    }).select().single();
-    if (error) throw new Error(error.message);
-    return { id: tx.id };
-  },
-
   async listTransactions(userId, limitCount = 50) {
     if (!userId) return [];
     const supabase = getSupabase();

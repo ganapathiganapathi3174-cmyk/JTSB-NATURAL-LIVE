@@ -188,7 +188,7 @@ export default function FirebaseRegisterPage() {
           password,
           referralCode: refCode || null,
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(45000),
       });
 
       if (!preRegResp.ok) {

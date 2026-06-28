@@ -6,7 +6,7 @@ const COL_SESSIONS = 'payment_sessions';
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.writeHead(200).end();
   if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
 
@@ -22,6 +22,7 @@ module.exports = async (req, res) => {
     });
     res.writeHead(200); res.end(JSON.stringify({ sessionId, amount: Number(amount) }));
   } catch (err) {
-    res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    console.error('[createTopupSessionHttp] Error:', err.message);
+    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };

@@ -117,6 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_pending_reg_status ON public.pending_registration
 CREATE TABLE IF NOT EXISTS public.upi_payments (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  pending_reg_id uuid REFERENCES public.pending_registrations(id) ON DELETE SET NULL,
   utr text,
   upi_id text,
   amount numeric(12,2),
@@ -132,11 +133,20 @@ CREATE TABLE IF NOT EXISTS public.upi_payments (
   screenshot_hash text,
   verification_locked boolean,
   verification_locked_at timestamptz,
+  verification_started_at timestamptz,
+  verification_completed_at timestamptz,
+  verification_duration bigint,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
 
+ALTER TABLE public.upi_payments ADD COLUMN IF NOT EXISTS pending_reg_id uuid REFERENCES public.pending_registrations(id) ON DELETE SET NULL;
+ALTER TABLE public.upi_payments ADD COLUMN IF NOT EXISTS verification_started_at timestamptz;
+ALTER TABLE public.upi_payments ADD COLUMN IF NOT EXISTS verification_completed_at timestamptz;
+ALTER TABLE public.upi_payments ADD COLUMN IF NOT EXISTS verification_duration bigint;
+
 CREATE INDEX IF NOT EXISTS idx_upi_user_id ON public.upi_payments (user_id);
+CREATE INDEX IF NOT EXISTS idx_upi_pending_reg_id ON public.upi_payments (pending_reg_id);
 CREATE INDEX IF NOT EXISTS idx_upi_utr ON public.upi_payments (utr);
 CREATE INDEX IF NOT EXISTS idx_upi_status ON public.upi_payments (status);
 
@@ -357,6 +367,24 @@ CREATE TABLE IF NOT EXISTS public.admins (
   createdAt timestamptz DEFAULT now(),
   created_at timestamptz DEFAULT now()
 );
+
+-- ============================================================
+-- TABLE: audit_logs
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  action text,
+  target_id text,
+  target_type text,
+  admin_id text,
+  details jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs (action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_target ON public.audit_logs (target_id, target_type);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_admin ON public.audit_logs (admin_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON public.audit_logs (created_at);
 
 -- ============================================================
 -- TABLE: deletion_audit_logs

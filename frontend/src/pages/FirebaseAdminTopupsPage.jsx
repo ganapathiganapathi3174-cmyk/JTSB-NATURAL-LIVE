@@ -6,6 +6,11 @@ import AdminSidebar from '../components/AdminSidebar.jsx';
 const ADMIN_KEY = 'fb_admin_token';
 const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL || '';
 
+function authHeaders() {
+  const t = localStorage.getItem(ADMIN_KEY);
+  return t ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t } : { 'Content-Type': 'application/json' };
+}
+
 function formatDateTime(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
@@ -156,9 +161,11 @@ export default function FirebaseAdminTopupsPage() {
     const token = localStorage.getItem(ADMIN_KEY);
     if (!token) { navigate('/fb-admin', { replace: true }); return; }
     try {
-      const d = JSON.parse(atob(token));
-      if (!d.expiresAt || Date.now() > d.expiresAt) {
+      const body = JSON.parse(atob(token.split('.')[1]));
+      const exp = body.exp;
+      if (!exp || Math.floor(Date.now() / 1000) > exp) {
         localStorage.removeItem(ADMIN_KEY);
+        localStorage.removeItem('fb_admin_login_at');
         navigate('/fb-admin', { replace: true }); return;
       }
     } catch { navigate('/fb-admin', { replace: true }); return; }
@@ -208,20 +215,18 @@ export default function FirebaseAdminTopupsPage() {
     setActionLoading(true);
     setDeleteError('');
     try {
-      const adminToken = localStorage.getItem(ADMIN_KEY);
-      if (!adminToken) {
+      if (!localStorage.getItem(ADMIN_KEY)) {
         setDeleteError('Session expired. Please re-login.');
         setActionLoading(false);
         return;
       }
       const res = await fetch(`${FUNCTIONS_URL}/adminDeleteRecord`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({
           recordId: deleteTarget.id,
           recordType: 'topup',
           reason: reason.trim(),
-          adminToken,
         }),
       });
       let data;

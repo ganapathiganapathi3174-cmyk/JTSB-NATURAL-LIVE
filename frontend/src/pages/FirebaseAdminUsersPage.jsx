@@ -1,10 +1,16 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
 import { getSupabase } from '../supabase/config.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
+const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
+
+function authHeaders() {
+  const t = localStorage.getItem(ADMIN_KEY);
+  return t ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t } : { 'Content-Type': 'application/json' };
+}
 
 function getLastActiveStatus(dateStr) {
   if (!dateStr) return 'inactive';
@@ -14,13 +20,42 @@ function getLastActiveStatus(dateStr) {
   return 'inactive';
 }
 
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(10px)'; el.style.transition = 'all 0.3s'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+function exportToCSV(users, filename = 'users-export.csv') {
+  const headers = ['Name', 'Email', 'Phone', 'Status', 'Account Status', 'Referral Code', 'Referred By', 'Referrals Count', 'Joined Date', 'Approved Date', 'Last Active'];
+  const rows = users.map(u => [
+    `"${(u.name || '').replace(/"/g, '""')}"`,
+    `"${(u.email || '').replace(/"/g, '""')}"`,
+    `"${(u.phone || '').replace(/"/g, '""')}"`,
+    u.payment_status || 'pending',
+    u.account_status || 'inactive',
+    u.referral_code || '',
+    u.referred_by || '',
+    u.total_referral_count || 0,
+    u.joinedDate ? new Date(u.joinedDate).toISOString() : '',
+    u.approvedDate ? new Date(u.approvedDate).toISOString() : '',
+    u.lastActiveAt ? new Date(u.lastActiveAt).toISOString() : '',
+  ]);
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate }) {
   const [deleting, setDeleting] = useState(false);
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
   const [resetMsg, setResetMsg] = useState('');
-  const [approving, setApproving] = useState(false);
   const [showActivateConfirm, setShowActivateConfirm] = useState(false);
   const [activateReason, setActivateReason] = useState('');
   const [activating, setActivating] = useState(false);
@@ -44,7 +79,6 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
       await FirebaseUser.updatePassword(user.id, newPwd);
       setResetMsg(`Password reset successfully! New password: ${newPwd}`);
     } catch (err) {
-      console.error('Reset error:', err);
       setResetMsg('Error: ' + (err.message || 'Failed to reset password'));
     } finally {
       setResetting(false);
@@ -101,7 +135,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
         senderName: adminName,
       });
       setAdminMessage('');
-      setActivateMsg('✓ User activated successfully!');
+      setActivateMsg('User activated successfully!');
       setShowActivateConfirm(false);
       setActivateReason('');
       if (onActivate) onActivate(user.id);
@@ -157,7 +191,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
             </div>
             <div className="detail-row">
               <span className="detail-label">Phone</span>
-              <span className="detail-value">{user.phone || '—'}</span>
+              <span className="detail-value">{user.phone || '\u2014'}</span>
             </div>
             <div className="detail-row">
               <span className="detail-label">Payment Status</span>
@@ -174,13 +208,13 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
             <div className="detail-row">
               <span className="detail-label">Joined Date</span>
               <span className="detail-value text-xs">
-                {user.joinedDate ? new Date(user.joinedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                {user.joinedDate ? new Date(user.joinedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u2014'}
               </span>
             </div>
             <div className="detail-row">
               <span className="detail-label">Approved Date</span>
               <span className="detail-value text-xs">
-                {user.approvedDate ? new Date(user.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                {user.approvedDate ? new Date(user.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u2014'}
               </span>
             </div>
             <div className="detail-row">
@@ -193,6 +227,12 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
                 </button>
               </div>
             </div>
+            {user._source === 'pending_registration' && (
+              <div className="detail-row" style={{ background: 'rgba(245,165,36,0.1)', borderRadius: '6px', padding: '0.5rem', marginBottom: '0.5rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--warning)' }}>{'\u23F3'} Pending Registration</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>This user has registered but not yet completed payment. The account will be created after payment is verified.</div>
+              </div>
+            )}
             {user.referred_by && (
               <div className="detail-row">
                 <span className="detail-label">Referred By</span>
@@ -201,7 +241,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
             )}
             <div className="detail-row">
               <span className="detail-label">Created At</span>
-              <span className="detail-value">{user.created_at ? new Date(user.created_at).toLocaleString() : '—'}</span>
+              <span className="detail-value">{user.created_at ? new Date(user.created_at).toLocaleString() : '\u2014'}</span>
             </div>
           </div>
 
@@ -253,8 +293,8 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
             <div className="verify-section mb-md">
               <h4>Activation Info</h4>
               <div className="text-sm">
-                <div><strong>Activated by:</strong> {user.activated_by || '—'}</div>
-                <div><strong>Activated at:</strong> {user.activated_at ? new Date(user.activated_at).toLocaleString() : '—'}</div>
+                <div><strong>Activated by:</strong> {user.activated_by || '\u2014'}</div>
+                <div><strong>Activated at:</strong> {user.activated_at ? new Date(user.activated_at).toLocaleString() : '\u2014'}</div>
                 {user.activation_reason && <div><strong>Reason:</strong> {user.activation_reason}</div>}
               </div>
             </div>
@@ -300,7 +340,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           )}
 
           {activateMsg && (
-            <div className={`alert ${activateMsg.includes('\u2713') ? 'alert-success' : 'alert-error'}`} style={{ marginTop: '0.75rem' }}>
+            <div className={`alert ${activateMsg.includes('succ') ? 'alert-success' : 'alert-error'}`} style={{ marginTop: '0.75rem' }}>
               {activateMsg}
             </div>
           )}
@@ -320,7 +360,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
                 </div>
                 <div className="modal-modern-body">
                   <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
-                    <strong>{'\u26A0\uFE0F'} Warning:</strong> This will permanently delete <strong>{user.name}</strong> and ALL associated data including topups, transactions, payments, screenshots, messages, chat history, and notifications. This action CANNOT be undone!
+                    <strong>{'\u26A0\uFE0F'} Warning:</strong> Are you sure you want to permanently delete <strong>{user.name}</strong> and all associated data? This includes all topups, transactions, payments, screenshots, messages, chat history, notifications, referral records, sponsor data, and uploaded files. This action CANNOT be undone!
                   </div>
                   <textarea className="input w-full mb-sm"
                     placeholder="Reason for deletion (required)"
@@ -332,7 +372,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
                 <div className="modal-modern-footer">
                   <button className={`btn-modern btn-modern-danger${deleting ? ' btn-loading' : ''}`}
                     onClick={handleDeleteConfirmed} disabled={deleting}>
-                    {deleting ? 'Deleting...' : '\u2715 Confirm Delete'}
+                    {deleting ? 'Deleting...' : 'Delete Permanently'}
                   </button>
                   <button className="btn-modern btn-modern-ghost" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>
                     Cancel
@@ -354,7 +394,6 @@ export default function FirebaseAdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [dragState, setDragState] = useState({ startX: 0, isDragging: false });
   const [expandedUserId, setExpandedUserId] = useState(null);
   const [expandedReferrals, setExpandedReferrals] = useState([]);
   const [loadingReferrals, setLoadingReferrals] = useState(false);
@@ -365,30 +404,17 @@ export default function FirebaseAdminUsersPage() {
   const [deleteError, setDeleteError] = useState('');
   const deleteSuccessTimeoutRef = useRef(null);
 
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [bulkDeleteText, setBulkDeleteText] = useState('');
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteReason, setBulkDeleteReason] = useState('');
+
   useEffect(() => {
     return () => {
       if (deleteSuccessTimeoutRef.current) clearTimeout(deleteSuccessTimeoutRef.current);
     };
   }, []);
-
-  const handleDragStart = (e, user) => {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    setDragState({ startX: clientX, isDragging: true, userId: user.id });
-  };
-
-  const handleDragMove = (e) => {
-    if (!dragState.isDragging) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const diff = Math.abs(clientX - dragState.startX);
-    if (diff > 50) {
-      handleToggleUserExpand(dragState.userId);
-      setDragState({ startX: 0, isDragging: false, userId: null });
-    }
-  };
-
-  const handleDragEnd = () => {
-    setDragState({ startX: 0, isDragging: false, userId: null });
-  };
 
   const handleToggleUserExpand = async (userId) => {
     if (expandedUserId === userId) {
@@ -417,14 +443,17 @@ export default function FirebaseAdminUsersPage() {
       return;
     }
     try {
-      const decoded = JSON.parse(atob(token));
-      if (!decoded.expiresAt || Date.now() > decoded.expiresAt) {
+      const body = JSON.parse(atob(token.split('.')[1]));
+      const exp = body.exp;
+      if (!exp || Math.floor(Date.now() / 1000) > exp) {
         localStorage.removeItem(ADMIN_KEY);
+        localStorage.removeItem('fb_admin_login_at');
         navigate('/fb-admin', { replace: true });
         return;
       }
     } catch {
       localStorage.removeItem(ADMIN_KEY);
+      localStorage.removeItem('fb_admin_login_at');
       navigate('/fb-admin', { replace: true });
       return;
     }
@@ -446,20 +475,23 @@ export default function FirebaseAdminUsersPage() {
   const handleDelete = async (userId, reason, deleteUser) => {
     const adminToken = localStorage.getItem('fb_admin_token');
     if (!adminToken) throw new Error('Admin session not found. Please re-login.');
+    const adminName = (() => {
+      try { return sessionStorage.getItem('fb_admin_name') || localStorage.getItem('fb_admin_name') || 'Admin'; } catch { return 'Admin'; }
+    })();
     const recordType = deleteUser?._source === 'pending_registration' ? 'pending_registration' : 'user';
-    const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL || '';
-    const url = FUNCTIONS_URL ? `${FUNCTIONS_URL}/adminDeleteRecord` : '/api/adminDeleteRecord';
-    const res = await fetch(url, {
+    const res = await fetch(`${API_BASE}/adminDeleteRecord`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recordId: userId, recordType, reason, adminToken }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ recordId: userId, recordType, reason, adminName }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Delete failed');
     setUsers(prev => prev.filter(u => u.id !== userId));
-    setDeleteSuccessMsg(recordType === 'pending_registration' ? 'Registration deleted successfully' : 'User permanently deleted');
+    const recordCount = data.totalCount || 0;
+    const storageCount = data.deletedStorage?.length || 0;
+    setDeleteSuccessMsg(`${deleteUser?.name || 'User'} permanently deleted \u2014 ${recordCount} records removed${storageCount ? `, ${storageCount} storage files cleaned` : ''}`);
     if (deleteSuccessTimeoutRef.current) clearTimeout(deleteSuccessTimeoutRef.current);
-    deleteSuccessTimeoutRef.current = setTimeout(() => setDeleteSuccessMsg(''), 3000);
+    deleteSuccessTimeoutRef.current = setTimeout(() => setDeleteSuccessMsg(''), 5000);
   };
 
   const handleDeleteReferral = async (referralCode, referredUserId) => {
@@ -501,7 +533,6 @@ export default function FirebaseAdminUsersPage() {
 
   const filteredUsers = useMemo(() => {
     let filtered = users;
-    
     if (statusFilter) {
       if (statusFilter === 'account_active') {
         filtered = filtered.filter(u => u.account_status === 'active');
@@ -509,20 +540,21 @@ export default function FirebaseAdminUsersPage() {
         filtered = filtered.filter(u => u.account_status === 'inactive');
       } else if (statusFilter === 'approved') {
         filtered = filtered.filter(u => u.payment_status === 'approved' || u.payment_status === 'success');
+      } else if (statusFilter === 'pending_registration') {
+        filtered = filtered.filter(u => u._source === 'pending_registration');
       } else {
         filtered = filtered.filter(u => u.payment_status === statusFilter);
       }
     }
-    
     if (q) {
       const ql = q.toLowerCase();
-      filtered = filtered.filter(u => 
+      filtered = filtered.filter(u =>
         (u.name && u.name.toLowerCase().includes(ql)) ||
         (u.email && u.email.toLowerCase().includes(ql)) ||
+        (u.phone && u.phone.toLowerCase().includes(ql)) ||
         (u.referral_code && u.referral_code.toLowerCase().includes(ql))
       );
     }
-    
     return filtered;
   }, [users, statusFilter, q]);
 
@@ -545,6 +577,68 @@ export default function FirebaseAdminUsersPage() {
     } catch { return 'Admin'; }
   }
 
+  const isAllSelected = useMemo(() => {
+    return filteredUsers.length > 0 && filteredUsers.every(u => selectedIds.has(u.id));
+  }, [filteredUsers, selectedIds]);
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredUsers.map(u => u.id)));
+    }
+  };
+
+  const handleSelectOne = (id) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const handleBulkDelete = async () => {
+    if (bulkDeleteText !== 'DELETE') {
+      toast('Please type DELETE to confirm', 'error');
+      return;
+    }
+    if (!bulkDeleteReason.trim()) {
+      toast('Please provide a reason for deletion', 'error');
+      return;
+    }
+    const adminToken = localStorage.getItem('fb_admin_token');
+    if (!adminToken) { toast('Admin session expired. Please re-login.', 'error'); return; }
+    const adminName = getAdminName();
+    setBulkDeleting(true);
+    try {
+      const userIds = Array.from(selectedIds);
+      const res = await fetch(`${API_BASE}/bulkDeleteUsers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+        body: JSON.stringify({ userIds, reason: bulkDeleteReason.trim(), adminName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Bulk delete failed');
+      if (data.summary) {
+        toast(`Deleted ${data.summary.successCount}/${data.summary.total} users (${data.summary.totalDeleted} total records)`, data.summary.failCount > 0 ? 'warning' : 'success');
+        if (data.summary.failCount > 0) {
+          console.warn('[BULK DELETE] Failures:', data.results.filter(r => !r.success));
+        }
+      }
+      setUsers(prev => prev.filter(u => !selectedIds.has(u.id)));
+      setSelectedIds(new Set());
+      setBulkDeleteConfirm(false);
+      setBulkDeleteText('');
+      setBulkDeleteReason('');
+    } catch (err) {
+      toast(err.message || 'Bulk delete failed', 'error');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   return (
     <div className="admin-layout">
       <AdminSidebar pendingCounts={pendingCounts} userName={getAdminName()} />
@@ -566,12 +660,18 @@ export default function FirebaseAdminUsersPage() {
           <div className="card-modern mb-md">
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F50D}'} Search & Filter</h2>
+              <div className="flex-row" style={{ gap: '0.5rem' }}>
+                <button className="btn-modern btn-modern-ghost btn-modern-sm" onClick={() => exportToCSV(filteredUsers, `users-${new Date().toISOString().split('T')[0]}.csv`)}>
+                  {'\u{1F4E5}'} Export CSV
+                </button>
+              </div>
             </div>
             <div className="search-bar-modern">
               <input value={q} onChange={e => setQ(e.target.value)}
-                placeholder="Search by name, email, or referral_code..." />
+                placeholder="Search by name, email, phone, or referral_code..." />
               <select value={statusFilter} onChange={e => updateStatusFilter(e.target.value)}>
                 <option value="">All Users</option>
+                <option value="pending_registration">Pending Registration</option>
                 <option value="pending">Payment: Pending</option>
                 <option value="approved">Payment: Approved</option>
                 <option value="rejected">Payment: Rejected</option>
@@ -582,15 +682,33 @@ export default function FirebaseAdminUsersPage() {
             </div>
           </div>
 
+          {selectedIds.size > 0 && (
+            <div className="bulk-action-bar">
+              <span className="bulk-action-count">{selectedIds.size} user{selectedIds.size > 1 ? 's' : ''} selected</span>
+              <button className="btn-modern btn-modern-danger btn-modern-sm" onClick={() => setBulkDeleteConfirm(true)}>
+                {'\u2715'} Delete Selected
+              </button>
+              <button className="btn-modern btn-modern-ghost btn-modern-sm" onClick={() => setSelectedIds(new Set())}>
+                Clear Selection
+              </button>
+            </div>
+          )}
+
           <div className="card-modern">
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F465}'} All Users ({filteredUsers.length})</h2>
             </div>
-            
+
             <div className="table-wrap-modern">
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: '40px' }}>
+                      <input type="checkbox"
+                        checked={isAllSelected}
+                        onChange={handleSelectAll}
+                        style={{ cursor: 'pointer', width: '18px', height: '18px' }} />
+                    </th>
                     <th>Name</th>
                     <th>Phone</th>
                     <th>Payment</th>
@@ -603,20 +721,23 @@ export default function FirebaseAdminUsersPage() {
                     <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody onMouseMove={handleDragMove} onMouseUp={handleDragEnd} onTouchEnd={handleDragEnd}>
+                <tbody>
                   {filteredUsers.map((u) => {
                     return (
                     <React.Fragment key={u.id}>
-                      <tr className="draggable-row"
-                        onMouseDown={(e) => handleDragStart(e, u)}
-                        onTouchStart={(e) => handleDragStart(e, u)}
-                      >
+                      <tr className={selectedIds.has(u.id) ? 'row-selected' : ''}>
+                        <td>
+                          <input type="checkbox"
+                            checked={selectedIds.has(u.id)}
+                            onChange={() => handleSelectOne(u.id)}
+                            style={{ cursor: 'pointer', width: '18px', height: '18px' }} />
+                        </td>
                         <td data-label="Name">
                           <div className="font-semibold">{u.name}</div>
                           <div className="text-xs text-muted">{u.email}</div>
-                          <div className="font-mono text-xs text-accent">{u.referral_code || '—'}</div>
+                          <div className="font-mono text-xs text-accent">{u.referral_code || '\u2014'}</div>
                         </td>
-                        <td data-label="Phone">{u.phone || '—'}</td>
+                        <td data-label="Phone">{u.phone || '\u2014'}</td>
                         <td data-label="Payment">
                           <span className={`badge ${u.payment_status === 'approved' || u.payment_status === 'success' ? 'badge-paid' : u.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
                             {u.payment_status ? u.payment_status.charAt(0).toUpperCase() + u.payment_status.slice(1) : 'Pending'}
@@ -633,7 +754,7 @@ export default function FirebaseAdminUsersPage() {
                           ) : u.topup_referral_qualified ? (
                             <span className="badge badge-pending badge-xs">Qualified</span>
                           ) : (
-                            <span className="muted badge-xs">—</span>
+                            <span className="muted badge-xs">\u2014</span>
                           )}
                         </td>
                         <td data-label="Referrals">
@@ -646,20 +767,52 @@ export default function FirebaseAdminUsersPage() {
                           </div>
                         </td>
                         <td data-label="Joined" className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
-                          {u.joinedDate ? new Date(u.joinedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {u.joinedDate ? new Date(u.joinedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u2014'}
                         </td>
                         <td data-label="Approved" className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
-                          {u.approvedDate ? new Date(u.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {u.approvedDate ? new Date(u.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u2014'}
                         </td>
                         <td data-label="Last Active" className="text-xs" style={{ whiteSpace: 'nowrap' }}>
                           {u.lastActiveAt ? (
                             <span className={`last-active-indicator ${getLastActiveStatus(u.lastActiveAt)}`}>
                               {new Date(u.lastActiveAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </span>
-                          ) : <span className="text-muted">—</span>}
+                          ) : <span className="text-muted">\u2014</span>}
                         </td>
                         <td data-label="Actions">
                           <div className="flex-actions" onClick={(e) => e.stopPropagation()}>
+                            {(u.account_status === 'suspended' || u.account_status === 'inactive' || u.account_status === 'blocked') && (
+                              <button className="btn-modern btn-modern-success btn-modern-xs"
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`${API_BASE}/updateUserStatus`, {
+                                      method: 'POST',
+                                      headers: authHeaders(),
+                                      body: JSON.stringify({ userId: u.id, status: 'active', reason: 'Admin activated' }),
+                                    });
+                                    if (!res.ok) throw new Error((await res.json()).error || 'Activation failed');
+                                    toast('User activated');
+                                  } catch (err) {
+                                    toast(err.message, 'error');
+                                  }
+                                }}>Activate</button>
+                            )}
+                            {u.account_status === 'active' && (
+                              <button className="btn-modern btn-modern-warning btn-modern-xs"
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`${API_BASE}/updateUserStatus`, {
+                                      method: 'POST',
+                                      headers: authHeaders(),
+                                      body: JSON.stringify({ userId: u.id, status: 'suspended', reason: 'Admin suspended' }),
+                                    });
+                                    if (!res.ok) throw new Error((await res.json()).error || 'Suspend failed');
+                                    toast('User suspended');
+                                  } catch (err) {
+                                    toast(err.message, 'error');
+                                  }
+                                }}>Suspend</button>
+                            )}
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => setSelectedUser(u)}>View</button>
                             <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => setDeleteConfirmUser(u)}>Del</button>
                           </div>
@@ -667,7 +820,7 @@ export default function FirebaseAdminUsersPage() {
                       </tr>
                       {expandedUserId === u.id && (
                         <tr>
-                          <td colSpan={11} className="expandable-row">
+                          <td colSpan={12} className="expandable-row">
                             {loadingReferrals ? (
                               <div className="muted">Loading referrals...</div>
                             ) : expandedReferrals.length > 0 ? (
@@ -680,7 +833,7 @@ export default function FirebaseAdminUsersPage() {
                                     <div key={ref.id} className="referral-card-row">
                                       <div>
                                         <div className="font-semibold text-sm">{ref.name}</div>
-                                        <div className="text-xs text-muted">{ref.phone || '—'}</div>
+                                        <div className="text-xs text-muted">{ref.phone || '\u2014'}</div>
                                         <div className="badge-xs" style={{ marginTop: '0.15rem' }}>
                                           {ref.referred_by_status === 'approved' ? (
                                             <span className="badge badge-paid badge-xs">Approved</span>
@@ -705,7 +858,7 @@ export default function FirebaseAdminUsersPage() {
                     );
                   })}
                   {filteredUsers.length === 0 && (
-                    <tr><td colSpan={11}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
+                    <tr><td colSpan={12}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
                   )}
                 </tbody>
               </table>
@@ -713,7 +866,7 @@ export default function FirebaseAdminUsersPage() {
           </div>
 
           {deleteSuccessMsg && (
-            <div style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999, padding: '1rem 1.5rem', borderRadius: '8px', background: 'var(--success)', color: '#fff', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <div className="toast toast-success" style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999 }}>
               {'\u2713'} {deleteSuccessMsg}
             </div>
           )}
@@ -727,7 +880,7 @@ export default function FirebaseAdminUsersPage() {
                 </div>
                 <div className="modal-modern-body">
                   <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
-                    <strong>{'\u26A0\uFE0F'} Warning:</strong> This will permanently delete <strong>{deleteConfirmUser.name}</strong> and ALL associated data including topups, transactions, payments, screenshots, messages, chat history, and notifications. This action CANNOT be undone!
+                    <strong>{'\u26A0\uFE0F'} Warning:</strong> Are you sure you want to permanently delete <strong>{deleteConfirmUser.name}</strong> and all associated data? This includes all topups, transactions, payments, screenshots, messages, chat history, notifications, referral records, sponsor data, and uploaded files. This action CANNOT be undone!
                   </div>
                   <textarea className="input w-full mb-sm"
                     placeholder="Reason for deletion (required)"
@@ -754,7 +907,7 @@ export default function FirebaseAdminUsersPage() {
                         setDeletingUser(false);
                       }
                     }} disabled={deletingUser}>
-                    {deletingUser ? 'Deleting...' : '\u2715 Confirm Delete'}
+                    {deletingUser ? 'Deleting...' : 'Delete Permanently'}
                   </button>
                   <button className="btn-modern btn-modern-ghost" onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }}>
                     Cancel
@@ -774,6 +927,50 @@ export default function FirebaseAdminUsersPage() {
                 setUsers(prev => prev.map(u => u.id === userId ? { ...u, account_status: 'active' } : u));
               }}
             />
+          )}
+
+          {bulkDeleteConfirm && (
+            <div className="modal-modern-overlay" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }}>
+              <div className="modal-modern" onClick={e => e.stopPropagation()}>
+                <div className="modal-modern-header">
+                  <h2>{'\u26A0\uFE0F'} Bulk Delete Users</h2>
+                  <button onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+                </div>
+                <div className="modal-modern-body">
+                  <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+                    <strong>{'\u26A0\uFE0F'} Danger:</strong> You are about to permanently delete <strong>{selectedIds.size} user{selectedIds.size > 1 ? 's' : ''}</strong>. All associated data for each user will be permanently removed. This action CANNOT be undone!
+                  </div>
+                  <div className="field" style={{ marginBottom: '1rem' }}>
+                    <label>Reason for deletion *</label>
+                    <textarea className="input"
+                      placeholder="Why are you deleting these users?"
+                      value={bulkDeleteReason}
+                      onChange={e => setBulkDeleteReason(e.target.value)}
+                      rows={3} />
+                  </div>
+                  <div className="field" style={{ marginBottom: '1rem' }}>
+                    <label>Type <strong>DELETE</strong> to confirm *</label>
+                    <input className={`input ${bulkDeleteText && bulkDeleteText !== 'DELETE' ? 'input-error' : bulkDeleteText === 'DELETE' ? 'input-valid' : ''}`}
+                      placeholder="Type DELETE here"
+                      value={bulkDeleteText}
+                      onChange={e => setBulkDeleteText(e.target.value)} />
+                    {bulkDeleteText && bulkDeleteText !== 'DELETE' && (
+                      <span className="field-error">Type exactly "DELETE" to confirm</span>
+                    )}
+                  </div>
+                </div>
+                <div className="modal-modern-footer">
+                  <button className={`btn-modern btn-modern-danger${bulkDeleting ? ' btn-loading' : ''}`}
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting || bulkDeleteText !== 'DELETE' || !bulkDeleteReason.trim()}>
+                    {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} User${selectedIds.size > 1 ? 's' : ''}`}
+                  </button>
+                  <button className="btn-modern btn-modern-ghost" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} disabled={bulkDeleting}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </main>

@@ -75,6 +75,7 @@ create index if not exists idx_pending_reg_status on public.pending_registration
 create table if not exists public.upi_payments (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references public.users(id) on delete set null,
+  pending_reg_id uuid references public.pending_registrations(id) on delete set null,
   utr text,
   upi_id text,
   amount numeric(12,2),
@@ -85,8 +86,14 @@ create table if not exists public.upi_payments (
   rejection_reasons jsonb,
   ocr_result jsonb,
   final_score numeric(5,2),
+  screenshot_hash text,
   payment_date timestamptz,
   verified_at timestamptz,
+  verification_locked boolean default false,
+  verification_locked_at timestamptz,
+  verification_started_at timestamptz,
+  verification_completed_at timestamptz,
+  verification_duration bigint,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -184,16 +191,23 @@ create index if not exists idx_referrals_code on public.referrals(referral_code)
 create table if not exists public.notifications (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references public.users(id) on delete cascade,
-  sender_id text,
-  sender_name text,
+  receiverId text,
+  senderId text,
+  senderName text,
+  title text,
   message text,
   type text,
+  status text default 'unread',
   is_read boolean default false,
+  readAt timestamptz,
+  createdAt timestamptz default now(),
   created_at timestamptz default now()
 );
 
 create index if not exists idx_notifications_user on public.notifications(user_id);
 create index if not exists idx_notifications_read on public.notifications(is_read);
+create index if not exists idx_notifications_receiver on public.notifications(receiverId);
+create index if not exists idx_notifications_status on public.notifications(status);
 
 -- ==================== CHAT CONVERSATIONS ====================
 create table if not exists public.chat_conversations (
@@ -228,6 +242,22 @@ create table if not exists public.admins (
   created_at timestamptz default now()
 );
 
+-- ==================== AUDIT LOGS ====================
+create table if not exists public.audit_logs (
+  id uuid primary key default uuid_generate_v4(),
+  action text,
+  target_id text,
+  target_type text,
+  admin_id text,
+  details jsonb,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_audit_logs_action on public.audit_logs(action);
+create index if not exists idx_audit_logs_target on public.audit_logs(target_id, target_type);
+create index if not exists idx_audit_logs_admin on public.audit_logs(admin_id);
+create index if not exists idx_audit_logs_created on public.audit_logs(created_at);
+
 -- ==================== DELETION AUDIT LOGS ====================
 create table if not exists public.deletion_audit_logs (
   id uuid primary key default uuid_generate_v4(),
@@ -254,6 +284,63 @@ create table if not exists public.sponsor_data (
   updated_at timestamptz default now()
 );
 
+-- ============================================================
+-- TABLE: topup_audit_log
+-- ============================================================
+create table if not exists public.topup_audit_log (
+  id uuid primary key default uuid_generate_v4(),
+  action text,
+  adminId text,
+  topupId text,
+  reason text,
+  previousData jsonb,
+  timestamp timestamptz default now()
+);
+
+-- ============================================================
+-- TABLE: payment_sessions
+-- ============================================================
+create table if not exists public.payment_sessions (
+  id text primary key,
+  user_id text,
+  type text default 'topup',
+  amount numeric,
+  status text default 'created',
+  paymentId text,
+  expires_at timestamptz,
+  completedAt timestamptz,
+  createdAt timestamptz default now()
+);
+
+-- ============================================================
+-- TABLE: verification_logs
+-- ============================================================
+create table if not exists public.verification_logs (
+  id uuid primary key default uuid_generate_v4(),
+  payment_id text,
+  user_id text,
+  utr text,
+  layer integer,
+  check_name text,
+  passed boolean,
+  score numeric(5,2),
+  details jsonb default '{}',
+  verification_id text,
+  payment_type text,
+  selected_amount numeric,
+  ocr_amount text,
+  ocr_upi text,
+  ocr_utr text,
+  ocr_date text,
+  ocr_confidence numeric,
+  final_score numeric,
+  status text,
+  reason text,
+  image_hash text,
+  validation_steps jsonb,
+  created_at timestamptz default now()
+);
+
 -- ==================== ROW LEVEL SECURITY ====================
 alter table public.users enable row level security;
 alter table public.uniques enable row level security;
@@ -270,6 +357,7 @@ alter table public.notifications enable row level security;
 alter table public.chat_conversations enable row level security;
 alter table public.chat_messages enable row level security;
 alter table public.admins enable row level security;
+alter table public.audit_logs enable row level security;
 alter table public.deletion_audit_logs enable row level security;
 alter table public.sponsor_data enable row level security;
 
@@ -303,8 +391,9 @@ create policy "Users can view own notifications"
 
 -- ==================== DEFAULT ADMIN ====================
 -- Insert default admin (password: jayaraj7523)
+-- SHA-256 hash matches handlers/adminLogin.js which uses crypto.createHash('sha256')
 insert into public.admins (email, password_hash, name)
-values ('jayaraj@gmail.com', crypt('jayaraj7523', gen_salt('bf')), 'Admin')
+values ('jayaraj@gmail.com', 'bc21f55e8275b8274e8e704fe2de13a43a46f70cc602e6888ec52893ab790b13', 'Admin')
 on conflict (email) do nothing;
 
 -- ==================== HELPER FUNCTIONS ====================

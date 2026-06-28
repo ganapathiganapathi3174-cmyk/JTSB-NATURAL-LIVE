@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { checkRateLimit } from '../utils/rateLimiter.js';
 
 const ADMIN_KEY = 'fb_admin_token';
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || '';
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || '';
 
 export default function FirebaseAdminLoginPage() {
   const navigate = useNavigate();
@@ -24,12 +22,22 @@ export default function FirebaseAdminLoginPage() {
     setLoading(true);
 
     try {
-      if (email.toLowerCase() !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-        throw new Error('Invalid credentials');
-      }
+      const res = await fetch('/api/adminLogin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Invalid credentials');
       const now = Date.now();
-      localStorage.setItem(ADMIN_KEY, btoa(JSON.stringify({ loginAt: now, expiresAt: now + 7 * 3600000 })));
+      localStorage.setItem(ADMIN_KEY, data.token);
       localStorage.setItem('fb_admin_login_at', String(now));
+      if (data.admin) {
+        localStorage.setItem('fb_admin_name', data.admin.name || 'Admin');
+        localStorage.setItem('fb_admin_email', data.admin.email || '');
+        sessionStorage.setItem('fb_admin_name', data.admin.name || 'Admin');
+        sessionStorage.setItem('fb_admin_email', data.admin.email || '');
+      }
       navigate('/fb-admin/dashboard');
     } catch (err) {
       setError(err.message || 'Invalid credentials');

@@ -1,5 +1,4 @@
-import { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { userApi, setClientUserToken, setClientUser } from '../api/client.js';
+import { createContext, useContext, useState, useMemo } from 'react';
 
 const TOKEN_KEY = 'jtsb_token';
 const USER_KEY = 'jtsb_user';
@@ -14,28 +13,6 @@ export function AuthProvider({ children }) {
       return u ? JSON.parse(u) : null;
     } catch { return null; }
   });
-
-  // When token changes: persist + attach to API client
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem(TOKEN_KEY, token);
-      setClientUserToken(userApi, token);
-    } else {
-      localStorage.removeItem(TOKEN_KEY);
-      setClientUserToken(userApi, null);
-    }
-  }, [token]);
-
-  // When user changes: persist + attach to API client
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
-      setClientUser(userApi, user);
-    } else {
-      localStorage.removeItem(USER_KEY);
-      setClientUser(userApi, null);
-    }
-  }, [user]);
 
   const logout = () => { setToken(null); setUser(null); };
 

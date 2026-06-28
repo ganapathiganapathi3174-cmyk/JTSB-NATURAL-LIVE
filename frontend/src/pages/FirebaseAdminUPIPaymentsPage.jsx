@@ -5,19 +5,17 @@ import AdminSidebar from '../components/AdminSidebar.jsx';
 const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL || '';
 const ADMIN_KEY = 'fb_admin_token';
 
+function authHeaders() {
+  const t = localStorage.getItem(ADMIN_KEY);
+  return t ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t } : { 'Content-Type': 'application/json' };
+}
+
 export default function FirebaseAdminUPIPaymentsPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
     if (!token) { navigate('/fb-admin', { replace: true }); return; }
-    try {
-      const d = JSON.parse(atob(token));
-      if (!d.expiresAt || Date.now() > d.expiresAt) {
-        localStorage.removeItem(ADMIN_KEY);
-        navigate('/fb-admin', { replace: true });
-      }
-    } catch { navigate('/fb-admin', { replace: true }); }
   }, [navigate]);
 
   const [payments, setPayments] = useState([]);
@@ -43,13 +41,15 @@ export default function FirebaseAdminUPIPaymentsPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteReason, setDeleteReason] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  const [actionLoading, setActionLoading] = useState(null);
+  const [detailPayment, setDetailPayment] = useState(null);
 
   const processPending = useCallback(async () => {
     setProcessing(true);
     try {
       const res = await fetch(`${FUNCTIONS_URL}/processPendingPayments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: '{}',
       });
       const data = await res.json();
@@ -77,7 +77,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
       const [payRes, statsRes] = await Promise.all([
         fetch(`${FUNCTIONS_URL}/getUPIPayments`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders(),
           body: JSON.stringify({
             ...(typeFilter && { type: typeFilter }),
             ...(statusFilter && { status: statusFilter }),
@@ -86,7 +86,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
         }),
         fetch(`${FUNCTIONS_URL}/getUPIDashboardStats`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders(),
           body: '{}',
         }),
       ]);
@@ -98,7 +98,15 @@ export default function FirebaseAdminUPIPaymentsPage() {
       setPayments(raw.map(p => ({
         ...p, userId: p.userId || p.user_id, type: p.type || p.payment_type,
         paymentDate: p.paymentDate || p.payment_date, screenshotUrl: p.screenshotUrl || p.screenshot_url,
-        rejectionReasons: p.rejectionReasons || p.rejection_reasons || [],
+        userName: p.userName, userEmail: p.userEmail, userPhone: p.userPhone,
+        rejectionReasons: (() => {
+          const val = p.rejectionReasons ?? p.rejection_reasons ?? [];
+          if (Array.isArray(val)) return val;
+          if (typeof val === 'string') {
+            try { const parsed = JSON.parse(val); return Array.isArray(parsed) ? parsed : [val]; } catch { return [val]; }
+          }
+          return [];
+        })(),
       })));
       setStats(statsData);
     } catch (e) {
@@ -109,13 +117,66 @@ export default function FirebaseAdminUPIPaymentsPage() {
   }, [typeFilter, statusFilter, searchText]);
 
   useEffect(() => {
-    Promise.all([processPending(), fetchData()]).catch(() => {});
-    const t = setInterval(() => { processPending().catch(() => {}); fetchData().catch(() => {}); }, 30000);
+    fetchData();
+    const t = setInterval(() => { fetchData(); }, 30000);
     return () => clearInterval(t);
-  }, [processPending, fetchData]);
+  }, [fetchData]);
 
-  function getAdminToken() {
-    return localStorage.getItem(ADMIN_KEY);
+  async function handleRestore(paymentId) {
+    setActionLoading(paymentId);
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/restoreUPIPayment`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ paymentId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Restore failed');
+      setDeleteMsg('Restored: ' + paymentId);
+      fetchData();
+    } catch (e) {
+      setError('Restore error: ' + e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleApprove(paymentId) {
+    setActionLoading(paymentId);
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/approveUPIPayment`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ paymentId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Approve failed');
+      setDeleteMsg('Approved: ' + (data.utr || paymentId));
+      fetchData();
+    } catch (e) {
+      setError('Approve error: ' + e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleReject(paymentId) {
+    const reason = prompt('Reason for rejection:');
+    if (reason === null) return;
+    if (!reason.trim()) { setError('Please enter a reason for rejection.'); return; }
+    setActionLoading(paymentId);
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/rejectUPIPayment`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ paymentId, reason: reason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Reject failed');
+      setDeleteMsg('Rejected: ' + paymentId);
+      fetchData();
+    } catch (e) {
+      setError('Reject error: ' + e.message);
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   async function handleDelete(utr) {
@@ -136,21 +197,13 @@ export default function FirebaseAdminUPIPaymentsPage() {
     setDeleteMsg('');
     setDeleteError('');
     try {
-      const adminToken = getAdminToken();
-      if (!adminToken) {
-        setDeleteError('Session expired. Please re-login.');
-        setDeleteLoading(null);
-        setDeleteTarget(null);
-        return;
-      }
       const res = await fetch(`${FUNCTIONS_URL}/adminDeleteRecord`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({
           recordId: utr,
           recordType: 'upi_payment',
           reason: deleteReason.trim(),
-          adminToken,
         }),
       });
       let data;
@@ -224,8 +277,8 @@ export default function FirebaseAdminUPIPaymentsPage() {
             )}
             {deleteMsg && <span style={{ color: 'var(--success, #16a34a)', fontSize: '0.85rem' }}>{deleteMsg}</span>}
             <button onClick={handleExport} className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>Export CSV</button>
-            <button onClick={() => processPending().then(fetchData)} className="btn btn-primary" style={{ fontSize: '0.85rem' }}>
-              {processing ? '...' : 'Refresh'}
+            <button onClick={fetchData} className="btn btn-primary" style={{ fontSize: '0.85rem' }}>
+              {loading ? '...' : 'Refresh'}
             </button>
           </div>
         </div>
@@ -310,38 +363,52 @@ export default function FirebaseAdminUPIPaymentsPage() {
             <table className="admin-table">
               <thead>
                 <tr>
+                  <th>Date</th>
+                  <th>Name</th>
+                  <th>Email / Mobile</th>
+                  <th>Amount</th>
                   <th>UTR</th>
                   <th>Type</th>
-                  <th>Amount</th>
-                  <th>Date</th>
-                  <th>User</th>
-                  <th>Screenshot</th>
                   <th>Status</th>
-                  <th>Reasons</th>
-                  <th>Action</th>
+                  <th>Verify Reason</th>
+                  <th>Screenshot</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {payments.length === 0 && (
-                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>No payments found</td></tr>
+                  <tr><td colSpan={10} style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>No payments found</td></tr>
                 )}
                 {payments.map(p => {
                   const reasons = p.rejectionReasons || [];
+                  const reasonText = reasons.length > 0 ? reasons.join('; ') : (p.verificationReason || '—');
+                  const canModify = p.status === 'pending' || p.status === 'manual_review';
+                  const isRejected = p.status === 'rejected';
                   return (
-                    <tr key={p.utr}>
-                      <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.utr}</td>
-                      <td><span className={`badge badge-${p.type}`}>{p.type}</span></td>
-                      <td>₹{p.amount}</td>
-                      <td style={{ fontSize: '0.85rem' }}>{p.paymentDate}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: '0.85rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {p.userId || '—'}
+                    <tr key={p.id || p.utr}>
+                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                        {p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                       </td>
+                      <td style={{ fontSize: '0.85rem' }}>
+                        <div style={{ fontWeight: 600 }}>{p.userName || p.fullName || '—'}</div>
+                      </td>
+                      <td style={{ fontSize: '0.75rem' }}>
+                        <div>{p.userEmail || p.userEmail || ''}</div>
+                        <div style={{ color: '#6b7280' }}>{p.userPhone || p.userMobile || ''}</div>
+                      </td>
+                      <td style={{ fontWeight: 600 }}>₹{p.amount}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.utr}</td>
+                      <td><span className={`badge badge-${p.paymentType || p.type}`}>{p.paymentType || p.type}</span></td>
+                      <td><span className={getStatusBadgeClass(p.status)}>
+                        {p.status === 'verified' ? 'Approved' : p.status === 'manual_review' ? 'Manual Review' : p.status}
+                      </span></td>
+                      <td style={{ fontSize: '0.8rem', maxWidth: '160px', wordBreak: 'break-word' }}>{reasonText}</td>
                       <td>
-                        {p.screenshotUrl ? (
+                        {p.screenshotUrl || p.screenshot_url ? (
                           <img
-                            src={p.screenshotUrl}
+                            src={p.screenshotUrl || p.screenshot_url}
                             alt="Screenshot"
-                            onClick={() => setLightboxUrl(p.screenshotUrl)}
+                            onClick={() => setLightboxUrl(p.screenshotUrl || p.screenshot_url)}
                             style={{
                               width: 48, height: 48, objectFit: 'cover', borderRadius: '6px',
                               cursor: 'pointer', border: '1px solid var(--border, #d1d5db)',
@@ -351,23 +418,36 @@ export default function FirebaseAdminUPIPaymentsPage() {
                           <span style={{ color: '#999', fontSize: '0.85rem' }}>—</span>
                         )}
                       </td>
-                      <td><span className={getStatusBadgeClass(p.status)}>{p.status === 'verified' ? 'Approved' : p.status === 'manual_review' ? 'Manual Review' : p.status}</span></td>
-                      <td style={{ fontSize: '0.8rem', maxWidth: '200px' }}>
-                        {reasons.length > 0 ? (
-                          <ul style={{ margin: 0, paddingLeft: '1rem' }}>
-                            {reasons.map((r, i) => <li key={i}>{r}</li>)}
-                          </ul>
-                        ) : <span style={{ color: '#999' }}>—</span>}
-                      </td>
                       <td>
-                        <button
-                          onClick={() => handleDelete(p.utr)}
-                          disabled={deleteLoading === p.utr}
-                          className="btn btn-ghost btn-sm"
-                          style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', color: '#ef4444' }}
-                        >
-                          {deleteLoading === p.utr ? '...' : 'Delete'}
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.25rem', flexDirection: 'column', alignItems: 'stretch' }}>
+                          <button
+                            onClick={() => setDetailPayment(p)}
+                            className="btn btn-sm"
+                            style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                          >Details</button>
+                          {canModify && (
+                            <>
+                              <button onClick={() => handleApprove(p.id)} disabled={actionLoading === p.id}
+                                className="btn btn-sm"
+                                style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', cursor: actionLoading === p.id ? 'not-allowed' : 'pointer' }}
+                              >{actionLoading === p.id ? '...' : 'Approve'}</button>
+                              <button onClick={() => handleReject(p.id)} disabled={actionLoading === p.id}
+                                className="btn btn-sm"
+                                style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: actionLoading === p.id ? 'not-allowed' : 'pointer' }}
+                              >{actionLoading === p.id ? '...' : 'Reject'}</button>
+                            </>
+                          )}
+                          {(isRejected || p.status === 'failed') && (
+                            <button onClick={() => handleRestore(p.id)} disabled={actionLoading === p.id}
+                              className="btn btn-sm"
+                              style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: actionLoading === p.id ? 'not-allowed' : 'pointer' }}
+                            >{actionLoading === p.id ? '...' : 'Restore'}</button>
+                          )}
+                          <button onClick={() => handleDelete(p.utr)} disabled={deleteLoading === p.utr}
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', color: '#dc2626' }}
+                          >{deleteLoading === p.utr ? '...' : 'Delete'}</button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -480,6 +560,48 @@ export default function FirebaseAdminUPIPaymentsPage() {
               alt="Screenshot full view"
               style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: '8px' }}
             />
+          </div>
+        )}
+
+        {detailPayment && (
+          <div className="modal-modern-overlay" onClick={() => setDetailPayment(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9998, padding: '1rem' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', maxWidth: '560px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Payment Details</h2>
+                <button onClick={() => setDetailPayment(null)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#888' }}>{'\u2715'}</button>
+              </div>
+              <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.9rem' }}>
+                {[
+                  ['Name', detailPayment.userName || detailPayment.fullName || '—'],
+                  ['Email', detailPayment.userEmail || ''],
+                  ['Mobile', detailPayment.userPhone || detailPayment.userMobile || ''],
+                  ['Amount', '\u20B9' + (detailPayment.amount || '—')],
+                  ['UTR', detailPayment.utr || '—'],
+                  ['Type', detailPayment.paymentType || detailPayment.type || '—'],
+                  ['Status', detailPayment.status],
+                  ['Date', detailPayment.created_at ? new Date(detailPayment.created_at).toLocaleString() : '—'],
+                  ['Verified At', detailPayment.verifiedAt || detailPayment.verified_at || '—'],
+                  ['Reason', (detailPayment.rejectionReasons || []).join('; ') || detailPayment.verificationReason || '—'],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f3f4f6', padding: '0.3rem 0' }}>
+                    <span style={{ color: '#6b7280', fontWeight: 500 }}>{label}</span>
+                    <span style={{ fontWeight: 600, textAlign: 'right', maxWidth: '60%', wordBreak: 'break-word' }}>{value}</span>
+                  </div>
+                ))}
+                {detailPayment.screenshotUrl || detailPayment.screenshot_url ? (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <span style={{ color: '#6b7280', fontWeight: 500, display: 'block', marginBottom: '0.3rem' }}>Screenshot</span>
+                    <img src={detailPayment.screenshotUrl || detailPayment.screenshot_url} alt="Payment Screenshot"
+                      onClick={() => setLightboxUrl(detailPayment.screenshotUrl || detailPayment.screenshot_url)}
+                      style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', cursor: 'pointer' }} />
+                  </div>
+                ) : null}
+              </div>
+              <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+                <button onClick={() => setDetailPayment(null)} className="btn" style={{ padding: '0.5rem 1.25rem' }}>Close</button>
+              </div>
+            </div>
           </div>
         )}
       </main>

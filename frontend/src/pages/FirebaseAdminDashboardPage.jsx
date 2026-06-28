@@ -8,6 +8,11 @@ const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 
 const ADMIN_KEY = 'fb_admin_token';
 
+function authHeaders() {
+  const t = localStorage.getItem(ADMIN_KEY);
+  return t ? { 'Cache-Control': 'no-cache', 'Authorization': 'Bearer ' + t } : { 'Cache-Control': 'no-cache' };
+}
+
 function AddUserModal({ onClose, onAdded }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -94,6 +99,10 @@ export default function FirebaseAdminDashboardPage() {
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [topups, setTopups] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [healthData, setHealthData] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(false);
   const [showAddUser, setShowAddUser] = useState(false);
   const [actionUser, setActionUser] = useState(null);
   const [actionReason, setActionReason] = useState('');
@@ -101,6 +110,10 @@ export default function FirebaseAdminDashboardPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
   const actionMsgTimeoutRef = useRef(null);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [sseCounts, setSseCounts] = useState({ pending_payments: 0, pending_registrations: 0 });
+  const [sseTime, setSseTime] = useState(null);
+  const sseRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -138,10 +151,17 @@ export default function FirebaseAdminDashboardPage() {
   }
 
   const REGISTRATION_FEE = Number(import.meta.env.VITE_PAYMENT_AMOUNT) || 120;
+  const todayStr = new Date().toISOString().split('T')[0];
   const stats = useMemo(() => {
     const approvedUsers = users.filter(u => u.payment_status === 'approved' || u.payment_status === 'success' || u.membershipStatus === 'active');
     const regRevenue = approvedUsers.length * REGISTRATION_FEE;
     const topupRevenue = topups.filter(t => t.status === 'approved').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const todayUserCount = users.filter(u => u.created_at && u.created_at.startsWith(todayStr)).length;
+    const todayTopupCount = topups.filter(t => t.created_at && t.created_at.startsWith(todayStr)).length;
+    const todayApprovedPayments = users.filter(u => (u.payment_status === 'approved' || u.payment_status === 'success') && u.created_at && u.created_at.startsWith(todayStr)).length;
+    const todayRevenue = approvedUsers.filter(u => u.created_at && u.created_at.startsWith(todayStr)).length * REGISTRATION_FEE
+      + topups.filter(t => t.status === 'approved' && t.created_at && t.created_at.startsWith(todayStr)).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const todayReferrals = users.filter(u => u.created_at && u.created_at.startsWith(todayStr)).reduce((sum, u) => sum + (u.referrals_count || 0), 0);
     return {
       totalUsers: users.length,
       successPayments: approvedUsers.length,
@@ -163,8 +183,13 @@ export default function FirebaseAdminDashboardPage() {
       membershipActive: users.filter(u => u.membershipStatus === 'active').length,
       sponsorsAwaitingRenewal: users.filter(u => u.sponsorRenewalRequired === true).length,
       usersNeedingReview: users.filter(u => u.reviewRequired === true).length,
+      todayRegistrations: todayUserCount,
+      todayPayments: todayApprovedPayments,
+      todayRevenue,
+      todayReferrals,
+      todayTopups: todayTopupCount,
     };
-  }, [users, topups, REGISTRATION_FEE]);
+  }, [users, topups, REGISTRATION_FEE, todayStr]);
 
   const paymentAnalytics = useMemo(() => computePaymentAnalytics(users, topups), [users, topups]);
   const [analyticsFilter, setAnalyticsFilter] = useState('Approved Only');
@@ -242,7 +267,7 @@ export default function FirebaseAdminDashboardPage() {
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/getAdminDashboardData`, {
-        headers: { 'Cache-Control': 'no-cache' },
+        headers: authHeaders(),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
@@ -255,6 +280,38 @@ export default function FirebaseAdminDashboardPage() {
     }
   }, []);
 
+  const fetchActivities = useCallback(async () => {
+    setActivitiesLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/getRecentActivity`, {
+        method: 'POST', headers: authHeaders(), body: '{}',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
+      if (result.success) setActivities(result.activities || []);
+    } catch (err) {
+      console.error('[ADMIN DASHBOARD] Failed to fetch activities:', err);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  }, []);
+
+  const fetchHealth = useCallback(async () => {
+    setHealthLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/getHealthStatus`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ refresh: true }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
+      if (result.success) setHealthData(result);
+    } catch (err) {
+      console.error('[ADMIN DASHBOARD] Failed to fetch health:', err);
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem(ADMIN_KEY);
     if (!token) {
@@ -263,11 +320,37 @@ export default function FirebaseAdminDashboardPage() {
     }
 
     fetchData();
+    fetchActivities();
+    fetchHealth();
 
     const interval = setInterval(fetchData, 30000);
 
     return () => clearInterval(interval);
-  }, [navigate, fetchData]);
+  }, [navigate, fetchData, fetchActivities, fetchHealth]);
+
+  useEffect(() => {
+    const baseUrl = import.meta.env.VITE_FUNCTIONS_URL || '';
+    const eventSource = new EventSource(`${baseUrl}/sse/dashboard`);
+
+    eventSource.onopen = () => setSseConnected(true);
+    eventSource.addEventListener('connected', () => setSseConnected(true));
+    eventSource.addEventListener('initialState', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        setSseCounts({ pending_payments: data.pending_payments, pending_registrations: data.pending_registrations });
+        setSseTime(data.timestamp);
+      } catch (_) {}
+    });
+    eventSource.addEventListener('paymentUpdated', () => {
+      fetchData();
+    });
+    eventSource.onerror = () => {
+      setSseConnected(false);
+    };
+
+    sseRef.current = eventSource;
+    return () => eventSource.close();
+  }, [fetchData]);
 
   function logout() {
     localStorage.removeItem(ADMIN_KEY);
@@ -294,6 +377,9 @@ export default function FirebaseAdminDashboardPage() {
               <button className="btn-modern btn-modern-primary" onClick={() => setShowAddUser(true)}>
                 + Add User
               </button>
+              <span className={`badge ${sseConnected ? 'badge-paid' : 'badge-rejected'} badge-xs`} style={{ marginLeft: '0.5rem', fontSize: '0.7rem' }}>
+                {sseConnected ? '\u25CF Live' : '\u25CB Disconnected'}
+              </span>
             </div>
           </div>
 
@@ -303,6 +389,12 @@ export default function FirebaseAdminDashboardPage() {
               <div className="stat-value">{stats.totalUsers}</div>
               <div className="stat-label">Total Users</div>
               <div className="stat-sub">{'\u{1F4C8}'} Registered</div>
+            </div>
+            <div className={`stat-card-modern ${sseCounts.pending_payments > 0 ? 'warning' : 'success'}`}>
+              <div className="stat-bg-icon">{'\u{1F4E8}'}</div>
+              <div className="stat-value">{sseConnected ? sseCounts.pending_payments : stats.pendingTopups}</div>
+              <div className="stat-label">{sseConnected ? 'Pending Payments (Live)' : 'Pending Payments'}</div>
+              <div className="stat-sub">{sseConnected ? '\u25CF Real-time SSE' : '\u{1F504}'} Awaiting processing</div>
             </div>
             <div className="stat-card-modern success">
               <div className="stat-bg-icon">{'\u2705'}</div>
@@ -378,6 +470,45 @@ export default function FirebaseAdminDashboardPage() {
             </div>
           </div>
 
+          {sseTime && (
+            <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--muted, #64748b)', marginBottom: '0.5rem' }}>
+              {sseConnected ? '\u25CF' : '\u25CB'} Last updated: {new Date(sseTime).toLocaleString('en-IN')}
+            </div>
+          )}
+
+          <div className="stats-grid-modern" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+            <div className="stat-card-modern info" style={{ '--accent-soft': 'rgba(59, 130, 246, 0.06)' }}>
+              <div className="stat-bg-icon">{'\u{1F4C5}'}</div>
+              <div className="stat-value">{stats.todayRegistrations}</div>
+              <div className="stat-label">Today's Registrations</div>
+              <div className="stat-sub">{'\u{1F4C8}'} New users</div>
+            </div>
+            <div className="stat-card-modern success">
+              <div className="stat-bg-icon">{'\u{1F4B3}'}</div>
+              <div className="stat-value">{stats.todayPayments}</div>
+              <div className="stat-label">Today's Payments</div>
+              <div className="stat-sub">{'\u2705'} Approved</div>
+            </div>
+            <div className="stat-card-modern accent">
+              <div className="stat-bg-icon">{'\u{1F4B0}'}</div>
+              <div className="stat-value">₹{stats.todayRevenue.toFixed(2)}</div>
+              <div className="stat-label">Today's Revenue</div>
+              <div className="stat-sub">{'\u{1F4C8}'} Collected</div>
+            </div>
+            <div className="stat-card-modern warning">
+              <div className="stat-bg-icon">{'\u{1F517}'}</div>
+              <div className="stat-value">{stats.todayReferrals}</div>
+              <div className="stat-label">Today's Referrals</div>
+              <div className="stat-sub">{'\u{1F4C8}'} Generated</div>
+            </div>
+            <div className="stat-card-modern" style={{ '--accent-soft': 'rgba(139, 92, 246, 0.06)' }}>
+              <div className="stat-bg-icon">{'\u{1F4E4}'}</div>
+              <div className="stat-value">{stats.todayTopups}</div>
+              <div className="stat-label">Today's Topups</div>
+              <div className="stat-sub">{'\u{1F504}'} Submitted</div>
+            </div>
+          </div>
+
           <div className="card-modern card-section">
             <div className="card-modern-header">
               <h2 className="card-modern-title">{'\u{1F4CA}'} Priority Overview</h2>
@@ -400,6 +531,151 @@ export default function FirebaseAdminDashboardPage() {
                 <div className="card-label">Approved Top-Ups</div>
                 <span className="priority-link">View {'\u2192'}</span>
               </Link>
+            </div>
+          </div>
+
+          <div className="card-modern card-section">
+            <div className="card-modern-header">
+              <h2 className="card-modern-title">{'\u{1F4CB}'} Recent Activity</h2>
+              <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={fetchActivities} disabled={activitiesLoading}>
+                {activitiesLoading ? '...' : '\u{1F504}'}
+              </button>
+            </div>
+            <div style={{ padding: '0.75rem 1rem' }}>
+              {activities.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '1.5rem', color: '#9ca3af', fontSize: '0.85rem' }}>
+                  {activitiesLoading ? 'Loading...' : 'No recent activity'}
+                </div>
+              ) : (
+                <div className="timeline">
+                  {activities.slice(0, 20).map(a => {
+                    const actionLabel = a.action
+                      .replace(/_/g, ' ')
+                      .replace(/\b\w/g, c => c.toUpperCase());
+                    const isApprove = a.action.includes('approve') || a.action.includes('credit');
+                    const isReject = a.action.includes('reject') || a.action.includes('delete') || a.action.includes('fail');
+                    const isRestore = a.action.includes('restore');
+                    const isReview = a.action.includes('manual') || a.action.includes('review');
+                    const cls = isApprove ? 'timeline-success' : isReject ? 'timeline-danger' : isRestore ? 'timeline-warning' : 'timeline-info';
+                    return (
+                      <div key={a.id} className={`timeline-item ${cls}`}>
+                        <div className="timeline-time">{a.createdAt ? new Date(a.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                        <div className="timeline-action">{actionLabel}</div>
+                        <div className="timeline-detail">
+                          {a.adminId && <>by <strong>{a.adminId}</strong></>}
+                          {a.targetType && <> on {a.targetType}{a.targetId ? ' #' + (typeof a.targetId === 'string' ? a.targetId.substring(0, 12) : a.targetId) : ''}</>}
+                          {a.details?.reason && <> — {a.details.reason}</>}
+                          {a.details?.amount && <> — ₹{a.details.amount}</>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="stats-grid-modern" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="card-modern card-section" style={{ margin: 0 }}>
+              <div className="card-modern-header">
+                <h2 className="card-modern-title">{'\u26A1'} Quick Actions</h2>
+              </div>
+              <div className="quick-actions-grid">
+                <button className="quick-action-btn" onClick={() => navigate('/fb-admin/upi-payments')}>
+                  {'\u{1F504}'} Process Payments
+                </button>
+                <button className="quick-action-btn" onClick={() => setShowAddUser(true)}>
+                  {'\u2795'} Add User
+                </button>
+                <button className="quick-action-btn" onClick={() => navigate('/fb-admin/users')}>
+                  {'\u{1F465}'} Manage Users
+                </button>
+                <button className="quick-action-btn" onClick={() => navigate('/fb-admin/payments')}>
+                  {'\u{1F4B3}'} View Payments
+                </button>
+                <button className="quick-action-btn" onClick={() => navigate('/fb-admin/topups')}>
+                  {'\u{1F4E4}'} View Topups
+                </button>
+                <button className="quick-action-btn" onClick={() => navigate('/fb-admin/status')}>
+                  {'\u{1F50D}'} System Status
+                </button>
+              </div>
+            </div>
+
+            <div className="card-modern card-section" style={{ margin: 0 }}>
+              <div className="card-modern-header">
+                <h2 className="card-modern-title">{'\u{1F4CA}'} System Health</h2>
+                <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={fetchHealth} disabled={healthLoading}>
+                  {healthLoading ? '...' : '\u{1F504}'}
+                </button>
+              </div>
+              <div>
+                {healthData ? (
+                  <>
+                    <div className="health-grid" style={{ marginBottom: '0.75rem' }}>
+                      {healthData.health && Object.entries(healthData.health).slice(0, 6).map(([key, val]) => (
+                        <div key={key} className="health-item">
+                          <span className={`health-dot ${val?.status === 'ok' ? 'online' : val?.status === 'degraded' ? 'degraded' : 'offline'}`} />
+                          <span className="health-label">{key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      {healthData.metrics && (
+                        <>
+                          <div className="health-metric">
+                            <span className="health-metric-label">Uptime</span>
+                            <span className="health-metric-value">
+                              {healthData.metrics.uptime_seconds > 86400
+                                ? Math.floor(healthData.metrics.uptime_seconds / 86400) + 'd '
+                                : ''}
+                              {Math.floor((healthData.metrics.uptime_seconds % 86400) / 3600)}h {Math.floor((healthData.metrics.uptime_seconds % 3600) / 60)}m
+                            </span>
+                          </div>
+                          <div className="health-metric">
+                            <span className="health-metric-label">API Calls</span>
+                            <span className="health-metric-value">{healthData.metrics.api_calls?.total || 0}</span>
+                          </div>
+                          <div className="health-metric">
+                            <span className="health-metric-label">Auth Failure Rate</span>
+                            <span className={`health-metric-value ${(healthData.metrics.auth?.failure_rate || 0) > 10 ? 'danger' : 'success'}`}>
+                              {healthData.metrics.auth?.failure_rate || 0}%
+                            </span>
+                          </div>
+                          <div className="health-metric">
+                            <span className="health-metric-label">Payment Approval Rate</span>
+                            <span className={`health-metric-value ${(healthData.metrics.payments?.approval_rate || 0) > 50 ? 'success' : 'warning'}`}>
+                              {healthData.metrics.payments?.approval_rate || 0}%
+                            </span>
+                          </div>
+                          <div className="health-metric">
+                            <span className="health-metric-label">OCR Success Rate</span>
+                            <span className={`health-metric-value ${(healthData.metrics.ocr?.success_rate || 0) > 80 ? 'success' : (healthData.metrics.ocr?.success_rate || 0) > 50 ? 'warning' : 'danger'}`}>
+                              {healthData.metrics.ocr?.success_rate || 0}%
+                            </span>
+                          </div>
+                          <div className="health-metric">
+                            <span className="health-metric-label">DB Errors</span>
+                            <span className={`health-metric-value ${(healthData.metrics.database?.supabase_errors || 0) > 0 ? 'danger' : 'success'}`}>
+                              {healthData.metrics.database?.supabase_errors || 0}
+                            </span>
+                          </div>
+                          <div className="health-metric">
+                            <span className="health-metric-label">Queue Pending</span>
+                            <span className={`health-metric-value ${(healthData.queue?.pending || 0) > 0 ? 'warning' : 'success'}`}>
+                              {healthData.queue?.pending || 0}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '1.5rem', color: '#9ca3af', fontSize: '0.85rem' }}>
+                    {healthLoading ? 'Loading...' : 'No health data'}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

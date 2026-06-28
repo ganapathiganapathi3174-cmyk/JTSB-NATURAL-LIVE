@@ -3,7 +3,7 @@ const turso = require('./_turso.js');
 const neon = require('./_neon.js');
 const r2 = require('./_r2.js');
 
-const CHECK_INTERVAL_MS = 60000;
+const CHECK_INTERVAL_MS = 300000;
 
 const status = {
   supabase: { status: 'unknown', lastCheck: null, latency: 0, error: null },
@@ -87,16 +87,22 @@ async function runAllChecks() {
   ]);
 }
 
+let logIntervalHandle = null;
+
 function startHealthChecks() {
   if (intervalHandle) return;
   runAllChecks();
   intervalHandle = setInterval(runAllChecks, CHECK_INTERVAL_MS);
 
-  // Log any unhealthy providers
-  setInterval(() => {
+  // Log any unhealthy providers (once per change)
+  logIntervalHandle = setInterval(() => {
     for (const [name, s] of Object.entries(status)) {
-      if (s.status === 'unhealthy') {
+      if (s.status === 'unhealthy' && s._logged !== true) {
         console.warn(`[HEALTH] ${name} is unhealthy: ${s.error}`);
+        s._logged = true;
+      }
+      if (s.status === 'healthy') {
+        s._logged = false;
       }
     }
   }, CHECK_INTERVAL_MS * 2);
@@ -106,6 +112,10 @@ function stopHealthChecks() {
   if (intervalHandle) {
     clearInterval(intervalHandle);
     intervalHandle = null;
+  }
+  if (logIntervalHandle) {
+    clearInterval(logIntervalHandle);
+    logIntervalHandle = null;
   }
 }
 

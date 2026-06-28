@@ -1,10 +1,11 @@
 const health = require('../api/_health.js');
 const queue = require('../api/_queue.js');
+const metrics = require('../api/_metrics.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.writeHead(200).end();
 
   try {
@@ -22,9 +23,11 @@ module.exports = async (req, res) => {
       timestamp: new Date().toISOString(),
       health: healthStatus,
       queue: queueStatus,
+      metrics: metrics.getMetrics(),
     }));
   } catch (err) {
+    console.error('[getHealthStatus] Error:', err.message);
     res.writeHead(500);
-    res.end(JSON.stringify({ error: err.message }));
+    res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };

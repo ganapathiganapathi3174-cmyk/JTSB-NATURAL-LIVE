@@ -26,7 +26,7 @@ async function ensureBucket(supabase) {
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.writeHead(200).end();
   if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
 
@@ -35,6 +35,20 @@ module.exports = async (req, res) => {
     if (!image) { res.writeHead(400); res.end(JSON.stringify({ error: 'Image data is required' })); return; }
 
     const buf = Buffer.from(image, 'base64');
+
+    // Server-side file validation: magic bytes and size
+    if (buf.length > 5 * 1024 * 1024) {
+      res.writeHead(400); res.end(JSON.stringify({ error: 'File size exceeds 5MB limit' }));
+      return;
+    }
+    const jpegHeader = buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF;
+    const pngHeader = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47;
+    if (!jpegHeader && !pngHeader) {
+      res.writeHead(400); res.end(JSON.stringify({ error: 'Only JPEG and PNG images are allowed' }));
+      return;
+    }
+
+    const contentType = pngHeader ? 'image/png' : 'image/jpeg';
     const safeName = 'screenshots/' + Date.now() + '_' + (fileName || 'screenshot.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
 
     // Try Cloudflare R2 first
@@ -53,7 +67,7 @@ module.exports = async (req, res) => {
         const supabase = createClient(url, key, { auth: { persistSession: false } });
         await ensureBucket(supabase);
         const { data, error } = await supabase.storage.from('payments').upload(safeName, buf, {
-          contentType: 'image/jpeg', upsert: false,
+          contentType, upsert: false,
         });
         if (!error) {
           const { data: urlData } = supabase.storage.from('payments').getPublicUrl(safeName);
@@ -71,6 +85,7 @@ module.exports = async (req, res) => {
     const origin = req.headers.origin || 'http://localhost:5173';
     res.writeHead(200); res.end(JSON.stringify({ url: origin + '/uploads/' + path.basename(localFile), path: safeName }));
   } catch (err) {
-    res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    console.error('[uploadScreenshot] Error:', err.message);
+    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };

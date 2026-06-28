@@ -99,6 +99,8 @@ const navItems = [
   { path: '/fb-admin/upi-payments', label: 'UPI Payments', icon: IconUPI },
   { path: '/fb-admin/users', label: 'Users', icon: IconUsers },
   { path: '/fb-admin/status', label: 'Status Board', icon: IconStatus },
+  { path: '/fb-admin/tools', label: 'Tools', icon: IconStatus },
+  { path: '/fb-admin/queue', label: 'Queue', icon: IconStatus },
   { path: '/fb-admin/messages', label: 'Messages', icon: IconMessages },
   { path: '/fb-admin/chat', label: 'Chat', icon: IconChat },
 ];

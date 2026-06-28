@@ -1,0 +1,30 @@
+const { createUPIOrder } = require('../api/_orderManager.js');
+
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.writeHead(200).end();
+  if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
+
+  try {
+    const { type, amount, userId, pendingRegId, plan } = req.body || {};
+    const errors = [];
+    if (!type || !['registration', 'topup'].includes(type)) errors.push('type must be registration or topup');
+    if (!amount || amount < 1) errors.push('Valid amount is required');
+    if (type === 'registration' && !pendingRegId) errors.push('pendingRegId is required for registration');
+    if (type === 'topup' && !userId) errors.push('userId is required for topup');
+    if (errors.length) { res.writeHead(400); res.end(JSON.stringify({ error: errors.join('. ') })); return; }
+
+
+    const result = await createUPIOrder(type, Number(amount), userId || null, pendingRegId || null, plan || null);
+
+    res.writeHead(200);
+    res.end(JSON.stringify(result));
+  } catch (err) {
+    const status = err.status || 500;
+    console.error('[createUPIOrder] Error:', err.message);
+    res.writeHead(status);
+    res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
+  }
+};

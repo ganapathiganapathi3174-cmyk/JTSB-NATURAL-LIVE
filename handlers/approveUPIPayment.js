@@ -1,5 +1,6 @@
-const { randomString, crypto } = require('../api/_shared.js');
-const { runQuery, writeDoc, updateDoc, addDoc, deleteDoc } = require('../api/_supabase.js');
+const { randomString, crypto, MAX_REFERRALS, COL_TOPUP_INCOME, generateIdempotencyKey } = require('../api/_shared.js');
+const { getDoc, runQuery, writeDoc, updateDoc, addDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet } = require('../api/_supabase.js');
+const { broadcast } = require('../api/_sse.js');
 
 const COL_UPI_PAYMENTS = 'upi_payments';
 const COL_USERS = 'users';
@@ -7,109 +8,205 @@ const COL_WALLET_BALANCES = 'wallet_balances';
 const COL_WALLET_TX = 'wallet_transactions';
 const COL_TOPUPS = 'topups';
 const COL_PENDING_REGS = 'pending_registrations';
-const COL_UNIQUES = 'uniques';
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.writeHead(200).end();
   if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
+  if (!req.admin) { res.writeHead(401); res.end(JSON.stringify({ error: 'Authentication required' })); return; }
+
+  const idempotencyKey = generateIdempotencyKey();
 
   try {
     const { paymentId } = req.body || {};
     if (!paymentId) { res.writeHead(400); res.end(JSON.stringify({ error: 'Payment ID is required' })); return; }
 
+    // ATOMIC: Claim payment — only succeeds if status is processable
+    const now = new Date().toISOString();
+    const claimed = await conditionalUpdateDoc(COL_UPI_PAYMENTS, paymentId, [
+      { field: 'status', op: 'IN', value: ['pending', 'manual_review'] },
+    ], { status: 'verified', verified_at: now });
+
+    if (claimed === 0) {
+      // Payment already processed — return current status (idempotent)
+      const existing = await runQuery(COL_UPI_PAYMENTS, [{ field: 'id', op: 'EQUAL', value: paymentId }]);
+      if (existing && existing.length) {
+        res.writeHead(200); res.end(JSON.stringify({ status: existing[0].status, idempotent: true }));
+        return;
+      }
+      res.writeHead(404); res.end(JSON.stringify({ error: 'Payment not found' }));
+      return;
+    }
+
     const payments = await runQuery(COL_UPI_PAYMENTS, [{ field: 'id', op: 'EQUAL', value: paymentId }]);
-    if (!payments.length) { res.writeHead(404); res.end(JSON.stringify({ error: 'Payment record not found' })); return; }
+    if (!payments.length) {
+      await conditionalUpdateDoc(COL_UPI_PAYMENTS, paymentId, [], { status: 'failed', rejection_reasons: ['Payment record vanished'] });
+      res.writeHead(404); res.end(JSON.stringify({ error: 'Payment record not found' }));
+      return;
+    }
+
     const payment = payments[0];
-
-    if (payment.status === 'verified') { res.writeHead(400); res.end(JSON.stringify({ error: 'Payment already verified' })); return; }
-
     const payType = payment.payment_type;
     const amountNum = payment.amount;
 
-    if (payType === 'registration') {
-      const pendingRegId = payment.user_id;
-      if (!pendingRegId) { res.writeHead(400); res.end(JSON.stringify({ error: 'No registration session linked' })); return; }
+    try {
+      if (payType === 'registration') {
+        const pendingRegId = payment.pending_reg_id || payment.user_id;
+        if (!pendingRegId) { throw Object.assign(new Error('No registration session linked'), { code: 'NO_SESSION' }); }
 
-      const pendingRegs = await runQuery(COL_PENDING_REGS, [{ field: 'id', op: 'EQUAL', value: pendingRegId }]);
-      if (!pendingRegs.length) { res.writeHead(400); res.end(JSON.stringify({ error: 'Registration session not found' })); return; }
-      const pendingReg = pendingRegs[0];
+        const pendingRegs = await runQuery(COL_PENDING_REGS, [{ field: 'id', op: 'EQUAL', value: pendingRegId }]);
+        if (!pendingRegs.length) { throw Object.assign(new Error('Registration session not found'), { code: 'NO_SESSION' }); }
 
-      const newUserId = crypto.randomUUID();
-      const refCode = pendingReg.referral_code;
+        const pendingReg = pendingRegs[0];
+        const newUserId = crypto.randomUUID();
+        const refCode = pendingReg.referral_code;
 
-      let referredBy = null;
-      if (refCode) {
-        const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: refCode }]);
-        if (refUsers.length) referredBy = refUsers[0].id;
-      }
-
-      const userData = {
-        id: newUserId, email: pendingReg.email, name: pendingReg.name || '',
-        phone: pendingReg.phone || '', password_hash: pendingReg.password_hash,
-        referral_code: randomString(8), referred_by: referredBy,
-        account_status: 'active', payment_status: 'success',
-        approved: true, active: true, membership_paid: true,
-        joined_date: new Date().toISOString(), approved_date: new Date().toISOString(),
-      };
-      await writeDoc(COL_USERS, newUserId, userData);
-      await writeDoc(COL_WALLET_BALANCES, newUserId, { balance: amountNum, total_earned: amountNum });
-
-      await addDoc(COL_WALLET_TX, {
-        user_id: newUserId, type: 'deposit', amount: amountNum,
-        description: 'Registration payment (admin approved)', reference_id: payment.id, balance_after: amountNum,
-      });
-
-      if (referredBy) {
-        const sponsorWallets = await runQuery(COL_WALLET_BALANCES, [{ field: 'id', op: 'EQUAL', value: referredBy }]);
-        if (sponsorWallets.length) {
-          const sponsorWallet = sponsorWallets[0];
-          const refAmount = amountNum * 0.1;
-          const newBal = (sponsorWallet.balance || 0) + refAmount;
-          await updateDoc(COL_WALLET_BALANCES, referredBy, { balance: newBal, total_earned: (sponsorWallet.total_earned || 0) + refAmount });
-          await addDoc(COL_WALLET_TX, {
-            user_id: referredBy, type: 'referral_bonus', amount: refAmount,
-            description: 'Referral bonus for ' + newUserId, balance_after: newBal,
+        const userName = pendingReg.name || '';
+        const userEmail = pendingReg.email || '';
+        const userPhone = pendingReg.phone || '';
+        const missingFields = [];
+        if (!userName) missingFields.push('name');
+        if (!userEmail) missingFields.push('email');
+        if (!userPhone) missingFields.push('phone');
+        if (['unknown', 'undefined', 'null'].includes(userName.toLowerCase())) missingFields.push('name=unknown');
+        if (['unknown', 'undefined', 'null'].includes(userEmail.toLowerCase())) missingFields.push('email=unknown');
+        if (['unknown', 'undefined', 'null'].includes(userPhone.toLowerCase())) missingFields.push('phone=unknown');
+        if (missingFields.length) {
+          await updateDoc(COL_UPI_PAYMENTS, payment.id, {
+            status: 'rejected', rejection_reasons: ['Invalid registration data: ' + missingFields.join(', ')],
+            verified_at: new Date().toISOString(),
           });
+          res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid registration data' })); return;
         }
+
+        let referredByUserId = null;
+        let referredByCode = null;
+        if (refCode) {
+          const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: refCode }]);
+          if (refUsers.length) { referredByUserId = refUsers[0].id; referredByCode = refCode; }
+        }
+
+        const userData = {
+          id: newUserId, email: userEmail, name: userName,
+          phone: userPhone, password_hash: pendingReg.password_hash,
+          referral_code: randomString(8), referred_by: referredByCode,
+          account_status: 'active', payment_status: 'success',
+          approved: true, active: true, membership_paid: true,
+          joined_date: now, approved_date: now,
+        };
+        await writeDoc(COL_USERS, newUserId, userData);
+
+        // New wallet — no race possible (fresh id)
+        await writeDoc(COL_WALLET_BALANCES, newUserId, { balance: 0, total_earned: amountNum });
+        await addDoc(COL_WALLET_TX, {
+          user_id: newUserId, type: 'deposit', amount: amountNum,
+          description: 'Registration payment (admin approved)', reference_id: payment.id, balance_after: amountNum,
+        });
+
+        // Referral bonus — atomic credit (use user ID, not referral code)
+        if (referredByUserId) {
+          const refAmount = amountNum * 0.1;
+          await atomicCreditWallet(referredByUserId, refAmount, payment.id, 'Referral bonus for ' + newUserId, 'referral_bonus');
+        }
+
+        // Audit log
+        try { await addDoc('audit_logs', { action: 'approve_registration_payment', target_id: payment.id, target_type: 'upi_payment', admin_id: req.admin?.email || 'unknown', details: { userId: newUserId, amount: amountNum, referredBy: referredByCode }, created_at: now }); } catch {}
+
+        try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch {}
+
+        try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Your registration payment of ₹' + amountNum + ' has been approved and your account is now active.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
+
+        try { broadcast('paymentUpdated', { id: payment.id, status: 'approved', type: payType, userId: newUserId }); } catch {}
+        res.writeHead(200); res.end(JSON.stringify({ status: 'approved', userId: newUserId }));
+        return;
       }
 
-      try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch {}
+      if (payType === 'topup') {
+        const userId = payment.user_id;
+        if (!userId) { throw Object.assign(new Error('No user linked to this payment'), { code: 'NO_USER' }); }
 
-      await updateDoc(COL_UPI_PAYMENTS, payment.id, { status: 'verified', verified_at: new Date().toISOString() });
+        const userDocs = await runQuery(COL_USERS, [{ field: 'id', op: 'EQUAL', value: userId }]);
+        if (!userDocs.length) { throw Object.assign(new Error('User not found'), { code: 'NO_USER' }); }
 
-      res.writeHead(200); res.end(JSON.stringify({ status: 'approved', userId: newUserId })); return;
+        const userDoc = userDocs[0];
+
+        // Atomic wallet credit
+        await atomicCreditWallet(userId, amountNum, payment.id, 'Topup via UPI (admin approved)');
+
+        const { id: topupId } = await addDoc(COL_TOPUPS, {
+          user_id: userId, amount: amountNum, utr: payment.utr,
+          screenshot_url: payment.screenshot_url, status: 'approved', verified_at: now,
+        });
+
+        // Referral income for topup
+        const referredByCode = userDoc.referred_by || null;
+        if (referredByCode) {
+          try {
+            const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: referredByCode }], { limit: 1 });
+            const referrer = refUsers.length ? refUsers[0] : null;
+            if (referrer) {
+              const sponsorTopups = await runQuery(COL_TOPUPS, [
+                { field: 'user_id', op: 'EQUAL', value: referrer.id },
+                { field: 'status', op: 'EQUAL', value: 'approved' },
+              ], { limit: 1 });
+              const incomeStatus = sponsorTopups.length > 0 ? 'eligible' : 'locked';
+
+              await addDoc(COL_TOPUP_INCOME, {
+                user_id: referrer.id, from_user_id: userId, topup_id: topupId,
+                amount: amountNum, level: 1, status: incomeStatus,
+              });
+
+              const currentCount = referrer.topup_referral_qualified_count || 0;
+              const newCount = currentCount + 1;
+              const topupQualified = (referrer.referrals_count || 0) + newCount >= MAX_REFERRALS;
+              await updateDoc(COL_USERS, referrer.id, { topup_referral_qualified_count: newCount, topup_referral_qualified: topupQualified });
+
+              if (userDoc.referred_by_status !== 'approved') {
+                await updateDoc(COL_USERS, userId, { referred_by_status: 'approved' });
+              }
+            }
+          } catch (e) { console.error('[MANUAL-APPROVE] Topup referral income error:', e?.message); }
+        }
+
+        // Audit log
+        try { await addDoc('audit_logs', { action: 'approve_topup_payment', target_id: payment.id, target_type: 'upi_payment', admin_id: req.admin?.email || 'unknown', details: { userId, amount: amountNum, topupId, referredBy: referredByCode }, created_at: now }); } catch {}
+
+        // Sponsor topup completion — unlock locked incomes
+        try {
+          if (userDoc.topup_referral_qualified && !userDoc.sponsor_topup_completed) {
+            await updateDoc(COL_USERS, userId, { account_status: 'inactive', sponsor_topup_completed: true });
+            const lockedIncome = await runQuery(COL_TOPUP_INCOME, [
+              { field: 'user_id', op: 'EQUAL', value: userId },
+              { field: 'status', op: 'EQUAL', value: 'locked' },
+            ], { limit: 100 });
+            for (const inc of lockedIncome) {
+              await updateDoc(COL_TOPUP_INCOME, inc.id, { status: 'eligible' });
+            }
+          }
+        } catch (e) { console.error('[MANUAL-APPROVE] Sponsor topup completion error:', e?.message); }
+
+        try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Your topup of ₹' + amountNum + ' has been approved and added to your wallet.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
+
+        try { broadcast('paymentUpdated', { id: payment.id, status: 'approved', type: payType, userId }); } catch {}
+        res.writeHead(200); res.end(JSON.stringify({ status: 'approved', userId }));
+        return;
+      }
+
+      await updateDoc(COL_UPI_PAYMENTS, payment.id, { status: 'failed', rejection_reasons: ['Unknown payment type: ' + payType] });
+      res.writeHead(400); res.end(JSON.stringify({ error: 'Unknown payment type' }));
+    } catch (innerErr) {
+      // ROLLBACK: revert payment status
+      await conditionalUpdateDoc(COL_UPI_PAYMENTS, payment.id, [
+        { field: 'status', op: 'EQUAL', value: 'verified' },
+      ], { status: 'failed', rejection_reasons: ['Approval failed: ' + innerErr.message] });
+      try { await addDoc('audit_logs', { action: 'approve_payment_failed', target_id: payment.id, target_type: 'upi_payment', admin_id: req.admin?.email || 'unknown', details: { error: innerErr.message, payType }, created_at: new Date().toISOString() }); } catch {}
+      console.error('[approveUPIPayment] Inner error:', innerErr.message);
+      res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
     }
-
-    if (payType === 'topup') {
-      const userId = payment.user_id;
-      if (!userId) { res.writeHead(400); res.end(JSON.stringify({ error: 'No user linked to this payment' })); return; }
-
-      const userDocs = await runQuery(COL_USERS, [{ field: 'id', op: 'EQUAL', value: userId }]);
-      if (!userDocs.length) { res.writeHead(400); res.end(JSON.stringify({ error: 'User not found' })); return; }
-
-      const wallets = await runQuery(COL_WALLET_BALANCES, [{ field: 'id', op: 'EQUAL', value: userId }]);
-      const wallet = wallets.length ? wallets[0] : { balance: 0, total_earned: 0 };
-      const newBalance = (wallet.balance || 0) + amountNum;
-      await writeDoc(COL_WALLET_BALANCES, userId, { balance: newBalance, total_earned: (wallet.total_earned || 0) + amountNum });
-
-      await addDoc(COL_WALLET_TX, {
-        user_id: userId, type: 'deposit', amount: amountNum,
-        description: 'Topup via UPI (admin approved)', reference_id: payment.id, balance_after: newBalance,
-      });
-      await addDoc(COL_TOPUPS, {
-        user_id: userId, amount: amountNum, status: 'approved',
-      });
-
-      await updateDoc(COL_UPI_PAYMENTS, payment.id, { status: 'verified', verified_at: new Date().toISOString() });
-
-      res.writeHead(200); res.end(JSON.stringify({ status: 'approved', userId })); return;
-    }
-
-    res.writeHead(400); res.end(JSON.stringify({ error: 'Unknown payment type' }));
   } catch (err) {
-    res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    console.error('[approveUPIPayment] Error:', err.message);
+    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };

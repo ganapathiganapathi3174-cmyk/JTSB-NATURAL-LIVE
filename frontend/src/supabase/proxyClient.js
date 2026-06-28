@@ -1,9 +1,16 @@
 const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 
+function proxyAuthHeaders() {
+  const t = localStorage.getItem('fb_admin_token');
+  const headers = { 'Content-Type': 'application/json' };
+  if (t) headers['Authorization'] = 'Bearer ' + t;
+  return headers;
+}
+
 async function proxyCall(method, table, options = {}) {
   const res = await fetch(`${API_BASE}/supabaseProxy`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: proxyAuthHeaders(),
     body: JSON.stringify({ method, table, ...options }),
   });
   const result = await res.json();

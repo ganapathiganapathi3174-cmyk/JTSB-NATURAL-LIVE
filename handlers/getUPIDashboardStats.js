@@ -18,6 +18,7 @@ module.exports = async (req, res) => {
       registrationPayments: regPayments, topupPayments,
     }));
   } catch (err) {
-    res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    console.error('[getUPIDashboardStats] Error:', err.message);
+    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };

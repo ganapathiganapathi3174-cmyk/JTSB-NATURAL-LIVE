@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { ToastProvider } from './components/ToastProvider.jsx';
 
 const TestPage = lazy(() => import('./pages/TestPage.jsx'));
 const PaymentPage = lazy(() => import('./pages/PaymentPage.jsx'));
@@ -18,8 +19,10 @@ const ReferralGraphPage = lazy(() => import('./pages/ReferralGraphPage.jsx'));
 const FirebaseAdminStatusPage = lazy(() => import('./pages/FirebaseAdminStatusPage.jsx'));
 const FirebaseAdminTopupsPage = lazy(() => import('./pages/FirebaseAdminTopupsPage.jsx'));
 const FirebaseAdminUPIPaymentsPage = lazy(() => import('./pages/FirebaseAdminUPIPaymentsPage.jsx'));
+const FirebaseAdminToolsPage = lazy(() => import('./pages/FirebaseAdminToolsPage.jsx'));
+const FirebaseAdminQueuePage = lazy(() => import('./pages/FirebaseAdminQueuePage.jsx'));
 
-const SESSION_DURATION = 7 * 3600 * 1000;
+const SESSION_DURATION = 24 * 3600 * 1000;
 
 function isSessionExpired(key) {
   const loginAt = parseInt(localStorage.getItem(key), 10);
@@ -73,11 +76,26 @@ function ProtectedFirebaseAdmin({ children }) {
     clearSession();
     return <Navigate to="/fb-admin" replace />;
   }
+  // Verify JWT is not expired by decoding it
+  try {
+    const parts = adminToken.split('.');
+    if (parts.length !== 3) { clearSession(); return <Navigate to="/fb-admin" replace />; }
+    const body = JSON.parse(atob(parts[1]));
+    const exp = body.exp;
+    if (!exp || Math.floor(Date.now() / 1000) > exp) {
+      clearSession();
+      return <Navigate to="/fb-admin" replace />;
+    }
+  } catch {
+    clearSession();
+    return <Navigate to="/fb-admin" replace />;
+  }
   return children;
 }
 
 export default function App() {
   return (
+    <ToastProvider>
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route path="/test" element={<TestPage />} />
@@ -100,9 +118,12 @@ export default function App() {
         <Route path="/fb-admin/chat" element={<ProtectedFirebaseAdmin><AdminChat /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/topups" element={<ProtectedFirebaseAdmin><FirebaseAdminTopupsPage /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/upi-payments" element={<ProtectedFirebaseAdmin><FirebaseAdminUPIPaymentsPage /></ProtectedFirebaseAdmin>} />
+        <Route path="/fb-admin/tools" element={<ProtectedFirebaseAdmin><FirebaseAdminToolsPage /></ProtectedFirebaseAdmin>} />
+        <Route path="/fb-admin/queue" element={<ProtectedFirebaseAdmin><FirebaseAdminQueuePage /></ProtectedFirebaseAdmin>} />
 
         <Route path="*" element={<Navigate to="/fb/register" replace />} />
       </Routes>
     </Suspense>
+    </ToastProvider>
   );
 }

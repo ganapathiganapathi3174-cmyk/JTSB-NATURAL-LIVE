@@ -1,31 +1,7 @@
 const https = require('https');
 const crypto = require('crypto');
 const r2 = require('./_r2.js');
-
-async function getGoogleToken() {
-  const keyBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!keyBase64) return null;
-  let sa;
-  try { sa = JSON.parse(Buffer.from(keyBase64, 'base64').toString()); } catch { return null; }
-  const now = Math.floor(Date.now() / 1000);
-  const jwt = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url')
-    + '.' + Buffer.from(JSON.stringify({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now })).toString('base64url');
-  const sign = crypto.createSign('RSA-SHA256').update(jwt).end();
-  const sig = sign.sign(sa.private_key, 'base64url');
-  const jwtSigned = jwt + '.' + sig;
-  return new Promise((resolve, reject) => {
-    const body = 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=' + encodeURIComponent(jwtSigned);
-    const req = https.request('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, (res) => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        try { const r = JSON.parse(data); resolve(r.access_token || null); } catch { resolve(null); }
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.write(body); req.end();
-  });
-}
+const Tesseract = require('tesseract.js');
 
 const DEFAULT_UPI_ID = 'jayarajj126-3@okicici';
 
@@ -124,42 +100,6 @@ function analyzeImageQuality(buffer, annotations) {
   return result;
 }
 
-async function callVisionAPI(base64Image) {
-  const token = await getGoogleToken();
-  if (!token) return null;
-
-  const body = JSON.stringify({
-    requests: [{
-      image: { content: base64Image },
-      features: [{ type: 'TEXT_DETECTION', maxResults: 1 }],
-    }],
-  });
-
-  return new Promise((resolve, reject) => {
-    const opts = {
-      hostname: 'vision.googleapis.com',
-      path: '/v1/images:annotate',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-        'Content-Length': Buffer.byteLength(body),
-      },
-    };
-    const req = https.request(opts, (res) => {
-      let d = '';
-      res.on('data', c => d += c);
-      res.on('end', () => {
-        try { resolve(JSON.parse(d)); } catch { resolve(null); }
-      });
-    });
-    req.on('error', reject);
-    req.setTimeout(20000, () => { req.destroy(); reject(new Error('Vision API timeout')); });
-    req.write(body);
-    req.end();
-  });
-}
-
 function parseOCRText(fullText, annotations) {
   const result = {
     rawText: fullText || '',
@@ -224,6 +164,18 @@ function parseOCRText(fullText, annotations) {
     }
   }
 
+  // Fallback: if no amount found with prefix, try standalone numbers matching allowed amounts
+  if (foundAmounts.length === 0) {
+    for (const line of lines) {
+      const clean = line.replace(/[,]/g, '').trim();
+      const num = parseFloat(clean);
+      if (!isNaN(num) && num > 0 && num === Math.floor(num) && [120, 500, 1000].includes(num)) {
+        foundAmounts.push(num);
+        break;
+      }
+    }
+  }
+
   if (foundAmounts.length > 0) result.extractedAmount = foundAmounts[0];
   if (foundUtrs.length > 0) result.extractedUtr = foundUtrs[0];
   if (foundUpiIds.length > 0) result.extractedUpiId = foundUpiIds[0];
@@ -240,52 +192,46 @@ function parseOCRText(fullText, annotations) {
 }
 
 async function analyzeScreenshot(imageUrl) {
-  const visionResult = { ocrAvailable: false, ocrParsed: null, imageHash: '', imageQuality: null, error: null };
+  const result = { ocrAvailable: false, ocrParsed: null, imageHash: '', imageQuality: null, error: null };
 
   try {
     const buf = await fetchBuffer(imageUrl);
-    const crypto = require('crypto');
-    visionResult.imageHash = crypto.createHash('sha256').update(buf).digest('hex');
+    result.imageHash = crypto.createHash('sha256').update(buf).digest('hex');
 
-    const base64 = buf.toString('base64');
-    const apiResponse = await callVisionAPI(base64);
+    const { data } = await Tesseract.recognize(buf, 'eng', {
+      logger: () => {},
+    });
 
-    if (!apiResponse) {
-      visionResult.ocrAvailable = false;
-      visionResult.error = 'Vision API credentials not available';
-      return visionResult;
+    const ocrText = data.text || '';
+
+    const annotations = [{
+      description: ocrText,
+      boundingPoly: { vertices: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }] },
+    }];
+    for (const word of (data.words || [])) {
+      annotations.push({
+        description: word.text,
+        confidence: (word.confidence || 0) / 100,
+        boundingPoly: word.bbox ? {
+          vertices: [
+            { x: word.bbox.x0, y: word.bbox.y0 },
+            { x: word.bbox.x1, y: word.bbox.y0 },
+            { x: word.bbox.x1, y: word.bbox.y1 },
+            { x: word.bbox.x0, y: word.bbox.y1 },
+          ],
+        } : undefined,
+      });
     }
 
-    if (apiResponse.error) {
-      visionResult.ocrAvailable = false;
-      visionResult.error = 'Vision API error: ' + (apiResponse.error.message || JSON.stringify(apiResponse.error));
-      return visionResult;
-    }
+    result.ocrAvailable = true;
+    result.ocrParsed = parseOCRText(ocrText, annotations);
+    result.ocrParsed.rawText = ocrText;
+    result.imageQuality = analyzeImageQuality(buf, annotations);
 
-    const responses = apiResponse.responses || [];
-    if (responses.length === 0 || !responses[0]) {
-      visionResult.ocrAvailable = false;
-      visionResult.error = 'No response from Vision API';
-      return visionResult;
-    }
-
-    const textAnnotations = responses[0].textAnnotations || [];
-    const fullText = responses[0].fullTextAnnotation ? responses[0].fullTextAnnotation.text : '';
-    const ocrText = fullText || (textAnnotations.length > 0 ? textAnnotations[0].description : '');
-
-    visionResult.ocrAvailable = true;
-    visionResult.ocrParsed = parseOCRText(ocrText, textAnnotations);
-    visionResult.ocrParsed.rawText = ocrText;
-    visionResult.rawApiResponse = {
-      textLength: ocrText.length,
-      annotationCount: textAnnotations.length,
-    };
-    visionResult.imageQuality = analyzeImageQuality(buf, textAnnotations);
-
-    return visionResult;
+    return result;
   } catch (e) {
-    visionResult.error = 'Screenshot analysis failed: ' + e.message;
-    return visionResult;
+    result.error = 'Screenshot analysis failed: ' + e.message;
+    return result;
   }
 }
 

@@ -4,576 +4,386 @@ const {
   COL_USERS, COL_PENDING_REGS, COL_TOPUPS, COL_WALLET_BALANCES, COL_WALLET_TX,
   COL_UPI_PAYMENTS, COL_TOPUP_INCOME, COL_VERIFICATION_LOGS, MAX_REFERRALS, randomString,
 } = require('../api/_shared.js');
-const { getDoc, deleteDoc, runQuery, writeDoc, updateDoc, addDoc } = require('../api/_supabase.js');
-const { analyzeScreenshot } = require('../api/_vision.js');
+const { getDoc, deleteDoc, runQuery, writeDoc, updateDoc, addDoc, conditionalUpdateDoc, atomicCreditWallet } = require('../api/_supabase.js');
+const { runVerification } = require('../api/_verificationEngine.js');
+const metrics = require('../api/_metrics.js');
+const { broadcast } = require('../api/_sse.js');
 
-const DEFAULT_UPI_ID = 'jayarajj126-3@okicici';
-const ALLOWED_AMOUNTS = [120, 500, 1000];
+const PER_PAYMENT_TIMEOUT_MS = 120000;
+let isProcessing = false;
 
-function fetchBuffer(url) {
-  return new Promise((resolve, reject) => {
-    const u = new URL(url);
-    const mod = u.protocol === 'https:' ? https : require('http');
-    mod.get(url, { timeout: 15000 }, (res) => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks)));
-    }).on('error', reject).on('timeout', function () { this.destroy(); reject(new Error('timeout')); });
-  });
+function TRACE(label) {
+  console.log(`[TRACE:${new Date().toISOString().slice(11,23)}] ${label}`);
 }
 
 module.exports = async (req, res) => {
+  TRACE('AAA: processPendingPayments ENTERED');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.writeHead(200).end();
-  if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  TRACE('AAB: headers set');
+  if (req.method === 'OPTIONS') { TRACE('AAC: OPTIONS early return'); return res.writeHead(200).end(); }
+  TRACE('AAD: method check passed');
+  if (req.method !== 'POST') { TRACE('AAE: not POST, returning 405'); res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
+  TRACE('AAF: method is POST');
+  TRACE(`AAG: isProcessing=${isProcessing}`);
+  if (isProcessing) { TRACE('AAH: isProcessing=true, returning 429'); res.writeHead(429); res.end(JSON.stringify({ error: 'Already processing', isProcessing: true })); return; }
+  TRACE('AAI: setting isProcessing=true');
+  isProcessing = true;
+  TRACE('AAJ: isProcessing set, entering try block');
+  let processingError = null;
 
   try {
+    TRACE('AAK: inside try');
     const today = new Date().toISOString().split('T')[0];
+    const startedAt = new Date().toISOString();
+    TRACE(`AAL: today=${today}, startedAt=${startedAt}`);
 
+    TRACE('AAM: about to query pending payments');
     const pendingPayments = await runQuery(COL_UPI_PAYMENTS, [
       { field: 'status', op: 'EQUAL', value: 'pending' },
     ], { limit: 100 });
+    TRACE(`AAN: pendingPayments query returned: length=${pendingPayments ? pendingPayments.length : 'NULL/undefined'}`);
+    if (!pendingPayments) { TRACE('AAO: pendingPayments is null/undefined'); }
+
+    console.log(`[AUTO-VERIFY] Pending payments: ${pendingPayments ? pendingPayments.length : 0}`);
 
     const results = { processed: 0, approved: 0, rejected: 0, manualReview: 0, ocrSkipped: 0, errors: [] };
+
+    TRACE(`AAP: about to loop over ${pendingPayments ? pendingPayments.length : 0} payments`);
 
     for (const payment of pendingPayments) {
       const paymentId = payment.id;
       const utr = payment.utr || paymentId;
       results.processed++;
+      TRACE(`AAQ: LOOP START for paymentId=${paymentId}, utr=${utr ? utr.substring(0,8)+'****' : 'null'}`);
 
       try {
         const amountNum = Number(payment.amount) || 0;
         const type = payment.payment_type;
-        const validationSteps = [];
-        let rejectionReasons = [];
-        const manualReviewReasons = [];
+        TRACE(`AAR: amount=${amountNum}, type=${type}, current status in DB=${payment.status}`);
 
-        function recordStep(layer, stepNum, name, passed, detail) {
-          validationSteps.push({ layer, step: stepNum, name, passed, detail: detail || '' });
+        // PROTECTION: Atomic Verification Lock
+        const lockedAt = new Date().toISOString();
+        TRACE(`AAS: attempting conditionalUpdateDoc for lock, status condition='pending'`);
+        const locked = await conditionalUpdateDoc(COL_UPI_PAYMENTS, paymentId, [
+          { field: 'status', op: 'EQUAL', value: 'pending' },
+        ], { verification_locked: true, verification_locked_at: lockedAt, status: 'verifying', verification_started_at: lockedAt });
+        TRACE(`AAT: conditionalUpdateDoc returned locked=${locked}`);
+        if (locked === 0) {
+          TRACE(`AAU: locked=0, checking why...`);
+          TRACE(`AAV: payment.verification_locked=${payment.verification_locked}, payment.verification_locked_at=${payment.verification_locked_at}, payment.status=${payment.status}`);
+          TRACE(`AAW: Could not acquire lock — skipping payment ${paymentId}`);
+          results.errors.push({ utr, error: 'Payment not in pending state' });
+          results.processed--;
+          continue;
         }
+        TRACE(`AAX: Lock acquired! Status should now be 'verifying'`);
 
-        // PROTECTION: Verification Locking
-        if (payment.verification_locked) {
-          const lockedAt = payment.verification_locked_at ? new Date(payment.verification_locked_at).getTime() : 0;
-          if (lockedAt && (Date.now() - lockedAt) < 300000) {
-            results.errors.push({ utr, error: 'Verification locked by another process' });
-            results.processed--;
-            continue;
-          }
-        }
-        await updateDoc(COL_UPI_PAYMENTS, paymentId, { verification_locked: true, verification_locked_at: new Date().toISOString() });
+        // ── VERIFICATION ENGINE (with per-payment timeout) ──
+        TRACE(`AAY: Starting runVerification for ${paymentId}`);
+        const verificationResult = await Promise.race([
+          runVerification(payment),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Verification timed out after 120s')), PER_PAYMENT_TIMEOUT_MS)),
+        ]);
+        TRACE(`AAZ: runVerification completed`);
 
-        // PROTECTION: Rate Limiting
-        if (payment.user_id) {
-          const recentPayments = await runQuery(COL_UPI_PAYMENTS, [
-            { field: 'user_id', op: 'EQUAL', value: payment.user_id },
-          ], { limit: 20 });
-          const todayStartMs = new Date().setHours(0, 0, 0, 0);
-          const todayAttempts = recentPayments.filter(p => {
-            const t = p.created_at ? new Date(p.created_at).getTime() : 0;
-            return t >= todayStartMs;
-          });
-          if (todayAttempts.length >= 3) {
-            recordStep(0, 0, 'Rate limiting', false, todayAttempts.length + ' payment attempts today exceeds limit of 3');
-            rejectionReasons.push('Rate limit exceeded: maximum 3 payment attempts per day');
-          } else {
-            recordStep(0, 0, 'Rate limiting', true, todayAttempts.length + '/3 attempts used today');
-          }
+        const finalStatus = verificationResult.status === 'approved' ? 'verified' : verificationResult.status;
+        TRACE(`ABA: finalStatus=${finalStatus}, verificationScore=${verificationResult.verificationScore}, fraudScore=${verificationResult.fraudScore}`);
+        TRACE(`ABB: verificationResult keys: ${Object.keys(verificationResult).join(', ')}`);
+
+        const reasons = verificationResult.reasons;
+        const ocrData = verificationResult.ocrData;
+        const screenshotHash = verificationResult.screenshotHash;
+        const imageQuality = verificationResult.imageQuality;
+        const steps = verificationResult.steps;
+        const fraudScore = verificationResult.fraudScore;
+        const verificationScore = verificationResult.verificationScore;
+        const verificationDuration = verificationResult.verificationDuration;
+
+        const completedAt = new Date().toISOString();
+        TRACE(`ABC: completedAt=${completedAt}`);
+
+        // Save verification result to payment
+        console.log(`[DB-SAVE] Payment ${paymentId}: saving status=${finalStatus}, matchedAmount=${verificationResult.matchedAmount}, matchedReceiver=${verificationResult.matchedReceiver}, matchedUtr=${verificationResult.matchedUtr}, matchedDate=${verificationResult.matchedDate}, extractedAmount=${ocrData?.extractedAmount}, extractedUtr=${ocrData?.extractedUtr}`);
+        TRACE(`ABD: about to updateDoc for ${paymentId} with status=${finalStatus}`);
+        const updateResult = await updateDoc(COL_UPI_PAYMENTS, paymentId, {
+          status: finalStatus,
+          screenshot_hash: screenshotHash || payment.screenshot_hash,
+          ocr_result: ocrData ? {
+            rawText: ocrData.ocrText,
+            confidence: ocrData.confidence,
+            extractedAmount: ocrData.extractedAmount,
+            extractedUtr: ocrData.extractedUtr,
+            extractedReceiverUpi: ocrData.extractedReceiverUpi,
+            extractedSenderUpi: ocrData.extractedSenderUpi,
+            extractedDate: ocrData.extractedDate,
+            extractedTime: ocrData.extractedTime,
+            extractedStatus: ocrData.extractedStatus,
+            extractedBankName: ocrData.extractedBankName,
+            extractedTxnId: ocrData.extractedTxnId,
+            wordCount: ocrData.wordCount,
+            ambiguous: ocrData.ambiguous,
+            matchedAmount: verificationResult.matchedAmount,
+            matchedReceiver: verificationResult.matchedReceiver,
+            matchedUtr: verificationResult.matchedUtr,
+            matchedDate: verificationResult.matchedDate,
+          } : null,
+          rejection_reasons: reasons,
+          final_score: verificationScore,
+          verified_at: completedAt,
+          verification_locked: false,
+          verification_completed_at: completedAt,
+          verification_duration: verificationDuration,
+        });
+        TRACE(`ABE: updateDoc returned: ${JSON.stringify(updateResult)}`);
+
+        // IMMEDIATELY READ BACK AND VERIFY STATUS CHANGE
+        TRACE(`ABF: Reading back payment ${paymentId} to verify status change...`);
+        const readBack = await runQuery(COL_UPI_PAYMENTS, [{ field: 'id', op: 'EQUAL', value: paymentId }], { limit: 1 });
+        if (readBack && readBack.length > 0) {
+          TRACE(`ABG: READBACK status=${readBack[0].status}, verification_locked=${readBack[0].verification_locked}, verified_at=${readBack[0].verified_at}`);
         } else {
-          recordStep(0, 0, 'Rate limiting', true, 'No userId — rate limiting not applicable');
+          TRACE(`ABH: READBACK FAILED — payment ${paymentId} not found after update!`);
         }
 
-        // LAYER 1 — Basic Input Validation
-        if (!payment.screenshot_url) {
-          recordStep(1, 1, 'Screenshot uploaded', false, 'No screenshot URL provided');
-          rejectionReasons.push('No screenshot uploaded');
-        } else {
-          recordStep(1, 1, 'Screenshot uploaded', true, 'Screenshot URL: ' + payment.screenshot_url.substring(0, 80));
-        }
+        // Save verification log
+        TRACE(`ABI: about to addDoc verification log`);
+        await addDoc(COL_VERIFICATION_LOGS, {
+          verification_id: 'VER_' + randomString(16),
+          payment_id: paymentId,
+          user_id: payment.user_id || '',
+          utr: payment.utr,
+          payment_type: type || 'unknown',
+          selected_amount: amountNum,
+          ocr_amount: ocrData ? String(ocrData.extractedAmount || '') : null,
+          ocr_upi: ocrData ? (ocrData.extractedReceiverUpi || ocrData.extractedSenderUpi || '') : null,
+          ocr_utr: ocrData ? (ocrData.extractedUtr || '') : null,
+          ocr_date: ocrData ? (ocrData.extractedDate || '') : null,
+          ocr_confidence: ocrData ? (ocrData.confidence || 0) : 0,
+          final_score: verificationScore || 0,
+          status: finalStatus,
+          reason: reasons,
+          image_hash: screenshotHash || '',
+          validation_steps: steps,
+          created_at: completedAt,
+        });
+        TRACE(`ABJ: verification log saved`);
 
-        if (!payment.utr || typeof payment.utr !== 'string' || payment.utr.trim().length < 4) {
-          recordStep(1, 2, 'UTR entered', false, 'UTR missing or too short');
-          rejectionReasons.push('No valid transaction reference (UTR) provided');
-        } else {
-          recordStep(1, 2, 'UTR entered', true, 'UTR: ' + payment.utr);
-        }
+        // Metrics
+        if (finalStatus === 'verified') metrics.trackPaymentApproved('auto');
+        else if (finalStatus === 'rejected') metrics.trackPaymentRejected('auto');
+        else if (finalStatus === 'manual_review') metrics.trackPaymentManualReview();
+        TRACE(`ABK: metrics tracked for ${finalStatus}`);
 
-        // LAYER 2 — OCR Extraction
-        let ocrResult = null;
-        let screenshotHash = '';
-        let ocrAvailable = false;
-        let imageQuality = null;
+        // Broadcast SSE update
+        TRACE(`ABL: broadcasting SSE for ${paymentId}, status=${finalStatus}`);
+        try { broadcast('paymentUpdated', { id: paymentId, status: finalStatus, type, autoProcessed: true }); }
+        catch (sseErr) { TRACE(`ABM: SSE broadcast failed: ${sseErr.message}`); }
+        TRACE(`ABN: SSE broadcast completed`);
 
-        if (payment.screenshot_url && rejectionReasons.length === 0) {
-          try {
-            const analysis = await analyzeScreenshot(payment.screenshot_url);
-            screenshotHash = analysis.imageHash || '';
-            ocrAvailable = analysis.ocrAvailable;
-            imageQuality = analysis.imageQuality || null;
-
-            if (analysis.error) {
-              recordStep(2, 3, 'OCR extraction', false, 'OCR unavailable: ' + analysis.error);
-              rejectionReasons.push('Screenshot could not be analyzed: ' + analysis.error);
-            } else if (ocrAvailable && analysis.ocrParsed) {
-              ocrResult = analysis.ocrParsed;
-              recordStep(2, 3, 'OCR extraction', true, 'Extracted ' + ocrResult.wordCount + ' words, confidence: ' + ocrResult.confidence + '%');
-            } else {
-              recordStep(2, 3, 'OCR extraction', false, 'No text detected in screenshot');
-              rejectionReasons.push('No text could be extracted from screenshot');
-            }
-          } catch (e) {
-            recordStep(2, 3, 'OCR extraction', false, 'Error: ' + e.message);
-            rejectionReasons.push('Screenshot processing error: ' + e.message);
-          }
-        } else {
-          recordStep(2, 3, 'OCR extraction', false, 'Skipped — no screenshot or prior failures');
-        }
-
-        // Minimum 5 OCR fields
-        if (rejectionReasons.length === 0 && ocrResult) {
-          const ocrFields = [ocrResult.extractedDate, ocrResult.extractedAmount, ocrResult.extractedUpiId, ocrResult.extractedUtr, ocrResult.extractedStatus];
-          const extractedCount = ocrFields.filter(Boolean).length;
-          if (extractedCount >= 5) {
-            recordStep(2, 3.5, 'Minimum OCR fields', true, 'Extracted ' + extractedCount + '/5 fields');
-          } else {
-            const missing = ['Date', 'Amount', 'UPI ID', 'UTR', 'Status'].filter((_, i) => !ocrFields[i]);
-            recordStep(2, 3.5, 'Minimum OCR fields', false, 'Extracted ' + extractedCount + '/5 fields. Missing: ' + missing.join(', '));
-            rejectionReasons.push('Insufficient data extracted from screenshot: ' + missing.join(', '));
-          }
-        } else if (rejectionReasons.length === 0) {
-          recordStep(2, 3.5, 'Minimum OCR fields', false, 'No OCR result available');
-        }
-
-        // Image Quality
-        if (rejectionReasons.length === 0 && imageQuality) {
-          if (imageQuality.blurry || imageQuality.cropped || imageQuality.dark || imageQuality.incomplete) {
-            const issues = [];
-            if (imageQuality.blurry) issues.push('blurry');
-            if (imageQuality.cropped) issues.push('cropped');
-            if (imageQuality.dark) issues.push('dark');
-            if (imageQuality.incomplete) issues.push('incomplete');
-            recordStep(1, 0, 'Image quality', false, 'Quality issues: ' + issues.join(', '));
-            rejectionReasons.push('Low quality screenshot: ' + issues.join(', '));
-          } else {
-            recordStep(1, 0, 'Image quality', true, 'Screenshot quality acceptable');
-          }
-        } else if (rejectionReasons.length === 0) {
-          recordStep(1, 0, 'Image quality', false, 'Image quality analysis not available');
-        }
-
-        // Multi-Detection
-        if (rejectionReasons.length === 0 && ocrResult) {
-          if (ocrResult.ambiguous) {
-            const multiFlags = [];
-            if (ocrResult.amountCount > 1) multiFlags.push(ocrResult.amountCount + ' amounts');
-            if (ocrResult.upiIdCount > 1) multiFlags.push(ocrResult.upiIdCount + ' UPI IDs');
-            if (ocrResult.utrCount > 1) multiFlags.push(ocrResult.utrCount + ' UTRs');
-            recordStep(2, 0, 'Multi-detection check', false, 'Ambiguous: ' + multiFlags.join(', '));
-            manualReviewReasons.push('Multiple values detected: ' + multiFlags.join(', '));
-          } else {
-            recordStep(2, 0, 'Multi-detection check', true, 'Single values detected for all fields');
-          }
-        } else if (rejectionReasons.length === 0) {
-          recordStep(2, 0, 'Multi-detection check', false, 'No OCR result available');
-        }
-
-        // OCR confidence (3-tier)
-        if (rejectionReasons.length === 0 && ocrResult) {
-          if (ocrResult.confidence >= 99) {
-            recordStep(2, 4, 'OCR confidence score', true, 'Confidence: ' + ocrResult.confidence + '%');
-          } else if (ocrResult.confidence >= 95) {
-            recordStep(2, 4, 'OCR confidence score', false, 'Confidence: ' + ocrResult.confidence + '% — manual review');
-            manualReviewReasons.push('OCR confidence borderline: ' + ocrResult.confidence + '%');
-          } else {
-            recordStep(2, 4, 'OCR confidence score', false, 'Confidence: ' + ocrResult.confidence + '% — too low');
-            rejectionReasons.push('OCR confidence too low: ' + ocrResult.confidence + '%');
-          }
-        } else if (rejectionReasons.length === 0) {
-          recordStep(2, 4, 'OCR confidence score', false, 'No OCR result available');
-        }
-
-        // Layer 2 — Steps 5-9: Field extraction checks
-        if (rejectionReasons.length === 0 && ocrResult) {
-          const checks = [
-            [5, 'Date extracted', ocrResult.extractedDate, 'No date found in screenshot', 'Payment date could not be read from screenshot'],
-            [6, 'Amount extracted', ocrResult.extractedAmount, 'No amount found in screenshot', 'Payment amount could not be read from screenshot'],
-            [7, 'UPI ID extracted', ocrResult.extractedUpiId, 'No UPI ID found in screenshot', 'Receiver UPI ID could not be read from screenshot'],
-            [8, 'UTR extracted', ocrResult.extractedUtr, 'No UTR found in screenshot', 'Transaction reference could not be read from screenshot'],
-            [9, 'Payment status SUCCESS', ocrResult.extractedStatus === 'SUCCESS', 'Expected SUCCESS, found: ' + (ocrResult.extractedStatus || 'none'), 'Payment screenshot does not show SUCCESS status'],
-          ];
-          for (const [stepNum, name, value, failDetail, failReason] of checks) {
-            if (rejectionReasons.length > 0) break;
-            if (value) {
-              recordStep(2, stepNum, name, true, typeof value === 'string' ? name + ': ' + value : 'Status: SUCCESS');
-            } else {
-              recordStep(2, stepNum, name, false, failDetail);
-              rejectionReasons.push(failReason);
-            }
-          }
-        } else if (rejectionReasons.length === 0) {
-          for (let s = 5; s <= 9; s++) recordStep(2, s, 'Field check', false, 'No OCR result');
-        }
-
-        // LAYER 3 — Cross-Validation
-        if (rejectionReasons.length === 0) {
-          if (!ALLOWED_AMOUNTS.includes(amountNum)) {
-            recordStep(3, 10, 'Exact amount match', false, 'Invalid amount: ' + amountNum);
-            rejectionReasons.push('Invalid payment amount');
-          } else if (ocrResult && ocrResult.extractedAmount === amountNum) {
-            recordStep(3, 10, 'Exact amount match', true, 'User: ₹' + amountNum + ', Screenshot: ₹' + ocrResult.extractedAmount);
-          } else {
-            recordStep(3, 10, 'Exact amount match', false, 'Mismatch — User: ₹' + amountNum + ', Screenshot: ₹' + (ocrResult ? ocrResult.extractedAmount : 'N/A'));
-            rejectionReasons.push('Amount mismatch');
-          }
-        }
-
-        if (rejectionReasons.length === 0 && ocrResult) {
-          const userUtr = payment.utr.trim().toUpperCase();
-          const ocrUtr = (ocrResult.extractedUtr || '').trim().toUpperCase();
-          if (ocrUtr === userUtr) {
-            recordStep(3, 11, 'Exact UTR match', true, 'UTR match confirmed');
-          } else {
-            recordStep(3, 11, 'Exact UTR match', false, 'User: ' + userUtr + ', Screenshot: ' + ocrUtr);
-            rejectionReasons.push('UTR in screenshot does not match entered UTR');
-          }
-        } else if (rejectionReasons.length === 0) {
-          recordStep(3, 11, 'Exact UTR match', false, 'No OCR result');
-        }
-
-        if (rejectionReasons.length === 0 && ocrResult) {
-          if (ocrResult.extractedDate === today) {
-            recordStep(3, 12, 'Exact date match', true, 'Date: ' + ocrResult.extractedDate);
-          } else {
-            recordStep(3, 12, 'Exact date match', false, 'Expected: ' + today + ', Screenshot: ' + ocrResult.extractedDate);
-            rejectionReasons.push('Payment date does not match today\'s date');
-          }
-        } else if (rejectionReasons.length === 0) {
-          recordStep(3, 12, 'Exact date match', false, 'No OCR result');
-        }
-
-        if (rejectionReasons.length === 0 && ocrResult) {
-          if (ocrResult.extractedUpiId === DEFAULT_UPI_ID) {
-            recordStep(3, 13, 'Exact receiver UPI match', true, 'UPI ID: ' + ocrResult.extractedUpiId);
-          } else {
-            recordStep(3, 13, 'Exact receiver UPI match', false, 'Expected: ' + DEFAULT_UPI_ID + ', Screenshot: ' + ocrResult.extractedUpiId);
-            rejectionReasons.push('Payment was sent to wrong UPI ID');
-          }
-        } else if (rejectionReasons.length === 0) {
-          recordStep(3, 13, 'Exact receiver UPI match', false, 'No OCR result');
-        }
-
-        if (rejectionReasons.length === 0) {
-          const dupUtr = await runQuery(COL_UPI_PAYMENTS, [
-            { field: 'utr', op: 'EQUAL', value: payment.utr },
-          ], { limit: 2 });
-          const existing = dupUtr.filter(d => d.id !== paymentId && d.status !== 'rejected');
-          if (existing.length > 0) {
-            recordStep(3, 14, 'Duplicate UTR check', false, 'UTR already used in: ' + existing[0].id);
-            rejectionReasons.push('This transaction reference has already been used');
-          } else {
-            recordStep(3, 14, 'Duplicate UTR check', true, 'UTR is unique');
-          }
-        }
-
-        if (rejectionReasons.length === 0 && screenshotHash) {
-          const dupHash = await runQuery(COL_UPI_PAYMENTS, [
-            { field: 'screenshot_hash', op: 'EQUAL', value: screenshotHash },
-          ], { limit: 2 });
-          const existing = dupHash.filter(d => d.id !== paymentId && d.status !== 'rejected');
-          if (existing.length > 0) {
-            recordStep(3, 15, 'Duplicate screenshot hash check', false, 'Hash already used in: ' + existing[0].id);
-            rejectionReasons.push('This screenshot has already been used');
-          } else {
-            recordStep(3, 15, 'Duplicate screenshot hash check', true, 'Hash unique');
-          }
-        } else if (rejectionReasons.length === 0) {
-          recordStep(3, 15, 'Duplicate screenshot hash check', false, 'No hash available');
-        }
-
-        if (rejectionReasons.length === 0) {
-          const dupPayments = await runQuery(COL_UPI_PAYMENTS, [
-            { field: 'utr', op: 'EQUAL', value: payment.utr },
-            { field: 'status', op: 'EQUAL', value: 'verified' },
-          ], { limit: 1 });
-          if (dupPayments.length > 0 && dupPayments[0].id !== paymentId) {
-            recordStep(3, 16, 'Duplicate payment check', false, 'Duplicate: ' + dupPayments[0].id);
-            rejectionReasons.push('Duplicate payment record detected');
-          } else {
-            recordStep(3, 16, 'Duplicate payment check', true, 'Unique');
-          }
-        }
-
-        // PROTECTION: Anomaly Detection
-        const anomalyFlags = [];
-        if (screenshotHash && payment.user_id) {
-          const hashUsers = await runQuery(COL_UPI_PAYMENTS, [
-            { field: 'screenshot_hash', op: 'EQUAL', value: screenshotHash },
-          ], { limit: 10 });
-          const diffUsers = hashUsers.filter(d => d.id !== paymentId && d.user_id && d.user_id !== payment.user_id && d.status !== 'rejected');
-          if (diffUsers.length > 0) anomalyFlags.push('Same screenshot used by multiple accounts');
-        }
-        if (payment.user_id) {
-          const userPayments = await runQuery(COL_UPI_PAYMENTS, [
-            { field: 'user_id', op: 'EQUAL', value: payment.user_id },
-          ], { limit: 10 });
-          const createdTime = payment.created_at ? new Date(payment.created_at).getTime() : Date.now();
-          const rapid = userPayments.filter(p => {
-            if (p.id === paymentId) return false;
-            const t = p.created_at ? new Date(p.created_at).getTime() : 0;
-            return t && Math.abs(t - createdTime) < 30000;
-          });
-          if (rapid.length > 0) anomalyFlags.push('Multiple payments within 30 seconds');
-        }
-        if (anomalyFlags.length > 0) {
-          recordStep(0, 0, 'Anomaly detection', false, anomalyFlags.join('; '));
-          rejectionReasons.push('Suspicious payment pattern: ' + anomalyFlags.join('; '));
-        } else {
-          recordStep(0, 0, 'Anomaly detection', true, 'No anomalies detected');
-        }
-
-        // DECISION
-        const verificationId = 'VER_' + randomString(16);
-        const verifiedAt = new Date().toISOString();
-
-        let finalScore = ocrResult ? Math.round(ocrResult.confidence * 10) / 10 : 0;
-        if (imageQuality) {
-          if (imageQuality.blurry) finalScore = Math.min(finalScore, 94);
-          if (imageQuality.cropped) finalScore = Math.min(finalScore, 90);
-          if (imageQuality.dark) finalScore = Math.min(finalScore, 90);
-          if (imageQuality.incomplete) finalScore = Math.min(finalScore, 90);
-        }
-
-        if (rejectionReasons.length > 0) {
-          await updateDoc(COL_UPI_PAYMENTS, paymentId, {
-            status: 'rejected', final_score: finalScore, screenshot_hash: screenshotHash,
-            rejection_reasons: JSON.stringify(rejectionReasons), ocr_result: ocrResult ? JSON.stringify(ocrResult) : '',
-            verified_at: verifiedAt, verification_locked: false,
-          });
-          await addDoc(COL_VERIFICATION_LOGS, {
-            verification_id: verificationId, user_id: payment.user_id || '',
-            payment_type: type || 'unknown', selected_amount: amountNum,
-            ocr_amount: ocrResult ? ocrResult.extractedAmount : null,
-            ocr_upi: ocrResult ? ocrResult.extractedUpiId : null,
-            ocr_utr: ocrResult ? ocrResult.extractedUtr : null,
-            ocr_date: ocrResult ? ocrResult.extractedDate : null,
-            ocr_confidence: ocrResult ? ocrResult.confidence : 0,
-            final_score: finalScore, status: 'rejected',
-            reason: JSON.stringify(rejectionReasons), verified_at: verifiedAt,
-            image_hash: screenshotHash, validation_steps: JSON.stringify(validationSteps),
-          });
+        // Handle results
+        if (finalStatus === 'rejected') {
+          TRACE(`ABO: handling REJECTED flow`);
           results.rejected++;
+          try {
+            TRACE(`ABP: adding notification for rejection`);
+            await addDoc('notifications', {
+              receiverId: payment.user_id || '',
+              title: 'Payment Auto-Rejected',
+              message: 'Your payment of ₹' + amountNum + ' was rejected: ' + reasons.join('. '),
+              type: 'payment_rejected', status: 'unread', createdAt: new Date().toISOString(),
+              senderId: 'system', senderName: 'System',
+            });
+          } catch (e) { console.error('[PROCESS] notify reject failed:', e.message); }
+          try {
+            TRACE(`ABQ: adding audit log for rejection`);
+            await addDoc('audit_logs', {
+              action: 'auto_reject', target_id: paymentId, target_type: 'upi_payment',
+              admin_id: 'system', details: { reasons, fraudScore, verificationScore, screenshotHash },
+              created_at: new Date().toISOString(),
+            });
+          } catch (e) { console.error('[PROCESS] audit reject failed:', e.message); }
+          TRACE(`ABR: continue (skipping to next payment after reject)`);
           continue;
         }
 
-        if (manualReviewReasons.length > 0) {
-          await updateDoc(COL_UPI_PAYMENTS, paymentId, {
-            status: 'manual_review', final_score: finalScore, screenshot_hash: screenshotHash,
-            rejection_reasons: JSON.stringify(manualReviewReasons), ocr_result: ocrResult ? JSON.stringify(ocrResult) : '',
-            verified_at: verifiedAt, verification_locked: false,
-          });
-          await addDoc(COL_VERIFICATION_LOGS, {
-            verification_id: verificationId, user_id: payment.user_id || '',
-            payment_type: type || 'unknown', selected_amount: amountNum,
-            ocr_amount: ocrResult ? ocrResult.extractedAmount : null,
-            ocr_upi: ocrResult ? ocrResult.extractedUpiId : null,
-            ocr_utr: ocrResult ? ocrResult.extractedUtr : null,
-            ocr_date: ocrResult ? ocrResult.extractedDate : null,
-            ocr_confidence: ocrResult ? ocrResult.confidence : 0,
-            final_score: finalScore, status: 'manual_review',
-            reason: JSON.stringify(manualReviewReasons), verified_at: verifiedAt,
-            image_hash: screenshotHash, validation_steps: JSON.stringify(validationSteps),
-          });
+        if (finalStatus === 'manual_review') {
+          TRACE(`ABS: handling MANUAL_REVIEW flow`);
           results.manualReview++;
+          try {
+            TRACE(`ABT: adding notification for manual review`);
+            await addDoc('notifications', {
+              receiverId: payment.user_id || '',
+              title: 'Payment Under Review',
+              message: 'Your payment of ₹' + amountNum + ' has been flagged for manual review.',
+              type: 'payment_manual_review', status: 'unread', createdAt: new Date().toISOString(),
+              senderId: 'system', senderName: 'System',
+            });
+          } catch (e) { console.error('[PROCESS] notify manual_review failed:', e.message); }
+          TRACE(`ABU: continue (skipping after manual review)`);
           continue;
         }
 
-        // ── APPROVAL ──
+        // ── APPROVED ──
+        TRACE(`ABV: handling APPROVED flow`);
         if (type === 'registration') {
-          const pendingRegId = payment.user_id;
+          TRACE(`ABW: type is registration`);
+          const pendingRegId = payment.pending_reg_id || payment.user_id;
           if (!pendingRegId) {
-            await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: JSON.stringify(['No registration session ID']), verified_at: verifiedAt, verification_locked: false });
+            TRACE(`ABX: no pendingRegId, rejecting`);
+            await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: ['No registration session ID'], verified_at: completedAt, verification_locked: false });
             results.rejected++; continue;
           }
-
+          TRACE(`ABY: pendingRegId=${pendingRegId}`);
           const pendingReg = await getDoc(COL_PENDING_REGS, pendingRegId);
           if (!pendingReg) {
-            await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: JSON.stringify(['Registration session expired']), verified_at: verifiedAt, verification_locked: false });
+            TRACE(`ABZ: pending reg not found, rejecting`);
+            await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: ['Registration session expired'], verified_at: completedAt, verification_locked: false });
             results.rejected++; continue;
           }
+          TRACE(`ACA: pendingReg found: name=${pendingReg.name}, email=${pendingReg.email}`);
 
           const newUserId = crypto.randomUUID();
           let referredByUserId = null;
           let referredByCode = null;
           const refCode = pendingReg.referral_code;
           if (refCode) {
+            TRACE(`ACB: looking up referral code: ${refCode}`);
             const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: refCode.toUpperCase() }], { limit: 1 });
             if (refUsers.length) { referredByUserId = refUsers[0].id; referredByCode = refCode.toUpperCase(); }
+            TRACE(`ACC: referredByUserId=${referredByUserId}, referredByCode=${referredByCode}`);
           }
 
+          const userName = pendingReg.name || '';
+          const userEmail = pendingReg.email || '';
+          const userPhone = pendingReg.phone || '';
+          const missingFields = [];
+          if (!userName) missingFields.push('name');
+          if (!userEmail) missingFields.push('email');
+          if (!userPhone) missingFields.push('phone');
+          if (['unknown', 'undefined', 'null'].includes(userName.toLowerCase())) missingFields.push('name=unknown');
+          if (['unknown', 'undefined', 'null'].includes(userEmail.toLowerCase())) missingFields.push('email=unknown');
+          if (['unknown', 'undefined', 'null'].includes(userPhone.toLowerCase())) missingFields.push('phone=unknown');
+          if (missingFields.length) {
+            TRACE(`ACD: missing fields detected: ${missingFields.join(', ')}`);
+            await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: ['Invalid registration data: ' + missingFields.join(', ')], verified_at: completedAt, verification_locked: false });
+            results.rejected++; continue;
+          }
+
+          TRACE(`ACE: creating user: id=${newUserId}, name=${userName}`);
           await writeDoc(COL_USERS, newUserId, {
-            id: newUserId, email: pendingReg.email, name: pendingReg.name || '',
-            phone: pendingReg.phone || '', password_hash: pendingReg.password_hash,
+            id: newUserId, email: userEmail, name: userName,
+            phone: userPhone, password_hash: pendingReg.password_hash,
             referral_code: randomString(8), referred_by: referredByCode,
             account_status: 'active', payment_status: 'success',
             approved: true, active: true, membership_paid: true,
             joined_date: new Date().toISOString(), approved_date: new Date().toISOString(),
           });
-
+          TRACE(`ACF: user created, creating wallet`);
           await writeDoc(COL_WALLET_BALANCES, newUserId, { balance: 0, total_earned: amountNum });
-          await addDoc(COL_WALLET_TX, {
-            user_id: newUserId, type: 'deposit', amount: amountNum,
-            description: 'Registration payment (UPI)', reference_id: paymentId, balance_after: amountNum,
-          });
+          await addDoc(COL_WALLET_TX, { user_id: newUserId, type: 'deposit', amount: amountNum, description: 'Registration payment (UPI)', reference_id: paymentId, balance_after: amountNum });
+          if (referredByUserId) await atomicCreditWallet(referredByUserId, amountNum * 0.1, paymentId, 'Referral bonus for ' + newUserId, 'referral_bonus');
+          try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch (e) { console.error('[PROCESS] delete pending reg failed:', e.message); }
+          TRACE(`ACG: wallet/ref/tx done`);
 
-          if (referredByUserId) {
-            const sponsorWallets = await runQuery(COL_WALLET_BALANCES, [{ field: 'id', op: 'EQUAL', value: referredByUserId }], { limit: 1 });
-            if (sponsorWallets.length) {
-              const sw = sponsorWallets[0];
-              const refAmt = amountNum * 0.1;
-              await updateDoc(COL_WALLET_BALANCES, referredByUserId, { balance: (sw.balance || 0) + refAmt, total_earned: (sw.total_earned || 0) + refAmt });
-              await addDoc(COL_WALLET_TX, {
-                user_id: referredByUserId, type: 'referral_bonus', amount: refAmt,
-                description: 'Referral bonus for ' + newUserId, balance_after: (sw.balance || 0) + refAmt,
-              });
-            }
+          TRACE(`ACH: FINAL updateDoc for payment ${paymentId} to verified`);
+          await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'verified', user_id: newUserId, verification_locked: false, verification_completed_at: new Date().toISOString() });
+          TRACE(`ACI: final updateDoc done`);
+          
+          // READ BACK AGAIN to confirm final status
+          const readBack2 = await runQuery(COL_UPI_PAYMENTS, [{ field: 'id', op: 'EQUAL', value: paymentId }], { limit: 1 });
+          if (readBack2 && readBack2.length > 0) {
+            TRACE(`ACJ: FINAL READBACK status=${readBack2[0].status}, user_id=${readBack2[0].user_id}`);
+          } else {
+            TRACE(`ACK: FINAL READBACK FAILED`);
           }
 
-          try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch {}
-
-          await updateDoc(COL_UPI_PAYMENTS, paymentId, {
-            status: 'verified', user_id: newUserId, screenshot_hash: screenshotHash,
-            ocr_result: ocrResult ? JSON.stringify(ocrResult) : '', rejection_reasons: '[]',
-            verified_at: verifiedAt, verification_locked: false,
-          });
-
-          await addDoc(COL_VERIFICATION_LOGS, {
-            verification_id: 'VER_' + randomString(16), user_id: newUserId,
-            payment_type: 'registration', selected_amount: amountNum,
-            ocr_amount: ocrResult ? ocrResult.extractedAmount : null,
-            ocr_upi: ocrResult ? ocrResult.extractedUpiId : null,
-            ocr_utr: ocrResult ? ocrResult.extractedUtr : null,
-            ocr_date: ocrResult ? ocrResult.extractedDate : null,
-            ocr_confidence: ocrResult ? ocrResult.confidence : 0,
-            final_score: finalScore, status: 'approved', reason: '',
-            verified_at: verifiedAt, image_hash: screenshotHash,
-            validation_steps: JSON.stringify(validationSteps),
-          });
+          try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Welcome! Your registration payment of ₹' + amountNum + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: new Date().toISOString(), senderId: 'system', senderName: 'System' }); } catch (e) { console.error('[PROCESS] notify registration failed:', e.message); }
+          try { await addDoc('audit_logs', { action: 'auto_approve_registration', target_id: paymentId, target_type: 'upi_payment', admin_id: 'system', details: { userId: newUserId, amount: amountNum, verificationScore, fraudScore }, created_at: new Date().toISOString() }); } catch (e) { console.error('[PROCESS] audit registration failed:', e.message); }
           results.approved++;
-        }
-
-        if (type === 'topup') {
+          TRACE(`ACL: registration approved, results.approved=${results.approved}`);
+        } else if (type === 'topup') {
+          TRACE(`ACM: type is topup`);
           const userId = payment.user_id;
           if (!userId) {
-            await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: JSON.stringify(['User not identified']), verified_at: verifiedAt, verification_locked: false });
+            TRACE(`ACN: no userId, rejecting`);
+            await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: ['User not identified'], verified_at: completedAt, verification_locked: false });
             results.rejected++; continue;
           }
-
           const userDoc = await getDoc(COL_USERS, userId);
           if (!userDoc) {
-            await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: JSON.stringify(['User account not found']), verified_at: verifiedAt, verification_locked: false });
+            TRACE(`ACO: userDoc not found, rejecting`);
+            await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: ['User account not found'], verified_at: completedAt, verification_locked: false });
             results.rejected++; continue;
           }
+          TRACE(`ACP: userDoc found, crediting wallet`);
 
-          const wallets = await runQuery(COL_WALLET_BALANCES, [{ field: 'id', op: 'EQUAL', value: userId }], { limit: 1 });
-          const wallet = wallets.length ? wallets[0] : { balance: 0, total_earned: 0 };
-          const newBalance = (wallet.balance || 0) + amountNum;
-
-          await updateDoc(COL_WALLET_BALANCES, userId, { balance: newBalance, total_earned: (wallet.total_earned || 0) + amountNum });
-          await addDoc(COL_WALLET_TX, {
-            user_id: userId, type: 'deposit', amount: amountNum,
-            description: 'Topup via UPI', reference_id: paymentId, balance_after: newBalance,
-          });
-
+          await atomicCreditWallet(userId, amountNum, paymentId, 'Topup via UPI');
           const referredByCode = userDoc.referred_by || null;
-          const topupData = {
-            user_id: userId, amount: amountNum, utr: payment.utr,
-            screenshot_url: payment.screenshot_url, status: 'approved', verified_at: verifiedAt,
-          };
-          const { id: topupId } = await addDoc(COL_TOPUPS, topupData);
+          const { id: topupId } = await addDoc(COL_TOPUPS, { user_id: userId, amount: amountNum, utr: payment.utr, screenshot_url: payment.screenshot_url, status: 'approved', verified_at: completedAt });
+          TRACE(`ACQ: wallet credited, topupId=${topupId}`);
 
           if (referredByCode) {
             try {
               const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: referredByCode }], { limit: 1 });
               const referrer = refUsers.length ? refUsers[0] : null;
               if (referrer) {
-                const sponsorTopups = await runQuery(COL_TOPUPS, [
-                  { field: 'user_id', op: 'EQUAL', value: referrer.id },
-                  { field: 'status', op: 'EQUAL', value: 'approved' },
-                ], { limit: 1 });
+                const sponsorTopups = await runQuery(COL_TOPUPS, [{ field: 'user_id', op: 'EQUAL', value: referrer.id }, { field: 'status', op: 'EQUAL', value: 'approved' }], { limit: 1 });
                 const incomeStatus = sponsorTopups.length > 0 ? 'eligible' : 'locked';
-
-                await addDoc(COL_TOPUP_INCOME, {
-                  user_id: referrer.id, from_user_id: userId, topup_id: topupId,
-                  amount: amountNum, level: 1, status: incomeStatus,
-                });
-
+                await addDoc(COL_TOPUP_INCOME, { user_id: referrer.id, from_user_id: userId, topup_id: topupId, amount: amountNum, level: 1, status: incomeStatus });
                 const currentCount = referrer.topup_referral_qualified_count || 0;
                 const newCount = currentCount + 1;
-                const topupQualified = (referrer.referrals_count || 0) + newCount >= MAX_REFERRALS;
-                await updateDoc(COL_USERS, referrer.id, { topup_referral_qualified_count: newCount, topup_referral_qualified: topupQualified });
-
-                if (userDoc.referred_by_status !== 'approved') {
-                  await updateDoc(COL_USERS, userId, { referred_by_status: 'approved' });
-                }
+                await updateDoc(COL_USERS, referrer.id, { topup_referral_qualified_count: newCount, topup_referral_qualified: (referrer.referrals_count || 0) + newCount >= MAX_REFERRALS });
+                if (userDoc.referred_by_status !== 'approved') await updateDoc(COL_USERS, userId, { referred_by_status: 'approved' });
               }
-            } catch (e) { /* silent */ }
+            } catch (e) { console.error('[PROCESS] topup referral failed:', e.message); }
           }
 
           try {
             if (userDoc.topup_referral_qualified && !userDoc.sponsor_topup_completed) {
               await updateDoc(COL_USERS, userId, { account_status: 'inactive', sponsor_topup_completed: true });
-              const lockedIncome = await runQuery(COL_TOPUP_INCOME, [
-                { field: 'user_id', op: 'EQUAL', value: userId },
-                { field: 'status', op: 'EQUAL', value: 'locked' },
-              ], { limit: 100 });
-              for (const inc of lockedIncome) {
-                await updateDoc(COL_TOPUP_INCOME, inc.id, { status: 'eligible' });
-              }
+              const lockedIncome = await runQuery(COL_TOPUP_INCOME, [{ field: 'user_id', op: 'EQUAL', value: userId }, { field: 'status', op: 'EQUAL', value: 'locked' }], { limit: 100 });
+              for (const inc of lockedIncome) await updateDoc(COL_TOPUP_INCOME, inc.id, { status: 'eligible' });
             }
-          } catch (e) { /* silent */ }
+          } catch (e) { console.error('[PROCESS] sponsor topup unlock failed:', e.message); }
 
-          await updateDoc(COL_UPI_PAYMENTS, paymentId, {
-            status: 'verified', user_id: userId, screenshot_hash: screenshotHash,
-            ocr_result: ocrResult ? JSON.stringify(ocrResult) : '', rejection_reasons: '[]',
-            verified_at: verifiedAt, verification_locked: false,
-          });
-
-          await addDoc(COL_VERIFICATION_LOGS, {
-            verification_id: 'VER_' + randomString(16), user_id: userId,
-            payment_type: 'topup', selected_amount: amountNum,
-            ocr_amount: ocrResult ? ocrResult.extractedAmount : null,
-            ocr_upi: ocrResult ? ocrResult.extractedUpiId : null,
-            ocr_utr: ocrResult ? ocrResult.extractedUtr : null,
-            ocr_date: ocrResult ? ocrResult.extractedDate : null,
-            ocr_confidence: ocrResult ? ocrResult.confidence : 0,
-            final_score: finalScore, status: 'approved', reason: '',
-            verified_at: verifiedAt, image_hash: screenshotHash,
-            validation_steps: JSON.stringify(validationSteps),
-          });
+          TRACE(`ACR: FINAL updateDoc for topup ${paymentId} to verified`);
+          await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'verified', user_id: userId, verification_locked: false, verification_completed_at: new Date().toISOString() });
+          try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Your topup of ₹' + amountNum + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: new Date().toISOString(), senderId: 'system', senderName: 'System' }); } catch (e) { console.error('[PROCESS] notify topup failed:', e.message); }
+          try { await addDoc('audit_logs', { action: 'auto_approve_topup', target_id: paymentId, target_type: 'upi_payment', admin_id: 'system', details: { userId, amount: amountNum, verificationScore, fraudScore }, created_at: new Date().toISOString() }); } catch (e) { console.error('[PROCESS] audit topup failed:', e.message); }
           results.approved++;
+          TRACE(`ACS: topup approved, results.approved=${results.approved}`);
+        } else {
+          TRACE(`ACT: unknown type=${type}, rejecting`);
+          await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'rejected', rejection_reasons: ['Unknown payment type: ' + type], verified_at: new Date().toISOString(), verification_locked: false });
+          results.rejected++;
         }
+        TRACE(`ACU: LOOP END for payment ${paymentId}, finalStatus=${finalStatus}`);
       } catch (e) {
-        results.errors.push({ utr, error: e.message });
-        try {
-          await updateDoc(COL_UPI_PAYMENTS, paymentId, { status: 'manual_review', verification_locked: false, rejection_reasons: JSON.stringify(['System error: ' + e.message]), verified_at: new Date().toISOString() });
-          await addDoc(COL_VERIFICATION_LOGS, {
-            verification_id: 'VER_' + randomString(16), user_id: payment.user_id || '',
-            payment_type: type || 'unknown', selected_amount: amountNum || 0,
-            ocr_confidence: (typeof ocrResult !== 'undefined' && ocrResult) ? ocrResult.confidence : 0,
-            final_score: 0, status: 'manual_review',
-            reason: JSON.stringify(['System error: ' + e.message]),
-            verified_at: new Date().toISOString(),
-            image_hash: typeof screenshotHash !== 'undefined' ? screenshotHash : '',
-            validation_steps: JSON.stringify(validationSteps || []),
-          });
-        } catch {}
+        TRACE(`ACV: CAUGHT ERROR in payment loop: ${e.message}`);
+        TRACE(`ACW: Stack: ${e.stack ? e.stack.substring(0, 500) : 'no stack'}`);
+        results.errors.push({ utr: payment.utr || payment.id, error: e.message });
+        try { await updateDoc(COL_UPI_PAYMENTS, payment.id, { status: 'manual_review', verification_locked: false, rejection_reasons: ['System error: ' + e.message], verified_at: new Date().toISOString() }); } catch (e2) { console.error('[PROCESS] error handler fallback failed:', e2.message); }
+        TRACE(`ACX: error handled, status set to manual_review`);
       }
     }
 
+    TRACE(`ACY: END of loop, results: processed=${results.processed} approved=${results.approved} rejected=${results.rejected} manualReview=${results.manualReview}`);
+    console.log(`[AUTO-VERIFY] END: processed=${results.processed} approved=${results.approved} rejected=${results.rejected} manualReview=${results.manualReview} errors=${results.errors.length}`);
+    TRACE(`ACZ: about to send response`);
     res.writeHead(200); res.end(JSON.stringify(results));
+    TRACE(`ADA: response sent`);
   } catch (err) {
-    res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    TRACE(`ADB: CAUGHT FATAL ERROR: ${err.message}`);
+    TRACE(`ADC: Stack: ${err.stack ? err.stack.substring(0, 500) : 'no stack'}`);
+    processingError = err;
+    console.error('[processPendingPayments] Error:', err.message);
+    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
+  } finally {
+    TRACE(`ADD: in finally block, setting isProcessing=false`);
+    isProcessing = false;
+    TRACE(`ADE: isProcessing set to false, function EXIT`);
+    if (processingError) console.error('[AUTO-VERIFY] Fatal error:', processingError.message);
   }
 };

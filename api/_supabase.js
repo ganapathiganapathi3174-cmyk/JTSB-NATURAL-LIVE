@@ -3,6 +3,7 @@ const turso = require('./_turso.js');
 const neon = require('./_neon.js');
 const queue = require('./_queue.js');
 const crypto_helper = require('./_crypto.js');
+const metrics = require('./_metrics.js');
 
 const CRITICAL_TABLES = ['users', 'referrals', 'topups', 'wallet_balances', 'wallet_transactions', 'uniques', 'sponsor_data'];
 const ANALYTICS_TABLES = ['verification_logs', 'payment_logs', 'audit_logs', 'admin_logs', 'analytics_events'];
@@ -31,6 +32,17 @@ function getSupabaseClient() {
   }
   return createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (url, opts) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        const origSignal = opts?.signal;
+        if (origSignal) {
+          origSignal.addEventListener('abort', () => controller.abort(), { once: true });
+        }
+        return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(timer));
+      },
+    },
   });
 }
 
@@ -82,6 +94,7 @@ async function getDoc(table, id) {
     if (error) throw new Error(`GET error: ${JSON.stringify(error)}`);
     return decryptSensitive(data, table);
   } catch (err) {
+    metrics.trackDBError('supabase');
     if (isCriticalTable(table)) {
       console.warn(`[FAILOVER] Supabase getDoc failed for ${table}/${id}, trying Turso`);
       const backup = await turso.readBackup(table, id);
@@ -148,7 +161,7 @@ async function writeDoc(table, id, data) {
   const supabase = getSupabaseClient();
   const now = new Date().toISOString();
   const encrypted = encryptSensitive(data, table);
-  const record = { ...encrypted, id, updated_at: now };
+  const record = { ...encrypted, id };
   if (!data.created_at) record.created_at = now;
 
   try {
@@ -176,10 +189,11 @@ async function updateDoc(table, id, data) {
   const encrypted = encryptSensitive(data, table);
 
   try {
-    await withRetry(() =>
-      supabase.from(table).update({ ...encrypted, updated_at: new Date().toISOString() }).eq('id', id),
+    const result = await withRetry(() =>
+      supabase.from(table).update({ ...encrypted, updated_at: new Date().toISOString() }).eq('id', id).select('id'),
       `updateDoc ${table}/${id}`
     );
+    if (result && result.error) throw new Error(`UPDATE error ${JSON.stringify(result.error)}`);
 
     if (isCriticalTable(table)) {
       getDoc(table, id).then(record => {
@@ -198,7 +212,7 @@ async function addDoc(table, data) {
   const supabase = getSupabaseClient();
   const now = new Date().toISOString();
   const encrypted = encryptSensitive(data, table);
-  const record = { ...encrypted, created_at: now, updated_at: now };
+  const record = { ...encrypted, created_at: now };
 
   try {
     const { data: result, error } = await withRetry(() =>
@@ -215,7 +229,11 @@ async function addDoc(table, data) {
     }
     return result;
   } catch (err) {
-    console.error(`[ADD] Failed for ${table}, queuing: ${err.message}`);
+    console.error(`[ADD] Failed for ${table}`);
+    console.error(`[ADD]   Collection: ${table}`);
+    console.error(`[ADD]   Error: ${err.message}`);
+    console.error(`[ADD]   Stack: ${err.stack}`);
+    console.error(`[ADD]   PayloadSize: ${Buffer.byteLength(JSON.stringify(record), 'utf8')} bytes`);
     const fallbackId = 'pending_' + Date.now();
     await queue.enqueue('write', table, fallbackId, record, 'write');
     if (isAnalyticsTable(table)) {
@@ -252,4 +270,113 @@ async function resilientQuery(table, filters, options = {}) {
   }
 }
 
-module.exports = { getDoc, deleteDoc, runQuery, writeDoc, updateDoc, addDoc, countQuery, resilientQuery, isCriticalTable };
+async function conditionalUpdateDoc(table, id, conditions, data) {
+  const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+  const encrypted = encryptSensitive(data, table);
+  try {
+    let query = supabase.from(table).update({ ...encrypted, updated_at: now }).eq('id', id);
+    for (const cond of conditions) {
+      if (cond.op === 'EQUAL') query = query.eq(cond.field, cond.value);
+      else if (cond.op === 'NOT_EQUAL') query = query.neq(cond.field, cond.value);
+      else if (cond.op === 'IN') query = query.in(cond.field, cond.value);
+      else if (cond.op === 'GREATER_THAN') query = query.gt(cond.field, cond.value);
+      else if (cond.op === 'LESS_THAN') query = query.lt(cond.field, cond.value);
+      else if (cond.op === 'GREATER_OR_EQUAL') query = query.gte(cond.field, cond.value);
+      else if (cond.op === 'LESS_OR_EQUAL') query = query.lte(cond.field, cond.value);
+    }
+    const { data: result, error } = await withRetry(() => query.select('id'), `conditionalUpdateDoc ${table}/${id}`);
+    if (error) throw new Error(`CONDITIONAL_UPDATE error ${JSON.stringify(error)}`);
+    const affected = result && result.length ? result.length : 0;
+    if (affected > 0 && isCriticalTable(table)) {
+      getDoc(table, id).then(record => {
+        if (record) turso.syncBackup(table, id, encryptSensitive(record, table)).catch(() => {});
+      }).catch(() => {});
+    }
+    return affected;
+  } catch (err) {
+    console.error(`[CONDITIONAL_UPDATE] Failed for ${table}/${id}, queuing: ${err.message}`);
+    await queue.enqueue('update', table, id, { ...encrypted, updated_at: now }, 'update');
+    return 0;
+  }
+}
+
+async function runQueryDecrypted(table, filters, options = {}) {
+  const sensitiveFields = { users: ['email', 'phone'], upi_payments: ['utr'] };
+  const fieldsToFilterOn = sensitiveFields[table];
+  const hasSensitiveFilter = filters && filters.some(f => fieldsToFilterOn?.includes(f.field));
+  if (!hasSensitiveFilter) return runQuery(table, filters, options);
+
+  // For sensitive-field filters, paginate through all records, decrypt in-memory, then filter
+  const supabase = getSupabaseClient();
+  const PAGE_SIZE = 1000;
+  let allResults = [];
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase.from(table).select(options.select || '*');
+    if (options.orderBy) query = query.order(options.orderBy, { ascending: options.ascending !== false });
+    query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    const { data, error } = await withRetry(() => query, `runQueryDecrypted ${table} page ${page}`);
+    if (error) throw new Error(`QUERY error ${JSON.stringify(error)}`);
+    const batch = (data || []).map(d => decryptSensitive(d, table));
+    allResults = allResults.concat(batch);
+    hasMore = batch.length === PAGE_SIZE;
+    page++;
+    if (page > 100) break;
+  }
+
+  let results = allResults;
+  for (const f of filters) {
+    if (f.op === 'EQUAL') results = results.filter(r => r[f.field] === f.value);
+    else if (f.op === 'NOT_EQUAL') results = results.filter(r => r[f.field] !== f.value);
+    else if (f.op === 'IN') results = results.filter(r => f.value.includes(r[f.field]));
+    else if (f.op === 'LIKE') results = results.filter(r => r[f.field]?.includes(f.value.replace(/%/g, '')));
+  }
+  return results;
+}
+
+async function atomicCreditWallet(userId, amount, paymentId, description, txType = 'deposit') {
+  const COL_WALLET_BALANCES = 'wallet_balances';
+  const COL_WALLET_TX = 'wallet_transactions';
+  let retries = 5;
+  let lastError;
+  while (retries > 0) {
+    try {
+      const wallets = await runQuery(COL_WALLET_BALANCES, [{ field: 'id', op: 'EQUAL', value: userId }]);
+      if (!wallets || wallets.length === 0) {
+        await writeDoc(COL_WALLET_BALANCES, userId, { balance: 0, total_earned: 0 });
+        continue;
+      }
+
+      const wallet = wallets[0];
+      const currentBalance = wallet.balance || 0;
+      const currentTotalEarned = wallet.total_earned || 0;
+      const newBalance = currentBalance + amount;
+      const newTotalEarned = currentTotalEarned + amount;
+
+      const affected = await conditionalUpdateDoc(COL_WALLET_BALANCES, userId, [
+        { field: 'balance', op: 'EQUAL', value: currentBalance },
+      ], { balance: newBalance, total_earned: newTotalEarned });
+
+      if (affected > 0) {
+        await addDoc(COL_WALLET_TX, {
+          user_id: userId, type: txType, amount,
+          description, reference_id: paymentId, balance_after: newBalance,
+        });
+        return { balance: newBalance, total_earned: newTotalEarned };
+      }
+
+      retries--;
+      if (retries > 0) await new Promise(r => setTimeout(r, 100 + Math.random() * 100));
+    } catch (err) {
+      lastError = err;
+      retries--;
+      if (retries > 0) await new Promise(r => setTimeout(r, 200));
+    }
+  }
+  throw new Error(lastError || 'Failed to credit wallet after retries');
+}
+
+module.exports = { getDoc, deleteDoc, runQuery, runQueryDecrypted, writeDoc, updateDoc, addDoc, countQuery, resilientQuery, isCriticalTable, conditionalUpdateDoc, getSupabaseClient, atomicCreditWallet };
