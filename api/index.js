@@ -40,11 +40,33 @@ const handlers = {
   paymentConfirm: require('../handlers/paymentConfirm.js'),
   createSmsSession: require('../handlers/createSmsSession.js'),
   smsPaymentConfirm: require('../handlers/smsPaymentConfirm.js'),
+  getQueueStatus: requireAdmin(require('../handlers/getQueueStatus.js')),
+  rerunOcr: requireAdmin(require('../handlers/rerunOcr.js')),
+  rerunVerification: requireAdmin(require('../handlers/rerunVerification.js')),
+  getReports: requireAdmin(require('../handlers/getReports.js')),
+  getAuditLogs: requireAdmin(require('../handlers/getAuditLogs.js')),
+  adminLogout: require('../handlers/adminLogout.js'),
+  enterprisePayment: require('../handlers/enterprisePaymentSubmit.js'),
+  enterpriseVerifyOtp: require('../handlers/enterpriseVerifyOtp.js'),
+  enterpriseResendOtp: require('../handlers/enterpriseResendOtp.js'),
+  pipelinePayment: require('../handlers/pipelinePaymentSubmit.js'),
+  pipelineVerifyOtp: require('../handlers/pipelineVerifyOtp.js'),
+  pipelineResendOtp: require('../handlers/pipelineResendOtp.js'),
+  createUPIOrder: require('../handlers/createUPIOrder.js'),
+  getUPIOrderStatus: require('../handlers/getUPIOrderStatus.js'),
+  webhookUPIConfirm: require('../handlers/webhookUPIConfirm.js'),
+  retryUPIOrder: require('../handlers/retryUPIOrder.js'),
 };
 
 module.exports = async (req, res) => {
   const url = req.url.split('?')[0];
   const path = url.replace(/^\/api\//, '').replace(/^\//, '');
+
+  // SSE dashboard — long-lived connection, bypass normal handler pipeline
+  if (url === '/api/sse/dashboard' || url === '/sse/dashboard') {
+    const sseHandler = require('../handlers/sseDashboard.js');
+    return sseHandler(req, res);
+  }
   const handler = handlers[path];
 
   // Rate limiting by IP
