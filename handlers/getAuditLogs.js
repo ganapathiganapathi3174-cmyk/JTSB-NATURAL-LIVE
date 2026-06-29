@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
     const filters = [];
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
-    filters.push({ field: 'created_at', op: 'GTE', value: startDate.toISOString() });
+    filters.push({ field: 'created_at', op: 'GREATER_OR_EQUAL', value: startDate.toISOString() });
 
     if (action) {
       filters.push({ field: 'action', op: 'EQUAL', value: action });
@@ -24,9 +24,18 @@ module.exports = async (req, res) => {
       filters.push({ field: 'target_type', op: 'EQUAL', value: targetType });
     }
 
-    const logs = await runQuery('audit_logs', filters, {
-      orderBy: 'created_at', ascending: false, limit: Math.min(limit, 1000),
-    });
+    let logs = [];
+    try {
+      logs = await runQuery('audit_logs', filters, {
+        orderBy: 'created_at', ascending: false, limit: Math.min(limit, 1000),
+      });
+    } catch (innerErr) {
+      if (innerErr.message && innerErr.message.includes('Could not find the table')) {
+        logs = [];
+      } else {
+        throw innerErr;
+      }
+    }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({

@@ -327,6 +327,7 @@ const userHasOwnTopup = useMemo(() => {
   const referralCount = user?.referrals_count || 0;
   const isQualified = useMemo(() => approvedReferralCount >= 2 || user?.is_qualified === true, [approvedReferralCount, user?.is_qualified]);
   const isActive = useMemo(() => user?.account_status === 'active' && (user?.payment_status === 'approved' || user?.payment_status === 'success'), [user?.account_status, user?.payment_status]);
+  const isReferralLimitReached = useMemo(() => user?.inactive_reason === 'Referral Limit Reached (2 Successful Referrals)' || user?.inactive_reason === 'Referral Limit Reached', [user?.inactive_reason]);
   const isSuspicious = useMemo(() => user?.admin_status === 'suspicious', [user?.admin_status]);
 
   if (loading) {
@@ -547,6 +548,14 @@ return (
             </div>
           </div>
 
+          {user?.account_status === 'inactive' && isReferralLimitReached && (
+            <div className="alert alert-warning" style={{ marginTop: '1rem', padding: '1rem', borderRadius: '12px', border: '1px solid #f59e0b', background: '#fffbeb', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>⏸️</div>
+              <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem' }}>Account Inactive — Waiting for Admin Approval</h3>
+              <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>Your referral link has reached the maximum of 2 successful registrations. An admin will review and reactivate your account.</p>
+            </div>
+          )}
+
           <div className="profile-body">
             <div className="quick-stats-grid">
               <div className="quick-stat-card">
@@ -766,6 +775,11 @@ return (
                     <p className="muted">Waiting for {pendingReferralCount} referral(s) to complete registration.</p>
                     <p className="muted">Sponsor benefits unlock after 2 completed referrals.</p>
                   </>
+                ) : user?.account_status === 'inactive' && isReferralLimitReached ? (
+                  <>
+                    <p className="muted">Referral Link Expired — limit of 2 registrations reached.</p>
+                    <p className="muted" style={{ marginTop: '0.25rem' }}>Account is inactive pending admin approval.</p>
+                  </>
                 ) : user?.account_status === 'inactive' ? (
                   <p className="muted">Your account is currently inactive.</p>
                 ) : (
@@ -941,9 +955,11 @@ return (
               </div>
             </div>
 
-          <button className="btn btn-primary mb-md" onClick={handleGoToTopupPayment}>
-            Submit Topup Request
-          </button>
+          {!isReferralLimitReached && (
+            <button className="btn btn-primary mb-md" onClick={handleGoToTopupPayment}>
+              Submit Topup Request
+            </button>
+          )}
 
           {topups.length > 0 && (
             <div className="mt-sm">

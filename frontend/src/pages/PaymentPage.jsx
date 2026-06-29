@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import UpiPayment from '../components/UpiPayment.jsx';
+import UpiPaymentAuto from '../components/UpiPaymentAuto.jsx';
 
 export default function PaymentPage() {
   const navigate = useNavigate();
@@ -76,7 +76,7 @@ export default function PaymentPage() {
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="upi-payment-wrap">
-          <UpiPayment
+          <UpiPaymentAuto
             type="topup"
             userId={topupUserId}
             onSuccess={handleUpiSuccess}

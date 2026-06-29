@@ -25,6 +25,14 @@ module.exports = async (req, res) => {
     if (existingPhone.length) { res.writeHead(409); res.end(JSON.stringify({ error: 'Phone already registered. Please login.' })); return; }
     const referrer = refMatches.length ? refMatches[0] : null;
 
+    // Reject if referral link has reached its limit
+    if (refCode && referrer && referrer.referral_limit_reached) {
+      res.writeHead(400); res.end(JSON.stringify({ error: 'Referral Link Expired — this referral link has already been used for the maximum number of registrations.' })); return;
+    }
+    if (refCode && referrer && referrer.referral_active === false) {
+      res.writeHead(400); res.end(JSON.stringify({ error: 'Referral Link Expired — this referral link is no longer active.' })); return;
+    }
+
     const pendingReg = await addDoc(COL_PENDING_REGS, {
       name: name.trim(), email: email.toLowerCase().trim(), phone: phone.trim(),
       password_hash: hashPassword(password), referral_code: refCode,

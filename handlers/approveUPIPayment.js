@@ -109,6 +109,32 @@ module.exports = async (req, res) => {
         if (referredByUserId) {
           const refAmount = amountNum * 0.1;
           await atomicCreditWallet(referredByUserId, refAmount, payment.id, 'Referral bonus for ' + newUserId, 'referral_bonus');
+
+          // Increment referrer's referral count
+          const referrerDoc = await getDoc(COL_USERS, referredByUserId);
+          if (referrerDoc) {
+            const currentCount = (referrerDoc.referrals_count || 0) + 1;
+            const limitReached = currentCount >= MAX_REFERRALS;
+            const updates = {
+              referrals_count: currentCount,
+              total_referral_count: (referrerDoc.total_referral_count || 0) + 1,
+              referral_limit_reached: limitReached,
+              referral_active: !limitReached,
+              is_qualified: limitReached,
+            };
+            if (limitReached) {
+              updates.account_status = 'inactive';
+              updates.inactive_reason = 'Referral Limit Reached (2 Successful Referrals)';
+              updates.referral_expires_at = new Date().toISOString();
+            }
+            await updateDoc(COL_USERS, referredByUserId, updates);
+
+            // Admin notification when limit reached
+            if (limitReached) {
+              try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been expired. Your account has been set to inactive pending admin approval.', type: 'referral_limit_reached', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
+              try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: req.admin?.email || 'system', details: { referralCode: referredByCode, referralCount: currentCount, reason: 'Auto-inactivated after ' + MAX_REFERRALS + ' referrals', registrationPlan: 'UPI', paymentMethod: 'UPI' }, created_at: now }); } catch {}
+            }
+          }
         }
 
         // Audit log

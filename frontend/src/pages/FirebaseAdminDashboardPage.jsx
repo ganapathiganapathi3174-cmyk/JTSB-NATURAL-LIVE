@@ -109,6 +109,8 @@ export default function FirebaseAdminDashboardPage() {
   const [actionMessage, setActionMessage] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
+  const [approveSponsorUser, setApproveSponsorUser] = useState(null);
+  const [approveSponsorLoading, setApproveSponsorLoading] = useState(false);
   const actionMsgTimeoutRef = useRef(null);
   const [sseConnected, setSseConnected] = useState(false);
   const [sseCounts, setSseCounts] = useState({ pending_payments: 0, pending_registrations: 0 });
@@ -147,6 +149,28 @@ export default function FirebaseAdminDashboardPage() {
       setActionMsg('Error: ' + detail + ' (see console for details)');
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function handleApproveSponsor(userId) {
+    setApproveSponsorLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/approveSponsor`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to approve sponsor');
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, account_status: 'active', inactive_reason: '', referral_limit_reached: false } : u));
+      setApproveSponsorUser(null);
+      setActionMsg('✓ Sponsor account reactivated');
+      if (actionMsgTimeoutRef.current) clearTimeout(actionMsgTimeoutRef.current);
+      actionMsgTimeoutRef.current = setTimeout(() => setActionMsg(''), 3000);
+    } catch (err) {
+      setActionMsg('Error: ' + (err.message || 'Failed to approve sponsor'));
+    } finally {
+      setApproveSponsorLoading(false);
     }
   }
 
@@ -924,11 +948,19 @@ export default function FirebaseAdminDashboardPage() {
                         <td data-label="Refs">{u.referrals_count}</td>
                         <td data-label="Topup Refs">{u.topup_referrals_count}</td>
                          <td data-label="Actions">
-                          <button className="btn-modern btn-modern-danger btn-modern-xs"
-                            onClick={() => { setActionUser(u); setActionReason(''); }}>
-                            {'\u2715'} Delete
-                          </button>
-                        </td>
+                           <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                             {u.inactiveReason && u.inactiveReason.includes('Referral Limit') && (
+                               <button className="btn-modern btn-modern-primary btn-modern-xs"
+                                 onClick={() => setApproveSponsorUser(u)}>
+                                 {'\u2713'} Approve Sponsor
+                               </button>
+                             )}
+                             <button className="btn-modern btn-modern-danger btn-modern-xs"
+                               onClick={() => { setActionUser(u); setActionReason(''); }}>
+                               {'\u2715'} Delete
+                             </button>
+                           </div>
+                         </td>
                       </tr>
                     ))}
                   </tbody>
@@ -994,6 +1026,77 @@ export default function FirebaseAdminDashboardPage() {
                     {actionLoading ? 'Deleting...' : '\u2715 Confirm Delete'}
                   </button>
                   <button className="btn-modern btn-modern-ghost" onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} disabled={actionLoading}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {approveSponsorUser && (
+            <div className="modal-modern-overlay" onClick={() => setApproveSponsorUser(null)}>
+              <div className="modal-modern" onClick={e => e.stopPropagation()}>
+                <div className="modal-modern-header">
+                  <h2>Approve Sponsor</h2>
+                  <button onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+                </div>
+                <div className="modal-modern-body">
+                  <div className="detail-grid card-section-sm">
+                    <div className="detail-row">
+                      <span className="detail-label">Name</span>
+                      <span className="detail-value">{approveSponsorUser.name}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Email</span>
+                      <span className="detail-value">{approveSponsorUser.email}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Referral Code</span>
+                      <span className="detail-value"><code>{approveSponsorUser.referral_code || '—'}</code></span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Referral Count</span>
+                      <span className="detail-value">{approveSponsorUser.referrals_count || 0}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Inactive Reason</span>
+                      <span className="detail-value"><span className="badge badge-rejected badge-xs">{approveSponsorUser.inactiveReason}</span></span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Registration Plan</span>
+                      <span className="detail-value">UPI — Standard Registration</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Payment Method</span>
+                      <span className="detail-value">UPI Auto Pay</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Registration Date</span>
+                      <span className="detail-value">{approveSponsorUser.created_at ? new Date(approveSponsorUser.created_at).toLocaleDateString() : '—'}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Account Status</span>
+                      <span className="detail-value"><span className="badge badge-rejected badge-xs">Inactive</span></span>
+                    </div>
+                  </div>
+
+                  <div className="alert alert-warning text-sm" style={{ marginTop: '1rem' }}>
+                    <strong>Note:</strong> Approving will reactivate the account without generating a new referral code. The old referral link remains permanently expired and cannot be reused.
+                  </div>
+
+                  {actionMsg && (
+                    <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
+                      {actionMsg}
+                    </div>
+                  )}
+                </div>
+                <div className="modal-modern-footer">
+                  <button className={`btn-modern btn-modern-primary${approveSponsorLoading ? ' btn-loading' : ''}`}
+                    onClick={() => handleApproveSponsor(approveSponsorUser.id)}
+                    disabled={approveSponsorLoading}>
+                    {approveSponsorLoading ? 'Approving...' : '\u2713 Approve Sponsor'}
+                  </button>
+                  <button className="btn-modern btn-modern-ghost" onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} disabled={approveSponsorLoading}>
                     Cancel
                   </button>
                 </div>
