@@ -200,18 +200,18 @@ module.exports = async (req, res) => {
         try { await addDoc('audit_logs', { action: 'approve_topup_payment', target_id: payment.id, target_type: 'upi_payment', admin_id: req.admin?.email || 'unknown', details: { userId, amount: amountNum, topupId, referredBy: referredByCode }, created_at: now }); } catch {}
 
         // Sponsor topup completion — unlock locked incomes
-        try {
-          if (userDoc.topup_referral_qualified && !userDoc.sponsor_topup_completed) {
-            await updateDoc(COL_USERS, userId, { account_status: 'inactive', sponsor_topup_completed: true });
-            const lockedIncome = await runQuery(COL_TOPUP_INCOME, [
-              { field: 'user_id', op: 'EQUAL', value: userId },
-              { field: 'status', op: 'EQUAL', value: 'locked' },
-            ], { limit: 100 });
-            for (const inc of lockedIncome) {
-              await updateDoc(COL_TOPUP_INCOME, inc.id, { status: 'eligible' });
+          try {
+            if (userDoc.topup_referral_qualified && !userDoc.sponsor_topup_completed) {
+              await updateDoc(COL_USERS, userId, { account_status: 'inactive', inactive_reason: 'Sponsor Claim Pending Admin Approval', sponsor_topup_completed: true, sponsor_awaiting_credit: true });
+              const lockedIncome = await runQuery(COL_TOPUP_INCOME, [
+                { field: 'user_id', op: 'EQUAL', value: userId },
+                { field: 'status', op: 'EQUAL', value: 'locked' },
+              ], { limit: 100 });
+              for (const inc of lockedIncome) {
+                await updateDoc(COL_TOPUP_INCOME, inc.id, { status: 'eligible' });
+              }
             }
-          }
-        } catch (e) { console.error('[MANUAL-APPROVE] Sponsor topup completion error:', e?.message); }
+          } catch (e) { console.error('[MANUAL-APPROVE] Sponsor topup completion error:', e?.message); }
 
         try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Your topup of ₹' + amountNum + ' has been approved and added to your wallet.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
 

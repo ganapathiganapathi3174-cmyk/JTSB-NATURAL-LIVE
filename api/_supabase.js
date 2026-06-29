@@ -5,7 +5,7 @@ const queue = require('./_queue.js');
 const crypto_helper = require('./_crypto.js');
 const metrics = require('./_metrics.js');
 
-const CRITICAL_TABLES = ['users', 'referrals', 'topups', 'wallet_balances', 'wallet_transactions', 'uniques', 'sponsor_data'];
+const CRITICAL_TABLES = ['users', 'referrals', 'topups', 'wallet_balances', 'wallet_transactions', 'uniques', 'sponsor_data', 'sponsor_claims'];
 const ANALYTICS_TABLES = ['verification_logs', 'payment_logs', 'audit_logs', 'admin_logs', 'analytics_events'];
 const SENSITIVE_TABLES = ['users', 'upi_payments'];
 

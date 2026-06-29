@@ -92,6 +92,8 @@ const handlerCfg = [
   ['webhookUPIConfirm', false, '../handlers/webhookUPIConfirm.js'],
   ['retryUPIOrder', false, '../handlers/retryUPIOrder.js'],
   ['approveSponsor', true, '../handlers/approveSponsor.js'],
+  ['rejectSponsor', true, '../handlers/rejectSponsor.js'],
+  ['sponsorClaim', false, '../handlers/sponsorClaim.js'],
 ];
 const handlerModules = {};
 const handlers = {};

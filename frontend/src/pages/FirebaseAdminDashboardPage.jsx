@@ -111,6 +111,11 @@ export default function FirebaseAdminDashboardPage() {
   const [actionMsg, setActionMsg] = useState('');
   const [approveSponsorUser, setApproveSponsorUser] = useState(null);
   const [approveSponsorLoading, setApproveSponsorLoading] = useState(false);
+  const [sponsorClaims, setSponsorClaims] = useState([]);
+  const [rejectSponsorUser, setRejectSponsorUser] = useState(null);
+  const [rejectSponsorReason, setRejectSponsorReason] = useState('');
+  const [rejectSponsorLoading, setRejectSponsorLoading] = useState(false);
+  const [showClaimHistory, setShowClaimHistory] = useState(null);
   const actionMsgTimeoutRef = useRef(null);
   const [sseConnected, setSseConnected] = useState(false);
   const [sseCounts, setSseCounts] = useState({ pending_payments: 0, pending_registrations: 0 });
@@ -162,15 +167,40 @@ export default function FirebaseAdminDashboardPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to approve sponsor');
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, account_status: 'active', inactive_reason: '', referral_limit_reached: false } : u));
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, account_status: 'active', inactive_reason: '', sponsor_awaiting_credit: false, sponsor_credited: true, sponsor_credited_amount: data.claimAmount } : u));
+      setSponsorClaims(prev => prev.filter(c => c.sponsor_id !== userId));
       setApproveSponsorUser(null);
-      setActionMsg('✓ Sponsor account reactivated');
+      setActionMsg(data.claimAmount > 0 ? `✓ Sponsor claim approved. ₹${data.claimAmount.toFixed(2)} credited.` : '✓ Sponsor claim approved.');
       if (actionMsgTimeoutRef.current) clearTimeout(actionMsgTimeoutRef.current);
       actionMsgTimeoutRef.current = setTimeout(() => setActionMsg(''), 3000);
     } catch (err) {
       setActionMsg('Error: ' + (err.message || 'Failed to approve sponsor'));
     } finally {
       setApproveSponsorLoading(false);
+    }
+  }
+
+  async function handleRejectSponsor(userId) {
+    setRejectSponsorLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/rejectSponsor`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, reason: rejectSponsorReason || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reject sponsor');
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, account_status: 'active', inactive_reason: '', sponsor_awaiting_credit: false } : u));
+      setSponsorClaims(prev => prev.filter(c => c.sponsor_id !== userId));
+      setRejectSponsorUser(null);
+      setRejectSponsorReason('');
+      setActionMsg('✓ Sponsor claim rejected. Account reactivated.');
+      if (actionMsgTimeoutRef.current) clearTimeout(actionMsgTimeoutRef.current);
+      actionMsgTimeoutRef.current = setTimeout(() => setActionMsg(''), 3000);
+    } catch (err) {
+      setActionMsg('Error: ' + (err.message || 'Failed to reject sponsor'));
+    } finally {
+      setRejectSponsorLoading(false);
     }
   }
 
@@ -257,6 +287,12 @@ export default function FirebaseAdminDashboardPage() {
   }, [users]);
 
   const inactiveUsersList = useMemo(() => {
+    const claimsBySponsor = {};
+    for (const c of sponsorClaims) {
+      if (c.status === 'pending') {
+        claimsBySponsor[c.sponsor_id] = c;
+      }
+    }
     return users.filter(u => u.account_status === 'inactive')
       .map(u => ({
         id: u.id,
@@ -272,11 +308,13 @@ export default function FirebaseAdminDashboardPage() {
         inactive_reason: u.inactive_reason || '',
         is_qualified: u.is_qualified || false,
         referral_limit_reached: u.referral_limit_reached || false,
+        claimInfo: claimsBySponsor[u.id] || null,
       }))
       .map(u => {
         let reason = u.inactive_reason;
         if (!reason) {
-          if (u.sponsor_awaiting_credit || u.sponsor_topup_completed) reason = 'Own Topup Completed';
+          if (u.sponsor_awaiting_credit) reason = 'Sponsor Claim Pending Admin Approval';
+          else if (u.sponsor_topup_completed) reason = 'Own Topup Completed';
           else if (u.referral_limit_reached) reason = '2 Normal Referrals';
           else if (u.is_qualified) reason = 'Qualification Limit';
           else reason = 'Unknown';
@@ -298,6 +336,7 @@ export default function FirebaseAdminDashboardPage() {
       if (result.success) {
         setUsers(result.users || []);
         setTopups(result.topups || []);
+        setSponsorClaims(result.sponsorClaims || []);
       }
     } catch (err) {
       console.error('[ADMIN DASHBOARD] Failed to fetch data:', err);
@@ -914,6 +953,69 @@ export default function FirebaseAdminDashboardPage() {
             </div>
           )}
 
+          {sponsorClaims.filter(c => c.status === 'pending').length > 0 && (
+            <div className="card-modern card-section" style={{ borderLeft: '3px solid var(--warning, #f59e0b)' }}>
+              <div className="card-modern-header">
+                <h2 className="card-modern-title">{'\u{1F3C6}'} Pending Sponsor Claims ({sponsorClaims.filter(c => c.status === 'pending').length})</h2>
+              </div>
+              <div className="table-wrap-modern table-section">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Sponsor Name</th>
+                      <th>Referral Code</th>
+                      <th>Claim Amount</th>
+                      <th>Items</th>
+                      <th>Claim Date</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sponsorClaims.filter(c => c.status === 'pending').map(c => {
+                      const sponsor = users.find(u => u.id === c.sponsor_id);
+                      return (
+                        <tr key={c.id}>
+                          <td className="font-semibold">{sponsor?.name || c.sponsor_id?.substring(0, 12) || '—'}</td>
+                          <td><code>{sponsor?.referral_code || '—'}</code></td>
+                          <td className="font-bold" style={{ color: 'var(--success)' }}>₹{Number(c.claim_amount || 0).toFixed(2)}</td>
+                          <td>{c.items_count || 0}</td>
+                          <td style={{ fontSize: '0.8rem' }}>{c.claim_date ? new Date(c.claim_date).toLocaleDateString() : '—'}</td>
+                          <td><span className="badge badge-pending badge-xs">Pending</span></td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.35rem' }}>
+                              <button className="btn-modern btn-modern-primary btn-modern-xs"
+                                onClick={() => {
+                                  const enriched = { ...sponsor, inactiveReason: 'Sponsor Claim Pending Admin Approval', claimInfo: c };
+                                  setApproveSponsorUser(enriched);
+                                }}>
+                                {'\u2713'} Approve
+                              </button>
+                              <button className="btn-modern btn-modern-danger btn-modern-xs"
+                                onClick={() => {
+                                  const enriched = { ...sponsor, inactiveReason: 'Sponsor Claim Pending Admin Approval', claimInfo: c };
+                                  setRejectSponsorUser(enriched);
+                                }}>
+                                {'\u2715'} Reject
+                              </button>
+                              <button className="btn-modern btn-modern-ghost btn-modern-xs"
+                                onClick={() => {
+                                  const enriched = { ...sponsor, inactiveReason: 'Sponsor Claim Pending Admin Approval', claimInfo: c };
+                                  setShowClaimHistory(enriched);
+                                }}>
+                                {'\u{1F4CB}'} Details
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {inactiveUsersList.length > 0 && (
             <div className="card-modern card-section">
               <div className="card-modern-header">
@@ -947,18 +1049,28 @@ export default function FirebaseAdminDashboardPage() {
                         </td>
                         <td data-label="Refs">{u.referrals_count}</td>
                         <td data-label="Topup Refs">{u.topup_referrals_count}</td>
-                         <td data-label="Actions">
-                           <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                             {u.inactiveReason && u.inactiveReason.includes('Referral Limit') && (
-                               <button className="btn-modern btn-modern-primary btn-modern-xs"
-                                 onClick={() => setApproveSponsorUser(u)}>
-                                 {'\u2713'} Approve Sponsor
-                               </button>
-                             )}
-                             <button className="btn-modern btn-modern-danger btn-modern-xs"
-                               onClick={() => { setActionUser(u); setActionReason(''); }}>
-                               {'\u2715'} Delete
-                             </button>
+                     <td data-label="Actions">
+                            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                              {(u.inactiveReason && (u.inactiveReason.includes('Referral Limit') || u.inactiveReason.includes('Sponsor Claim Pending'))) && (
+                                <button className="btn-modern btn-modern-primary btn-modern-xs"
+                                  onClick={() => setApproveSponsorUser(u)}>
+                                  {'\u2713'} Approve
+                                </button>
+                              )}
+                              {u.inactiveReason && u.inactiveReason.includes('Sponsor Claim Pending') && (
+                                <button className="btn-modern btn-modern-danger btn-modern-xs"
+                                  onClick={() => { setRejectSponsorUser(u); setRejectSponsorReason(''); }}>
+                                  {'\u2715'} Reject
+                                </button>
+                              )}
+                              <button className="btn-modern btn-modern-ghost btn-modern-xs"
+                                onClick={() => { setShowClaimHistory(u); }}>
+                                {'\u{1F4CB}'} Details
+                              </button>
+                              <button className="btn-modern btn-modern-danger btn-modern-xs"
+                                onClick={() => { setActionUser(u); setActionReason(''); }}>
+                                {'\u2715'} Delete
+                              </button>
                            </div>
                          </td>
                       </tr>
@@ -1037,51 +1149,87 @@ export default function FirebaseAdminDashboardPage() {
             <div className="modal-modern-overlay" onClick={() => setApproveSponsorUser(null)}>
               <div className="modal-modern" onClick={e => e.stopPropagation()}>
                 <div className="modal-modern-header">
-                  <h2>Approve Sponsor</h2>
+                  <h2>Approve Sponsor Claim</h2>
                   <button onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
                 </div>
                 <div className="modal-modern-body">
                   <div className="detail-grid card-section-sm">
                     <div className="detail-row">
-                      <span className="detail-label">Name</span>
+                      <span className="detail-label">Sponsor Name</span>
                       <span className="detail-value">{approveSponsorUser.name}</span>
                     </div>
                     <div className="detail-row">
-                      <span className="detail-label">Email</span>
-                      <span className="detail-value">{approveSponsorUser.email}</span>
+                      <span className="detail-label">Sponsor ID</span>
+                      <span className="detail-value"><code>{approveSponsorUser.id ? approveSponsorUser.id.substring(0, 12) + '...' : '—'}</code></span>
                     </div>
                     <div className="detail-row">
                       <span className="detail-label">Referral Code</span>
                       <span className="detail-value"><code>{approveSponsorUser.referral_code || '—'}</code></span>
                     </div>
                     <div className="detail-row">
-                      <span className="detail-label">Referral Count</span>
-                      <span className="detail-value">{approveSponsorUser.referrals_count || 0}</span>
-                    </div>
-                    <div className="detail-row">
                       <span className="detail-label">Inactive Reason</span>
-                      <span className="detail-value"><span className="badge badge-rejected badge-xs">{approveSponsorUser.inactiveReason}</span></span>
+                      <span className="detail-value"><span className="badge badge-pending badge-xs">{approveSponsorUser.inactiveReason}</span></span>
                     </div>
                     <div className="detail-row">
-                      <span className="detail-label">Registration Plan</span>
-                      <span className="detail-value">UPI — Standard Registration</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Payment Method</span>
-                      <span className="detail-value">UPI Auto Pay</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Registration Date</span>
-                      <span className="detail-value">{approveSponsorUser.created_at ? new Date(approveSponsorUser.created_at).toLocaleDateString() : '—'}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Account Status</span>
+                      <span className="detail-label">Current Status</span>
                       <span className="detail-value"><span className="badge badge-rejected badge-xs">Inactive</span></span>
                     </div>
                   </div>
 
+                  {approveSponsorUser.claimInfo && (
+                    <div className="card-section-sm" style={{ marginTop: '1rem', borderTop: '1px solid var(--border, #e2e8f0)', paddingTop: '1rem' }}>
+                      <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Claim Details</h3>
+                      <div className="detail-grid">
+                        <div className="detail-row">
+                          <span className="detail-label">Claim Amount</span>
+                          <span className="detail-value font-bold" style={{ color: 'var(--success)' }}>₹{Number(approveSponsorUser.claimInfo.claim_amount || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">Claim Date</span>
+                          <span className="detail-value">{approveSponsorUser.claimInfo.claim_date ? new Date(approveSponsorUser.claimInfo.claim_date).toLocaleString() : '—'}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">Referred Users Count</span>
+                          <span className="detail-value">{approveSponsorUser.claimInfo.items_count || 0}</span>
+                        </div>
+                      </div>
+
+                      {(approveSponsorUser.claimInfo.items || []).length > 0 && (
+                        <div style={{ marginTop: '0.75rem' }}>
+                          <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted, #64748b)' }}>Referred Users Generating Eligibility</h4>
+                          <div className="table-wrap-modern" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                            <table style={{ fontSize: '0.75rem' }}>
+                              <thead>
+                                <tr>
+                                  <th>User Name</th>
+                                  <th>Top-up Amount</th>
+                                  <th>Top-up Date</th>
+                                  <th>Transaction ID</th>
+                                  <th>Payment Method</th>
+                                  <th>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {approveSponsorUser.claimInfo.items.map((item, idx) => (
+                                  <tr key={item.income_id || idx}>
+                                    <td>{item.referred_user_name || '—'}</td>
+                                    <td className="font-bold">₹{Number(item.topup_amount || 0).toFixed(2)}</td>
+                                    <td style={{ fontSize: '0.7rem' }}>{item.topup_date ? new Date(item.topup_date).toLocaleDateString() : '—'}</td>
+                                    <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.transaction_id || '—'}</td>
+                                    <td>{item.payment_method || 'UPI'}</td>
+                                    <td><span className="badge badge-paid badge-xs">{item.payment_status || 'approved'}</span></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="alert alert-warning text-sm" style={{ marginTop: '1rem' }}>
-                    <strong>Note:</strong> Approving will reactivate the account without generating a new referral code. The old referral link remains permanently expired and cannot be reused.
+                    <strong>Approve:</strong> Credits <strong>₹{Number(approveSponsorUser.claimInfo?.claim_amount || 0).toFixed(2)}</strong> to sponsor's wallet and reactivates account. Referral history and wallet history remain unchanged.
                   </div>
 
                   {actionMsg && (
@@ -1094,11 +1242,153 @@ export default function FirebaseAdminDashboardPage() {
                   <button className={`btn-modern btn-modern-primary${approveSponsorLoading ? ' btn-loading' : ''}`}
                     onClick={() => handleApproveSponsor(approveSponsorUser.id)}
                     disabled={approveSponsorLoading}>
-                    {approveSponsorLoading ? 'Approving...' : '\u2713 Approve Sponsor'}
+                    {approveSponsorLoading ? 'Approving...' : '\u2713 Approve & Credit ₹' + Number(approveSponsorUser.claimInfo?.claim_amount || 0).toFixed(2)}
                   </button>
                   <button className="btn-modern btn-modern-ghost" onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} disabled={approveSponsorLoading}>
                     Cancel
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {rejectSponsorUser && (
+            <div className="modal-modern-overlay" onClick={() => setRejectSponsorUser(null)}>
+              <div className="modal-modern" onClick={e => e.stopPropagation()}>
+                <div className="modal-modern-header">
+                  <h2>Reject Sponsor Claim</h2>
+                  <button onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+                </div>
+                <div className="modal-modern-body">
+                  <div className="detail-grid card-section-sm">
+                    <div className="detail-row">
+                      <span className="detail-label">Sponsor Name</span>
+                      <span className="detail-value">{rejectSponsorUser.name}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Inactive Reason</span>
+                      <span className="detail-value"><span className="badge badge-pending badge-xs">{rejectSponsorUser.inactiveReason}</span></span>
+                    </div>
+                  </div>
+
+                  <div className="field modal-field-mb" style={{ marginTop: '1rem' }}>
+                    <label>Rejection Reason</label>
+                    <textarea
+                      className="input"
+                      placeholder="Why is this claim being rejected?"
+                      value={rejectSponsorReason}
+                      onChange={e => setRejectSponsorReason(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="alert alert-warning text-sm">
+                    <strong>Note:</strong> Rejecting will reactivate the sponsor account without crediting the bonus. The income records will be restored to eligible status for future claims.
+                  </div>
+
+                  {actionMsg && (
+                    <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
+                      {actionMsg}
+                    </div>
+                  )}
+                </div>
+                <div className="modal-modern-footer">
+                  <button className={`btn-modern btn-modern-danger${rejectSponsorLoading ? ' btn-loading' : ''}`}
+                    onClick={() => handleRejectSponsor(rejectSponsorUser.id)}
+                    disabled={rejectSponsorLoading}>
+                    {rejectSponsorLoading ? 'Rejecting...' : '\u2715 Reject Claim'}
+                  </button>
+                  <button className="btn-modern btn-modern-ghost" onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} disabled={rejectSponsorLoading}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showClaimHistory && (
+            <div className="modal-modern-overlay" onClick={() => setShowClaimHistory(null)}>
+              <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
+                <div className="modal-modern-header">
+                  <h2>Claim History — {showClaimHistory.name}</h2>
+                  <button onClick={() => setShowClaimHistory(null)} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+                </div>
+                <div className="modal-modern-body">
+                  <div className="detail-grid card-section-sm">
+                    <div className="detail-row">
+                      <span className="detail-label">Sponsor Name</span>
+                      <span className="detail-value">{showClaimHistory.name}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Sponsor ID</span>
+                      <span className="detail-value"><code>{showClaimHistory.id ? showClaimHistory.id.substring(0, 12) + '...' : '—'}</code></span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Referral Code</span>
+                      <span className="detail-value"><code>{showClaimHistory.referral_code || '—'}</code></span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Current Status</span>
+                      <span className="detail-value"><span className="badge badge-rejected badge-xs">Inactive</span></span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Inactive Reason</span>
+                      <span className="detail-value"><span className="badge badge-pending badge-xs">{showClaimHistory.inactiveReason}</span></span>
+                    </div>
+                  </div>
+                  {showClaimHistory.claimInfo && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Claim Details</h3>
+                      <div className="detail-grid">
+                        <div className="detail-row">
+                          <span className="detail-label">Total Claim Amount</span>
+                          <span className="detail-value font-bold" style={{ color: 'var(--success)' }}>₹{Number(showClaimHistory.claimInfo.claim_amount || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">Claim Date</span>
+                          <span className="detail-value">{showClaimHistory.claimInfo.claim_date ? new Date(showClaimHistory.claimInfo.claim_date).toLocaleString() : '—'}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">Referred Users</span>
+                          <span className="detail-value">{showClaimHistory.claimInfo.items_count || 0}</span>
+                        </div>
+                      </div>
+                      {(showClaimHistory.claimInfo.items || []).length > 0 && (
+                        <div style={{ marginTop: '0.75rem', maxHeight: '300px', overflowY: 'auto' }}>
+                          <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted, #64748b)' }}>Referred Users & Top-up Details</h4>
+                          <table className="table-wrap-modern" style={{ fontSize: '0.75rem', width: '100%' }}>
+                            <thead>
+                              <tr>
+                                <th>User Name</th>
+                                <th>User ID</th>
+                                <th>Top-up Amount</th>
+                                <th>Top-up Date</th>
+                                <th>Transaction ID</th>
+                                <th>Payment Method</th>
+                                <th>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {showClaimHistory.claimInfo.items.map((item, idx) => (
+                                <tr key={item.income_id || idx}>
+                                  <td>{item.referred_user_name || '—'}</td>
+                                  <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.referred_user_id ? item.referred_user_id.substring(0, 8) + '...' : '—'}</td>
+                                  <td className="font-bold">₹{Number(item.topup_amount || 0).toFixed(2)}</td>
+                                  <td style={{ fontSize: '0.7rem' }}>{item.topup_date ? new Date(item.topup_date).toLocaleDateString() : '—'}</td>
+                                  <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.transaction_id || '—'}</td>
+                                  <td>{item.payment_method || 'UPI'}</td>
+                                  <td><span className="badge badge-paid badge-xs">{item.payment_status || 'approved'}</span></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="modal-modern-footer">
+                  <button className="btn-modern btn-modern-ghost" onClick={() => setShowClaimHistory(null)}>Close</button>
                 </div>
               </div>
             </div>

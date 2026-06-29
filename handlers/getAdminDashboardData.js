@@ -1,4 +1,4 @@
-const { COL_USERS, COL_UPI_PAYMENTS, COL_PENDING_REGS, COL_TOPUPS } = require('../api/_shared.js');
+const { COL_USERS, COL_UPI_PAYMENTS, COL_PENDING_REGS, COL_TOPUPS, COL_SPONSOR_CLAIMS } = require('../api/_shared.js');
 const { runQuery, getSupabaseClient } = require('../api/_supabase.js');
 
 module.exports = async (req, res) => {
@@ -10,6 +10,7 @@ module.exports = async (req, res) => {
       supabase.from(COL_TOPUPS).select('*').order('created_at', { ascending: false }).limit(500),
       supabase.from(COL_PENDING_REGS).select('*').order('created_at', { ascending: false }).limit(500),
       runQuery(COL_UPI_PAYMENTS, [], { orderBy: 'created_at', ascending: false, limit: 500 }),
+      runQuery(COL_SPONSOR_CLAIMS, [], { orderBy: 'created_at', ascending: false, limit: 200 }),
     ]);
 
     const diagnostics = {
@@ -17,14 +18,17 @@ module.exports = async (req, res) => {
       topupsSuccess: results[1].status === 'fulfilled',
       pendingSuccess: results[2].status === 'fulfilled',
       paymentsSuccess: results[3].status === 'fulfilled',
+      claimsSuccess: results[4].status === 'fulfilled',
       usersError: results[0].status === 'rejected' ? (results[0].reason?.message || 'unknown') : null,
       topupsError: results[1].status === 'rejected' ? (results[1].reason?.message || 'unknown') : null,
       pendingError: results[2].status === 'rejected' ? (results[2].reason?.message || 'unknown') : null,
       paymentsError: results[3].status === 'rejected' ? (results[3].reason?.message || 'unknown') : null,
+      claimsError: results[4].status === 'rejected' ? (results[4].reason?.message || 'unknown') : null,
       usersCount: results[0].status === 'fulfilled' ? (results[0].value || []).length : -1,
       topupsCount: results[1].status === 'fulfilled' ? ((results[1].value || {}).data || []).length : -1,
       pendingCount: results[2].status === 'fulfilled' ? ((results[2].value || {}).data || []).length : -1,
       paymentsCount: results[3].status === 'fulfilled' ? (results[3].value || []).length : -1,
+      claimsCount: results[4].status === 'fulfilled' ? (results[4].value || []).length : -1,
     };
     console.log(`[DASHBOARD] DIAGNOSTICS:`, JSON.stringify(diagnostics));
 
@@ -39,6 +43,7 @@ module.exports = async (req, res) => {
     const topupsRes = results[1].value;
     const pendingRegsRes = results[2].value;
     const upiPayments = results[3].value;
+    const sponsorClaims = results[4].status === 'fulfilled' ? (results[4].value || []) : [];
 
     const pendingRegs = pendingRegsRes.data || [];
     const topups = topupsRes.data || [];
@@ -165,6 +170,7 @@ module.exports = async (req, res) => {
       users: allUsers,
       topups,
       pendingPayments,
+      sponsorClaims,
       _diagnostics: diagnostics,
     }));
   } catch (err) {

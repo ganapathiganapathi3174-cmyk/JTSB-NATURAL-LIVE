@@ -417,6 +417,29 @@ CREATE TABLE IF NOT EXISTS public.sponsor_data (
 );
 
 -- ============================================================
+-- TABLE: sponsor_claims
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.sponsor_claims (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  sponsor_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
+  claim_amount numeric(12,2) DEFAULT 0,
+  items_count integer DEFAULT 0,
+  items jsonb DEFAULT '[]',
+  status text DEFAULT 'pending',
+  claim_date timestamptz DEFAULT now(),
+  approved_at timestamptz,
+  approved_by text,
+  rejected_at timestamptz,
+  rejected_by text,
+  rejection_reason text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sponsor_claims_sponsor ON public.sponsor_claims(sponsor_id);
+CREATE INDEX IF NOT EXISTS idx_sponsor_claims_status ON public.sponsor_claims(status);
+
+-- ============================================================
 -- TABLE: topup_audit_log
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.topup_audit_log (

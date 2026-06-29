@@ -50,6 +50,7 @@ export default function FirebaseUserDashboard() {
   const [topups, setTopups] = useState([]);
   const [topupIncome, setTopupIncome] = useState([]);
   const [claimingId, setClaimingId] = useState(null);
+  const [bulkClaiming, setBulkClaiming] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
@@ -285,6 +286,30 @@ export default function FirebaseUserDashboard() {
     }
   }
 
+  async function handleClaimSponsorBonus() {
+    if (!userId) return;
+    setBulkClaiming(true);
+    try {
+      const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
+      const token = localStorage.getItem('fb_admin_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      const res = await fetch(`${API_BASE}/sponsorClaim`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to claim sponsor bonus');
+      setSuccess('Sponsor bonus claimed! Account set to inactive pending admin approval.');
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBulkClaiming(false);
+    }
+  }
+
 const totalTopupIncome = useMemo(() => {
   return topupIncome.reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
 }, [topupIncome]);
@@ -328,6 +353,7 @@ const userHasOwnTopup = useMemo(() => {
   const isQualified = useMemo(() => approvedReferralCount >= 2 || user?.is_qualified === true, [approvedReferralCount, user?.is_qualified]);
   const isActive = useMemo(() => user?.account_status === 'active' && (user?.payment_status === 'approved' || user?.payment_status === 'success'), [user?.account_status, user?.payment_status]);
   const isReferralLimitReached = useMemo(() => user?.inactive_reason === 'Referral Limit Reached (2 Successful Referrals)' || user?.inactive_reason === 'Referral Limit Reached', [user?.inactive_reason]);
+  const isSponsorClaimPending = useMemo(() => user?.inactive_reason === 'Sponsor Claim Pending Admin Approval', [user?.inactive_reason]);
   const isSuspicious = useMemo(() => user?.admin_status === 'suspicious', [user?.admin_status]);
 
   if (loading) {
@@ -555,6 +581,13 @@ return (
               <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>Your referral link has reached the maximum of 2 successful registrations. An admin will review and reactivate your account.</p>
             </div>
           )}
+          {user?.account_status === 'inactive' && isSponsorClaimPending && (
+            <div className="alert alert-warning" style={{ marginTop: '1rem', padding: '1rem', borderRadius: '12px', border: '1px solid #f59e0b', background: '#fffbeb', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>⏳</div>
+              <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem' }}>Account Inactive — Waiting for Admin Approval</h3>
+              <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>Your sponsor claim is pending admin review. An admin will review your claim and reactivate your account.</p>
+            </div>
+          )}
 
           <div className="profile-body">
             <div className="quick-stats-grid">
@@ -780,6 +813,11 @@ return (
                     <p className="muted">Referral Link Expired — limit of 2 registrations reached.</p>
                     <p className="muted" style={{ marginTop: '0.25rem' }}>Account is inactive pending admin approval.</p>
                   </>
+                ) : user?.account_status === 'inactive' && isSponsorClaimPending ? (
+                  <>
+                    <p className="muted">Sponsor claim submitted — pending admin approval.</p>
+                    <p className="muted" style={{ marginTop: '0.25rem' }}>Your account will be reactivated after admin review.</p>
+                  </>
                 ) : user?.account_status === 'inactive' ? (
                   <p className="muted">Your account is currently inactive.</p>
                 ) : (
@@ -955,7 +993,7 @@ return (
               </div>
             </div>
 
-          {!isReferralLimitReached && (
+          {!isReferralLimitReached && !isSponsorClaimPending && (
             <button className="btn btn-primary mb-md" onClick={handleGoToTopupPayment}>
               Submit Topup Request
             </button>
@@ -1019,8 +1057,18 @@ return (
             )}
 
             {pendingClaimAmount > 0 && (
-              <div className="alert alert-success text-sm mb-md">
-                <strong>₹{pendingClaimAmount.toFixed(2)}</strong> eligible for claim!
+              <div className="alert alert-success text-sm mb-md" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span><strong>₹{pendingClaimAmount.toFixed(2)}</strong> eligible for claim!</span>
+                {userHasOwnTopup && !user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
+                  <button
+                    className="btn btn-primary btn-modern-sm"
+                    onClick={handleClaimSponsorBonus}
+                    disabled={bulkClaiming}
+                    style={{ marginLeft: '1rem' }}
+                  >
+                    {bulkClaiming ? 'Claiming...' : 'Claim Sponsor Bonus'}
+                  </button>
+                )}
               </div>
             )}
 

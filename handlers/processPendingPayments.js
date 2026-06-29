@@ -385,7 +385,7 @@ module.exports = async (req, res) => {
 
           try {
             if (userDoc.topup_referral_qualified && !userDoc.sponsor_topup_completed) {
-              await updateDoc(COL_USERS, userId, { account_status: 'inactive', sponsor_topup_completed: true });
+              await updateDoc(COL_USERS, userId, { account_status: 'inactive', inactive_reason: 'Sponsor Claim Pending Admin Approval', sponsor_topup_completed: true, sponsor_awaiting_credit: true });
               const lockedIncome = await runQuery(COL_TOPUP_INCOME, [{ field: 'user_id', op: 'EQUAL', value: userId }, { field: 'status', op: 'EQUAL', value: 'locked' }], { limit: 100 });
               for (const inc of lockedIncome) await updateDoc(COL_TOPUP_INCOME, inc.id, { status: 'eligible' });
             }

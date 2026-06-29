@@ -1,5 +1,5 @@
-const { COL_USERS, COL_SPONSOR_CLAIMS } = require('../api/_shared.js');
-const { runQuery, updateDoc, addDoc, atomicCreditWallet } = require('../api/_supabase.js');
+const { COL_USERS, COL_SPONSOR_CLAIMS, COL_TOPUP_INCOME } = require('../api/_shared.js');
+const { runQuery, updateDoc, addDoc, getDoc } = require('../api/_supabase.js');
 const { broadcast } = require('../api/_sse.js');
 
 module.exports = async (req, res) => {
@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
   if (!req.admin) { res.writeHead(401); res.end(JSON.stringify({ error: 'Authentication required' })); return; }
 
   try {
-    const { userId, claimId } = req.body || {};
+    const { userId, claimId, reason } = req.body || {};
     if (!userId && !claimId) { res.writeHead(400); res.end(JSON.stringify({ error: 'userId or claimId is required' })); return; }
 
     let claim;
@@ -28,54 +28,43 @@ module.exports = async (req, res) => {
       claim = claims[0];
     }
 
-    const users = await runQuery(COL_USERS, [{ field: 'id', op: 'EQUAL', value: claim.sponsor_id }], { limit: 1 });
-    if (!users.length) { res.writeHead(404); res.end(JSON.stringify({ error: 'Sponsor user not found' })); return; }
-    const user = users[0];
     const now = new Date().toISOString();
 
-    // Update claim status to approved
+    // Update claim status to rejected
     await updateDoc(COL_SPONSOR_CLAIMS, claim.id, {
-      status: 'approved',
-      approved_at: now,
-      approved_by: req.admin?.email || 'unknown',
+      status: 'rejected',
+      rejected_at: now,
+      rejected_by: req.admin?.email || 'unknown',
+      rejection_reason: reason || 'Rejected by admin',
     });
 
-    // Credit wallet with the claim amount (atomic to prevent duplicates)
-    const claimAmount = Number(claim.claim_amount || 0);
-    if (claimAmount > 0) {
-      await atomicCreditWallet(claim.sponsor_id, claimAmount, claim.id, 'Sponsor bonus claim approved by admin', 'sponsor_bonus');
+    // Restore income records back to eligible
+    const items = claim.items || [];
+    for (const item of items) {
+      if (item.income_id) {
+        await updateDoc(COL_TOPUP_INCOME, item.income_id, { status: 'eligible' });
+      }
     }
 
-    // Reactivate account
-    // Keep existing referral data intact: referrals_count, total_referral_count, referral_code
+    // Reactivate the sponsor account
     await updateDoc(COL_USERS, claim.sponsor_id, {
       account_status: 'active',
       inactive_reason: null,
       sponsor_awaiting_credit: false,
-      sponsor_topup_completed: false,
-      sponsor_credited: true,
-      sponsor_credited_amount: claimAmount,
-      sponsor_credited_at: now,
-      sponsor_credited_by: req.admin?.email || 'unknown',
-      activated_at: now,
-      activated_by: req.admin?.email || 'unknown',
-      activation_reason: 'Admin approved sponsor claim',
     });
 
     // Audit log
     try {
       await addDoc('audit_logs', {
-        action: 'approve_sponsor_claim',
+        action: 'reject_sponsor_claim',
         target_id: claim.id,
         target_type: 'sponsor_claim',
         admin_id: req.admin?.email || 'unknown',
         details: {
           sponsorId: claim.sponsor_id,
-          sponsorName: user.name,
-          referralCode: user.referral_code,
-          claimAmount: claimAmount,
+          claimAmount: claim.claim_amount,
           itemsCount: claim.items_count,
-          items: claim.items,
+          rejectionReason: reason || 'No reason provided',
         },
         created_at: now,
       });
@@ -85,11 +74,11 @@ module.exports = async (req, res) => {
     try {
       await addDoc('notifications', {
         receiverId: claim.sponsor_id,
-        title: 'Sponsor Claim Approved',
-        message: claimAmount > 0
-          ? `Your sponsor claim of ₹${claimAmount.toFixed(2)} has been approved and credited to your wallet. Your account is now active.`
-          : 'Your sponsor claim has been approved. Your account is now active.',
-        type: 'sponsor_claim_approved',
+        title: 'Sponsor Claim Rejected',
+        message: reason
+          ? `Your sponsor claim of ₹${Number(claim.claim_amount || 0).toFixed(2)} was rejected. Reason: ${reason}`
+          : `Your sponsor claim of ₹${Number(claim.claim_amount || 0).toFixed(2)} was rejected by admin.`,
+        type: 'sponsor_claim_rejected',
         status: 'unread',
         createdAt: now,
         senderId: 'system',
@@ -97,18 +86,16 @@ module.exports = async (req, res) => {
       });
     } catch {}
 
-    try { broadcast('sponsorClaimApproved', { sponsorId: claim.sponsor_id, claimId: claim.id, amount: claimAmount }); } catch {}
+    try { broadcast('sponsorClaimRejected', { sponsorId: claim.sponsor_id, claimId: claim.id }); } catch {}
 
     res.writeHead(200);
     res.end(JSON.stringify({
-      status: 'approved',
-      userId: claim.sponsor_id,
+      status: 'rejected',
       claimId: claim.id,
-      claimAmount: claimAmount,
-      message: 'Sponsor claim approved. Wallet credited and account reactivated.',
+      message: 'Sponsor claim rejected. Account reactivated.',
     }));
   } catch (err) {
-    console.error('[approveSponsor] Error:', err.message);
+    console.error('[rejectSponsor] Error:', err.message);
     res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };

@@ -285,6 +285,29 @@ create table if not exists public.sponsor_data (
 );
 
 -- ============================================================
+-- TABLE: sponsor_claims
+-- ============================================================
+create table if not exists public.sponsor_claims (
+  id uuid primary key default uuid_generate_v4(),
+  sponsor_id uuid references public.users(id) on delete cascade,
+  claim_amount numeric(12,2) default 0,
+  items_count integer default 0,
+  items jsonb default '[]',
+  status text default 'pending',
+  claim_date timestamptz default now(),
+  approved_at timestamptz,
+  approved_by text,
+  rejected_at timestamptz,
+  rejected_by text,
+  rejection_reason text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_sponsor_claims_sponsor on public.sponsor_claims(sponsor_id);
+create index if not exists idx_sponsor_claims_status on public.sponsor_claims(status);
+
+-- ============================================================
 -- TABLE: topup_audit_log
 -- ============================================================
 create table if not exists public.topup_audit_log (
@@ -360,6 +383,7 @@ alter table public.admins enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.deletion_audit_logs enable row level security;
 alter table public.sponsor_data enable row level security;
+alter table public.sponsor_claims enable row level security;
 
 -- ==================== RLS POLICIES ====================
 
