@@ -73,7 +73,7 @@ updateDoc(reset fields) → continue → SKIPS EVERY PAYMENT
 [OCR] ✅ Screenshot fetched: 52340 bytes, hash=abc...
 [OCR] 🔄 Starting Tesseract.js recognition...
 [OCR] ✅ Recognition complete: 245 chars, confidence range: 65-98
-[VERIFY] ✅ Payment xxx: OCR completed — confidence=92%, amount=500, utr=HDFC****, receiver=jayarajj126-3@okicici
+[VERIFY] ✅ Payment xxx: OCR completed — confidence=92%, amount=500, utr=HDFC****, receiver=9655897523@ptyes
 [VERIFY] Payment xxx: Image validation ✅ PASS
 [VERIFY] Payment xxx: Payment validation ✅ PASS
 [VERIFY] Payment xxx: Duplicate check ✅ PASS
@@ -561,7 +561,7 @@ Rewrite Stage 8 decision logic per new business rules: UTR + date match → auto
 | UTR | ✅ `1234567892222` (100% agreement, 3/3 engines) |
 | Date | ✅ `2026-06-27` (2/3 engines: PaddleOCR `27Jun26` + EasyOCR `27 Jun 26`) |
 | Amount | ⚠️ `126.0` vs expected `120` (uncertain, but ignored per rule) |
-| Receiver | ❌ `9025882508@ibl` vs `jayarajj126-3@okicici` |
+| Receiver | ❌ `9025882508@ibl` vs `9655897523@ptyes` |
 | **Decision** | ✅ **APPROVED** — UTR+Date match |
 | **Reasons** | "UTR matched successfully", "Date matches current transaction", "Amount unclear but ignored due to rule" |
 | **matched_fields** | `{utr: true, date: true, amount: "uncertain", upi_id: false}` |

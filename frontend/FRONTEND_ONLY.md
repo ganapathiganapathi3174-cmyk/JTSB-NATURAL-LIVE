@@ -218,7 +218,7 @@ Create a `.env` file in the `frontend/` directory:
 ```env
 # Payment Configuration
 VITE_PAYMENT_AMOUNT=120
-VITE_UPI_VPA=jayarajj126-3@okicici
+VITE_UPI_VPA=9655897523@ptyes
 VITE_UPI_PAYEE_NAME=Community
 
 # JWT Secrets

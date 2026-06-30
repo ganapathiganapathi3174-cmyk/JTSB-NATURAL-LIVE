@@ -1,8 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import QRCode from 'qrcode';
 
-const DEFAULT_UPI_ID = 'jayarajj126-3@okicici';
-const DEFAULT_PAYEE_NAME = 'Jayaraj';
+const DEFAULT_UPI_ID = '9655897523@ptyes';
+const DEFAULT_PAYEE_NAME = 'JTSB Natural';
+
+function upiEncode(val, keepAt) {
+  var s = encodeURIComponent(String(val)).replace(/%20/g, '%20');
+  if (keepAt) s = s.replace(/%40/g, '@');
+  return s;
+}
 
 const REG_AMOUNTS = [
   { amount: 120, label: 'Basic Access' },
@@ -55,7 +61,14 @@ export default function UpiPayment({ type, pendingRegId, userId, onSuccess, onEr
   }, []);
 
   const upiUri = selectedAmount
-    ? `upi://pay?pa=${DEFAULT_UPI_ID}&pn=${encodeURIComponent(DEFAULT_PAYEE_NAME)}&am=${selectedAmount}&cu=INR`
+    ? 'upi://pay?pa=' + upiEncode(DEFAULT_UPI_ID, true) +
+      '&pn=' + upiEncode(DEFAULT_PAYEE_NAME) +
+      '&am=' + upiEncode(selectedAmount.toFixed(2)) +
+      '&tr=' + upiEncode('QR-' + Date.now().toString(36).toUpperCase()) +
+      '&tn=' + upiEncode('Payment of \u20B9' + selectedAmount) +
+      '&cu=' + upiEncode('INR') +
+      '&mc=' + upiEncode('0000') +
+      '&mode=' + upiEncode('04')
     : '';
 
   useEffect(() => {

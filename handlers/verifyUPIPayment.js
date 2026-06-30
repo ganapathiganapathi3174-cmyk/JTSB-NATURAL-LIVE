@@ -3,7 +3,7 @@ const { deleteDoc, runQuery, addDoc } = require('../api/_supabase.js');
 const { broadcast } = require('../api/_sse.js');
 
 const VALID_TYPES = { registration: [120, 500, 1000], topup: [120, 500, 1000] };
-const ACCEPTED_UPI = 'jayarajj126-3@okicici';
+const ACCEPTED_UPI = '9655897523@ptyes';
 
 const utrLocks = new Map();
 

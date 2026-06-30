@@ -4,7 +4,7 @@ const { runQuery, addDoc, updateDoc, atomicCreditWallet } = require('./_supabase
 const { broadcast } = require('./_sse.js');
 
 const ALLOWED_AMOUNTS = [120, 540, 1200];
-const ACCEPTED_UPI = 'jayarajj126-3@okicici';
+const ACCEPTED_UPI = '9655897523@ptyes';
 const OTP_EXPIRY_MS = 300000;
 const MAX_OTP_ATTEMPTS = 3;
 const FRAUD_SCORE_REJECT = 60;

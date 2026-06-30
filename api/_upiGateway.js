@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 const MERCHANT_NAME = 'JTSB Natural';
-const UPI_ID = 'jayarajj126-3@okicici';
+const UPI_ID = '9655897523@ptyes';
 
 function log(tag, msg) {
   console.log(`[${new Date().toISOString().slice(0, 19).replace('T', ' ')}] [UPI-GATEWAY] [${tag}] ${msg}`);
@@ -11,16 +11,24 @@ function generateOrderId() {
   return 'ORD-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
+function upiEncode(val, keepAt) {
+  var s = encodeURIComponent(String(val)).replace(/%20/g, '%20');
+  if (keepAt) s = s.replace(/%40/g, '@');
+  return s;
+}
+
 function generateUPIIntentUrl(orderId, amount, description) {
-  const params = new URLSearchParams({
-    pa: UPI_ID,
-    pn: MERCHANT_NAME,
-    am: amount.toFixed(2),
-    tr: orderId,
-    tn: (description || 'Payment').substring(0, 30),
-    cu: 'INR',
-  });
-  return 'upi://pay?' + params.toString();
+  const params = [
+    'pa=' + upiEncode(UPI_ID, true),
+    'pn=' + upiEncode(MERCHANT_NAME),
+    'am=' + upiEncode(amount.toFixed(2)),
+    'tr=' + upiEncode(orderId),
+    'tn=' + upiEncode((description || 'Payment').substring(0, 30)),
+    'cu=' + upiEncode('INR'),
+    'mc=' + upiEncode('0000'),
+    'mode=' + upiEncode('04'),
+  ];
+  return 'upi://pay?' + params.join('&');
 }
 
 const razorpayConfigured = !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);

@@ -601,14 +601,14 @@ Also reduce the retry count or implement a circuit breaker:
 | **Files** | `handlers/verifyUPIPayment.js:6`, `handlers/processPendingPayments.js:10`, `frontend/src/components/UpiPayment.jsx:4`, `api/_vision.js:30` |
 | **Functions** | All four files (`DEFAULT_UPI_ID` constant) |
 | **Lines** | verifyUPIPayment.js:6, processPendingPayments.js:10, UpiPayment.jsx:4, _vision.js:30 |
-| **Root Cause** | The admin UPI ID `jayarajj126-3@okicici` is hardcoded as a string literal in 4 files. Changing the UPI ID requires updating all 4 locations in sync. |
+| **Root Cause** | The admin UPI ID `9655897523@ptyes` is hardcoded as a string literal in 4 files. Changing the UPI ID requires updating all 4 locations in sync. |
 | **Impact** | If the UPI ID changes (bank account change, payment provider change), pending payments submitted before the change would be validated against the OLD ID until all 4 files are updated. |
 | **Fix Type** | Safe to fix now |
 | **Fix** | Define in `api/_shared.js` and import everywhere. For frontend, expose via an API endpoint (`/api/config`). |
 
 ```diff
 // api/_shared.js — add
-+const DEFAULT_UPI_ID = 'jayarajj126-3@okicici';
++const DEFAULT_UPI_ID = '9655897523@ptyes';
  module.exports = {
 -  COL_USERS, COL_TOPUPS, ...MAX_REFERRALS, randomString, hashPassword, crypto,
 +  COL_USERS, COL_TOPUPS, ...MAX_REFERRALS, randomString, hashPassword, crypto, DEFAULT_UPI_ID,

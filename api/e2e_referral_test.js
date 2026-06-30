@@ -107,7 +107,7 @@ async function run() {
   const utr1 = `E2E${ts}1${uid().slice(0,4)}`.toUpperCase().slice(0, 12);
   const pay1 = await httpRequest('POST', '/api/verifyUPIPayment', {
     pendingRegId: pendingId1, type: 'registration', amount: 120, utr: utr1,
-    upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(), screenshotUrl: 'https://example.com/ss1.png',
+    upiId: '9655897523@ptyes', paymentDate: todayStr(), screenshotUrl: 'https://example.com/ss1.png',
   });
   assert(pay1.status === 200, 'User 1 payment submitted');
   assert(!!pay1.body?.paymentId, 'User 1 paymentId received');
@@ -147,7 +147,7 @@ async function run() {
   const utr2 = `E2E${ts}2${uid().slice(0,4)}`.toUpperCase().slice(0, 12);
   const pay2 = await httpRequest('POST', '/api/verifyUPIPayment', {
     pendingRegId: pendingId2, type: 'registration', amount: 120, utr: utr2,
-    upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(), screenshotUrl: 'https://example.com/ss2.png',
+    upiId: '9655897523@ptyes', paymentDate: todayStr(), screenshotUrl: 'https://example.com/ss2.png',
   });
   assert(pay2.status === 200, 'User 2 payment submitted');
   assert(!!pay2.body?.paymentId, 'User 2 paymentId received');

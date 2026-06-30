@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const r2 = require('./_r2.js');
 const Tesseract = require('tesseract.js');
 
-const DEFAULT_UPI_ID = 'jayarajj126-3@okicici';
+const DEFAULT_UPI_ID = '9655897523@ptyes';
 
 function fetchBuffer(url) {
   // Try R2 for cloudflare r2 URLs

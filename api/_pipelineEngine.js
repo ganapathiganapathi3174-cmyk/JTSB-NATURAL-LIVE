@@ -17,7 +17,7 @@ const { analyzeWithAI, mapAIResultToVerificationFormat } = require('./_ai_bridge
 const { broadcast } = require('./_sse.js');
 
 const ALLOWED_AMOUNTS = [120, 540, 1200];
-const ACCEPTED_UPI = 'jayarajj126-3@okicici';
+const ACCEPTED_UPI = '9655897523@ptyes';
 const OTP_EXPIRY_MS = 300000;
 const MAX_OTP_ATTEMPTS = 3;
 const PYTHON_PATH = 'C:\\Users\\Sahan\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
