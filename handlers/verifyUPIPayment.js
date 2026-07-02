@@ -1,8 +1,11 @@
-const { COL_UPI_PAYMENTS } = require('../api/_shared.js');
+const { COL_UPI_PAYMENTS, TEST_MODE, TEST_PAYMENT_AMOUNT } = require('../api/_shared.js');
 const { deleteDoc, runQuery, addDoc } = require('../api/_supabase.js');
 const { broadcast } = require('../api/_sse.js');
 
-const VALID_TYPES = { registration: [120, 500, 1000], topup: [120, 500, 1000] };
+const BASE_TYPES = { registration: [120, 500, 1000], topup: [120, 500, 1000] };
+const VALID_TYPES = TEST_MODE
+  ? { registration: [...BASE_TYPES.registration, TEST_PAYMENT_AMOUNT], topup: [...BASE_TYPES.topup, TEST_PAYMENT_AMOUNT] }
+  : BASE_TYPES;
 const ACCEPTED_UPI = '9655897523@ptyes';
 
 const utrLocks = new Map();

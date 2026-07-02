@@ -101,6 +101,8 @@ const navItems = [
   { path: '/fb-admin/status', label: 'Status Board', icon: IconStatus },
   { path: '/fb-admin/tools', label: 'Tools', icon: IconStatus },
   { path: '/fb-admin/queue', label: 'Queue', icon: IconStatus },
+  { path: '/fb-admin/pending-queue', label: 'Pending Queue', icon: IconStatus },
+  { path: '/fb-admin/sponsor-transfers', label: 'Sponsor Transfers', icon: IconStatus },
   { path: '/fb-admin/messages', label: 'Messages', icon: IconMessages },
   { path: '/fb-admin/chat', label: 'Chat', icon: IconChat },
 ];

@@ -1,9 +1,10 @@
 const crypto = require('crypto');
-const { COL_UPI_PAYMENTS, COL_USERS, COL_PENDING_REGS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_REFERRALS, COL_NOTIFICATIONS, COL_TOPUP_INCOME, randomString, hashPassword } = require('./_shared.js');
+const { COL_UPI_PAYMENTS, COL_USERS, COL_PENDING_REGS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_REFERRALS, COL_NOTIFICATIONS, COL_TOPUP_INCOME, randomString, hashPassword, TEST_MODE, TEST_PAYMENT_AMOUNT } = require('./_shared.js');
 const { runQuery, addDoc, updateDoc, atomicCreditWallet } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
 
-const ALLOWED_AMOUNTS = [120, 540, 1200];
+const BASE_AMOUNTS = [120, 540, 1200];
+const ALLOWED_AMOUNTS = TEST_MODE ? [...BASE_AMOUNTS, TEST_PAYMENT_AMOUNT] : BASE_AMOUNTS;
 const ACCEPTED_UPI = '9655897523@ptyes';
 const OTP_EXPIRY_MS = 300000;
 const MAX_OTP_ATTEMPTS = 3;

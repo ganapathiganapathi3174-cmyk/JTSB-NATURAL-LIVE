@@ -56,6 +56,15 @@ const handlers = {
   getUPIOrderStatus: require('../handlers/getUPIOrderStatus.js'),
   webhookUPIConfirm: require('../handlers/webhookUPIConfirm.js'),
   retryUPIOrder: require('../handlers/retryUPIOrder.js'),
+  companionPayment: require('../handlers/companionPayment.js'),
+  getCompanionStatus: requireAdmin(require('../handlers/getCompanionStatus.js')),
+  getSponsorMarketplace: require('../handlers/getSponsorMarketplace.js'),
+  createSponsorTransfer: require('../handlers/createSponsorTransfer.js'),
+  getSponsorRequests: require('../handlers/getSponsorRequests.js'),
+  handleSponsorTransfer: require('../handlers/handleSponsorTransfer.js'),
+  getUserSponsorInfo: require('../handlers/getUserSponsorInfo.js'),
+  getAdminSponsorTransfers: requireAdmin(require('../handlers/getAdminSponsorTransfers.js')),
+  getPendingPaymentsQueue: requireAdmin(require('../handlers/getPendingPaymentsQueue.js')),
 };
 
 module.exports = async (req, res) => {

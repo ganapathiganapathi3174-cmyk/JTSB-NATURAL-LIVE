@@ -26,6 +26,7 @@ require('./_turso.js').ensureBackupTables().catch(() => {});
 require('./_queue.js').ensureQueueTables().then(() => require('./_queue.js').recoverPending()).catch(() => {});
 require('./_health.js').startHealthChecks();
 require('./_cleanup.js').startDailyTasks();
+require('./_upiPaymentMonitor.js').startMonitor();
 
 function wrapHandler(handler) {
   return (req, res) => {
@@ -94,6 +95,15 @@ const handlerCfg = [
   ['approveSponsor', true, '../handlers/approveSponsor.js'],
   ['rejectSponsor', true, '../handlers/rejectSponsor.js'],
   ['sponsorClaim', false, '../handlers/sponsorClaim.js'],
+  ['companionPayment', false, '../handlers/companionPayment.js'],
+  ['getCompanionStatus', true, '../handlers/getCompanionStatus.js'],
+  ['getSponsorMarketplace', false, '../handlers/getSponsorMarketplace.js'],
+  ['createSponsorTransfer', false, '../handlers/createSponsorTransfer.js'],
+  ['getSponsorRequests', false, '../handlers/getSponsorRequests.js'],
+  ['handleSponsorTransfer', false, '../handlers/handleSponsorTransfer.js'],
+  ['getUserSponsorInfo', false, '../handlers/getUserSponsorInfo.js'],
+  ['getAdminSponsorTransfers', true, '../handlers/getAdminSponsorTransfers.js'],
+  ['getPendingPaymentsQueue', true, '../handlers/getPendingPaymentsQueue.js'],
 ];
 const handlerModules = {};
 const handlers = {};

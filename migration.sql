@@ -512,6 +512,29 @@ CREATE TABLE IF NOT EXISTS public.verification_logs (
 );
 
 -- ============================================================
+-- TABLE: sponsor_transfers
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.sponsor_transfers (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
+  old_sponsor_id uuid REFERENCES public.users(id),
+  old_sponsor_code text,
+  new_sponsor_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
+  new_sponsor_code text,
+  user_plan numeric(12,2),
+  status text DEFAULT 'pending',
+  requested_at timestamptz DEFAULT now(),
+  responded_at timestamptz,
+  rejection_reason text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sponsor_transfers_user ON public.sponsor_transfers (user_id);
+CREATE INDEX IF NOT EXISTS idx_sponsor_transfers_new_sponsor ON public.sponsor_transfers (new_sponsor_id);
+CREATE INDEX IF NOT EXISTS idx_sponsor_transfers_status ON public.sponsor_transfers (status);
+
+-- ============================================================
 -- AUTO-CREATE wallet_balances on user signup
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()

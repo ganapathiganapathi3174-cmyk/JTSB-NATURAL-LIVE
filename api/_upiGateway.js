@@ -2,6 +2,15 @@ const crypto = require('crypto');
 
 const MERCHANT_NAME = 'JTSB Natural';
 const UPI_ID = '9655897523@ptyes';
+const DEFAULT_TIMEOUT_MINUTES = 10;
+
+const UPI_APPS = {
+  GOOGLE_PAY: { scheme: 'tez', pkg: 'com.google.android.apps.nbu.paisa.user' },
+  PHONE_PE: { scheme: 'phonepe', pkg: 'com.phonepe.app' },
+  PAYTM: { scheme: 'paytmmp', pkg: 'net.one97.paytm' },
+  BHIM: { scheme: 'bhim', pkg: 'in.org.npci.upiapp' },
+  AMAZON_PAY: { scheme: 'amazonpay', pkg: 'in.amazon.mShop.android.shopping' },
+};
 
 function log(tag, msg) {
   console.log(`[${new Date().toISOString().slice(0, 19).replace('T', ' ')}] [UPI-GATEWAY] [${tag}] ${msg}`);
@@ -29,6 +38,39 @@ function generateUPIIntentUrl(orderId, amount, description) {
     'mode=' + upiEncode('04'),
   ];
   return 'upi://pay?' + params.join('&');
+}
+
+function generateUPIIntentForApp(orderId, amount, description, appScheme) {
+  const upiUri = generateUPIIntentUrl(orderId, amount, description);
+  if (appScheme === 'tez') {
+    return 'tez://upi/pay?' + upiUri.split('?')[1];
+  }
+  if (appScheme === 'phonepe') {
+    return 'phonepe://pay?' + upiUri.split('?')[1];
+  }
+  if (appScheme === 'paytmmp') {
+    return 'paytmmp://pay?' + upiUri.split('?')[1];
+  }
+  if (appScheme === 'bhim') {
+    return 'bhim://upi/pay?' + upiUri.split('?')[1];
+  }
+  if (appScheme === 'amazonpay') {
+    return 'amazonpay://upi/pay?' + upiUri.split('?')[1];
+  }
+  return upiUri;
+}
+
+function getUPIDeeplinks(orderId, amount, description) {
+  const baseUri = generateUPIIntentUrl(orderId, amount, description);
+  const apps = {};
+  for (const [name, config] of Object.entries(UPI_APPS)) {
+    apps[name] = {
+      intent: generateUPIIntentForApp(orderId, amount, description, config.scheme),
+      packageName: config.pkg,
+      name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    };
+  }
+  return { baseUri, apps, upiId: UPI_ID, merchantName: MERCHANT_NAME };
 }
 
 const razorpayConfigured = !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
@@ -62,14 +104,15 @@ async function createRazorpayOrder(amount, orderId, description, customerInfo) {
 }
 
 async function createMockOrder(amount, orderId, description) {
-  const upiIntentUrl = generateUPIIntentUrl(orderId, amount, description);
-  log('MOCK', `Order created: id=${orderId}, amount=${amount}, upi=${upiIntentUrl}`);
+  const deeplinks = getUPIDeeplinks(orderId, amount, description);
+  log('MOCK', `Order created: id=${orderId}, amount=${amount}`);
   return {
     gatewayOrderId: orderId,
     amount,
     currency: 'INR',
     status: 'created',
-    upiIntentUrl,
+    upiIntentUrl: deeplinks.baseUri,
+    deeplinks,
   };
 }
 
@@ -116,6 +159,9 @@ module.exports = {
   getOrderStatusFromGateway,
   generateUPIIntentUrl,
   generateOrderId,
+  getUPIDeeplinks,
   UPI_ID,
   MERCHANT_NAME,
+  UPI_APPS,
+  DEFAULT_TIMEOUT_MINUTES,
 };

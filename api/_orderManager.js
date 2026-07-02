@@ -113,6 +113,7 @@ async function createUPIOrder(type, amount, userId, pendingRegId, plan) {
     type,
     status: ORDER_STATUS.PENDING,
     upiIntentUrl: gatewayResult.upiIntentUrl,
+    deeplinks: gatewayResult.deeplinks || null,
     razorpayKeyId: gatewayResult.razorpayKeyId || null,
     expiresAt,
     description,

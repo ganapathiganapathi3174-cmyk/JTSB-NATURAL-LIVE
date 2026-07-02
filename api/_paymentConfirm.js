@@ -1,12 +1,16 @@
 const {
   COL_USERS, COL_PENDING_REGS, COL_TOPUPS, COL_WALLET_BALANCES, COL_WALLET_TX,
   COL_PAYMENT_CONFIRM_SESSIONS, MAX_REFERRALS, randomString,
+  TEST_MODE, TEST_PAYMENT_AMOUNT,
 } = require('./_shared.js');
 const { runQuery, addDoc, writeDoc, updateDoc, getDoc, atomicCreditWallet } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
 const crypto = require('crypto');
 
-const ALLOWED_PLANS = { registration: [120, 500, 1000], topup: [120, 500, 1000] };
+const BASE_PLANS = { registration: [120, 500, 1000], topup: [120, 500, 1000] };
+const ALLOWED_PLANS = TEST_MODE
+  ? { registration: [...BASE_PLANS.registration, TEST_PAYMENT_AMOUNT], topup: [...BASE_PLANS.topup, TEST_PAYMENT_AMOUNT] }
+  : BASE_PLANS;
 const SESSION_TTL_MS = 30 * 60 * 1000;
 
 function log(msg) {

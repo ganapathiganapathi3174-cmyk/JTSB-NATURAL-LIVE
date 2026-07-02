@@ -1,25 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import QRCode from 'qrcode';
+import { useState, useEffect, useRef } from 'react';
 
-const DEFAULT_UPI_ID = '9655897523@ptyes';
-const DEFAULT_PAYEE_NAME = 'JTSB Natural';
-
-function upiEncode(val, keepAt) {
-  var s = encodeURIComponent(String(val)).replace(/%20/g, '%20');
-  if (keepAt) s = s.replace(/%40/g, '@');
-  return s;
-}
+const TEST_MODE = import.meta.env.VITE_TEST_MODE === 'true' || true;
 
 const REG_AMOUNTS = [
   { amount: 120, label: 'Basic Access' },
   { amount: 500, label: 'Premium Access' },
   { amount: 1000, label: 'VIP Access' },
+  ...(TEST_MODE ? [{ amount: 1, label: 'Test Payment' }] : []),
 ];
 
 const TOPUP_AMOUNTS = [
   { amount: 120, label: 'Basic Topup' },
   { amount: 500, label: 'Standard Topup' },
   { amount: 1000, label: 'Premium Topup' },
+  ...(TEST_MODE ? [{ amount: 1, label: 'Test Topup' }] : []),
 ];
 
 const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
@@ -31,103 +25,21 @@ export default function UpiPayment({ type, pendingRegId, userId, onSuccess, onEr
 
   const [selectedAmount, setSelectedAmount] = useState(null);
   const [step, setStep] = useState('select');
-  const [utr, setUtr] = useState('');
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false);
-  const [screenshotFile, setScreenshotFile] = useState(null);
-  const [screenshotPreview, setScreenshotPreview] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [screenshotUrl, setScreenshotUrl] = useState('');
-
   const [upiOrderId, setUpiOrderId] = useState(null);
   const [upiIntentUrl, setUpiIntentUrl] = useState(null);
   const [upiStatus, setUpiStatus] = useState(null);
   const [polling, setPolling] = useState(false);
-  const [paymentMode, setPaymentMode] = useState('auto');
 
-  const fileInputRef = useRef(null);
-  const canvasRef = useRef(null);
-  const copyTimeoutRef = useRef(null);
   const pollTimerRef = useRef(null);
   const pollStartRef = useRef(null);
 
   useEffect(() => {
     return () => {
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
   }, []);
-
-  const upiUri = selectedAmount
-    ? 'upi://pay?pa=' + upiEncode(DEFAULT_UPI_ID, true) +
-      '&pn=' + upiEncode(DEFAULT_PAYEE_NAME) +
-      '&am=' + upiEncode(selectedAmount.toFixed(2)) +
-      '&tr=' + upiEncode('QR-' + Date.now().toString(36).toUpperCase()) +
-      '&tn=' + upiEncode('Payment of \u20B9' + selectedAmount) +
-      '&cu=' + upiEncode('INR') +
-      '&mc=' + upiEncode('0000') +
-      '&mode=' + upiEncode('04')
-    : '';
-
-  useEffect(() => {
-    if (canvasRef.current && upiUri) {
-      QRCode.toCanvas(canvasRef.current, upiUri, {
-        width: 220, margin: 2,
-        color: { dark: '#ffffff', light: '#000000' },
-      }).catch(() => {});
-    }
-  }, [upiUri]);
-
-  useEffect(() => {
-    return () => {
-      if (screenshotPreview) URL.revokeObjectURL(screenshotPreview);
-    };
-  }, [screenshotPreview]);
-
-  const handleCopyUpiId = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(DEFAULT_UPI_ID);
-      setCopied(true);
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  }, []);
-
-  function handleFileSelect(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { setError('Screenshot must be under 10 MB'); return; }
-    if (!file.type.startsWith('image/')) { setError('Please select an image file'); return; }
-    setScreenshotFile(file);
-    setScreenshotPreview(URL.createObjectURL(file));
-    setError('');
-    setScreenshotUrl('');
-  }
-
-  async function uploadScreenshotViaApi(file) {
-    setUploading(true);
-    try {
-      const reader = new FileReader();
-      const base64 = await new Promise((resolve, reject) => {
-        reader.onload = () => { const result = reader.result; resolve(result.split(',')[1]); };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const resp = await fetch(`${FUNCTIONS_BASE}/uploadScreenshot`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, fileName: file.name }),
-        signal: AbortSignal.timeout(30000),
-      });
-      if (!resp.ok) { const errData = await resp.json().catch(() => ({})); throw new Error(errData.error || 'Upload failed'); }
-      const data = await resp.json();
-      setScreenshotUrl(data.url);
-      return data.url;
-    } catch (e) { throw new Error('Failed to upload screenshot: ' + e.message); }
-    finally { setUploading(false); }
-  }
 
   async function createUPIOrderAndPay() {
     setError('');
@@ -228,49 +140,9 @@ export default function UpiPayment({ type, pendingRegId, userId, onSuccess, onEr
     finally { setVerifying(false); }
   }
 
-  async function handleVerify() {
-    setError('');
-    if (!selectedAmount) { setError('Please select an amount'); return; }
-    if (!screenshotFile) { setError('Please upload your payment screenshot'); return; }
-    const utrTrimmed = utr.trim();
-    if (!utrTrimmed) { setError('Please enter the transaction reference (UTR)'); return; }
-    if (utrTrimmed.length < 12) { setError('Transaction reference must be at least 12 characters'); return; }
-    if (!paymentDate) { setError('Please enter the payment date'); return; }
-
-    setVerifying(true);
-    try {
-      const uploadedUrl = screenshotUrl || await uploadScreenshotViaApi(screenshotFile);
-      if (!uploadedUrl) throw new Error('Screenshot upload failed');
-
-      const body = { type, amount: selectedAmount, utr: utrTrimmed, paymentDate, upiId: DEFAULT_UPI_ID, screenshotUrl: uploadedUrl };
-      if (type === 'registration') { if (!pendingRegId) { setError('Registration session expired. Please refresh.'); setVerifying(false); return; } body.pendingRegId = pendingRegId; }
-      else { if (!userId) { setError('User session not found. Please login again.'); setVerifying(false); return; } body.userId = userId; }
-
-      const resp = await fetch(`${FUNCTIONS_BASE}/verifyUPIPayment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(120000),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Verification failed');
-      setStep('success');
-      if (onSuccess) onSuccess(data);
-    } catch (err) {
-      const msg = err.message || 'Verification failed';
-      setError(msg);
-      if (onError) onError(msg);
-    } finally { setVerifying(false); }
-  }
-
   function handleReset() {
     setStep('select');
     setSelectedAmount(null);
-    setUtr('');
-    setPaymentDate(new Date().toISOString().split('T')[0]);
-    setScreenshotFile(null);
-    setScreenshotPreview(null);
-    setScreenshotUrl('');
     setUpiOrderId(null);
     setUpiIntentUrl(null);
     setUpiStatus(null);
@@ -326,15 +198,6 @@ export default function UpiPayment({ type, pendingRegId, userId, onSuccess, onEr
         <div className="alert alert-error" style={{ marginBottom: '1rem', whiteSpace: 'pre-line' }}>{error}</div>
       )}
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-        <button type="button" className={`btn ${paymentMode === 'auto' ? 'btn-primary' : 'btn-ghost'}`} style={{ flex: 1, fontSize: '0.85rem' }} onClick={() => setPaymentMode('auto')}>
-          Auto Pay (UPI)
-        </button>
-        <button type="button" className={`btn ${paymentMode === 'manual' ? 'btn-primary' : 'btn-ghost'}`} style={{ flex: 1, fontSize: '0.85rem' }} onClick={() => setPaymentMode('manual')}>
-          Upload Screenshot
-        </button>
-      </div>
-
       {step === 'select' && (
         <div className="upi-amount-selector">
           <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>
@@ -351,69 +214,12 @@ export default function UpiPayment({ type, pendingRegId, userId, onSuccess, onEr
             ))}
           </div>
 
-          {selectedAmount && paymentMode === 'auto' && (
+          {selectedAmount && (
             <button type="button" className={`btn btn-primary w-full${verifying ? ' btn-loading' : ''}`} style={{ marginTop: '0.75rem' }} onClick={createUPIOrderAndPay} disabled={verifying}>
               {verifying ? 'Creating order...' : `Pay ₹${selectedAmount} via UPI`}
             </button>
           )}
-
-          {selectedAmount && paymentMode === 'manual' && (
-            <p className="muted" style={{ textAlign: 'center', marginTop: '0.5rem', fontSize: '0.85rem' }}>Proceed to scan QR and upload screenshot</p>
-          )}
         </div>
-      )}
-
-      {step !== 'upi_poll' && selectedAmount && paymentMode === 'manual' && (
-        <>
-          <div className="upi-qr-section" style={{ textAlign: 'center', marginTop: '1rem' }}>
-            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>Pay ₹{selectedAmount}</h3>
-            <div style={{ display: 'inline-block', padding: '8px', background: '#fff', borderRadius: '12px' }}>
-              <canvas ref={canvasRef} style={{ width: 220, height: 220, display: 'block' }} />
-            </div>
-            <p style={{ margin: '0.75rem 0 0.25rem', fontSize: '0.85rem', color: 'var(--muted)' }}>Scan with any UPI app</p>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--surface, #f8f8f8)', borderRadius: '8px', fontSize: '0.95rem', fontFamily: 'monospace' }}>
-              <span>{DEFAULT_UPI_ID}</span>
-              <button type="button" onClick={handleCopyUpiId} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>{copied ? 'Copied!' : 'Copy'}</button>
-            </div>
-          </div>
-
-          <div className="upi-upload-section" style={{ marginTop: '1.25rem' }}>
-            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>Upload Payment Screenshot</h3>
-            <div onClick={() => fileInputRef.current?.click()} style={{ border: '2px dashed var(--border, #d1d5db)', borderRadius: '12px', padding: '2rem 1rem', textAlign: 'center', cursor: 'pointer', background: screenshotPreview ? 'var(--surface, #f8f8f8)' : 'transparent', transition: 'all 0.2s' }}>
-              {screenshotPreview ? (
-                <div>
-                  <img src={screenshotPreview} alt="Screenshot preview" style={{ maxHeight: 200, maxWidth: '100%', borderRadius: '8px', marginBottom: '0.5rem' }} />
-                  <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: 0 }}>Tap to change screenshot</p>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem', opacity: 0.5 }}>📷</div>
-                  <p style={{ margin: 0, fontWeight: 600 }}>Tap to upload screenshot</p>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.25rem' }}>Upload the payment confirmation from your UPI app</p>
-                </div>
-              )}
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
-            </div>
-          </div>
-
-          <div className="upi-verify-section" style={{ marginTop: '1.25rem' }}>
-            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>Verification Details</h3>
-            <div className="field">
-              <label>Transaction Reference (UTR) *</label>
-              <input value={utr} onChange={(e) => setUtr(e.target.value)} placeholder="Enter UTR from your UPI app" style={{ fontFamily: 'monospace' }} />
-            </div>
-            <div className="field">
-              <label>Payment Date *</label>
-              <input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} max={new Date().toISOString().split('T')[0]} />
-            </div>
-            <button type="button" className={`btn btn-primary w-full${(verifying || uploading) ? ' btn-loading' : ''}`} onClick={handleVerify} disabled={verifying || uploading || !utr.trim() || !screenshotFile} style={{ marginTop: '0.5rem' }}>
-              {uploading ? 'Uploading screenshot...' : verifying ? 'Verifying...' : 'Verify Payment'}
-            </button>
-            <button type="button" className="btn btn-ghost w-full" onClick={handleReset} style={{ marginTop: '0.5rem', fontSize: '0.85rem' }} disabled={verifying || uploading}>
-              Back to amount selection
-            </button>
-          </div>
-        </>
       )}
     </div>
   );

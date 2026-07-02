@@ -1,5 +1,6 @@
-const { COL_USERS, COL_UPI_PAYMENTS, COL_PENDING_REGS, COL_TOPUPS, COL_SPONSOR_CLAIMS } = require('../api/_shared.js');
+const { COL_USERS, COL_UPI_PAYMENTS, COL_PENDING_REGS, COL_TOPUPS, COL_SPONSOR_CLAIMS, TEST_MODE, TEST_PAYMENT_AMOUNT, TEST_UPI_ID, TEST_PAYEE_NAME } = require('../api/_shared.js');
 const { runQuery, getSupabaseClient } = require('../api/_supabase.js');
+const { getCompanionStatus } = require('../api/_companionAuth.js');
 
 module.exports = async (req, res) => {
   try {
@@ -164,6 +165,8 @@ module.exports = async (req, res) => {
 
     console.log(`[DASHBOARD] Enriched ${pendingPayments.length} payments from ${upiPayments.length} raw rows`);
 
+    const companionState = getCompanionStatus();
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       success: true,
@@ -172,6 +175,8 @@ module.exports = async (req, res) => {
       pendingPayments,
       sponsorClaims,
       _diagnostics: diagnostics,
+      _companion: companionState,
+      _testMode: TEST_MODE ? { enabled: true, amount: TEST_PAYMENT_AMOUNT, upiId: TEST_UPI_ID, payeeName: TEST_PAYEE_NAME } : { enabled: false },
     }));
   } catch (err) {
     console.error('[getAdminDashboardData] Error:', err.message);

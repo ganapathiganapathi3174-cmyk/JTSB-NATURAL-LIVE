@@ -1,5 +1,13 @@
 const crypto = require('crypto');
 
+// ── TEST MODE CONFIGURATION ──
+// Set TEST_MODE=true to use ₹1 fixed amount across all payment modules
+// All existing business logic is preserved: referral, wallet, sponsor, OTP
+const TEST_MODE = true;
+const TEST_PAYMENT_AMOUNT = 1;
+const TEST_UPI_ID = '9655897523@ptyes';
+const TEST_PAYEE_NAME = 'Test Payment';
+
 // Polyfill crypto.randomUUID for Node 18 compatibility
 if (!crypto.randomUUID) {
   crypto.randomUUID = function randomUUIDPolyfill() {
@@ -36,6 +44,7 @@ const COL_UNIQUES = 'uniques';
 const COL_SPONSOR_DATA = 'sponsor_data';
 const COL_SPONSOR_CLAIMS = 'sponsor_claims';
 const COL_SMS_SESSIONS = 'paymentSessions';
+const COL_SPONSOR_TRANSFERS = 'sponsor_transfers';
 const MAX_REFERRALS = 2;
 
 function randomString(length) {
@@ -58,5 +67,6 @@ module.exports = {
   COL_UPI_PAYMENTS, COL_TOPUP_INCOME, COL_VERIFICATION_LOGS, COL_DELETION_AUDIT_LOGS,
   COL_REFERRALS, COL_NOTIFICATIONS, COL_CHAT_MESSAGES, COL_CHAT_CONVOS,
   COL_ADMINS, COL_UNIQUES, COL_SPONSOR_DATA, COL_SPONSOR_CLAIMS, COL_PAYMENT_CONFIRM_SESSIONS, COL_SMS_SESSIONS,
-  MAX_REFERRALS, randomString, hashPassword, crypto, generateIdempotencyKey,
+  COL_SPONSOR_TRANSFERS, MAX_REFERRALS, randomString, hashPassword, crypto, generateIdempotencyKey,
+  TEST_MODE, TEST_PAYMENT_AMOUNT, TEST_UPI_ID, TEST_PAYEE_NAME,
 };

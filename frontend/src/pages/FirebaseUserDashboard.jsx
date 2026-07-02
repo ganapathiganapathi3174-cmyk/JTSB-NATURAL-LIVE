@@ -571,6 +571,12 @@ return (
               <Link to="/fb/chat" className="profile-chat-link">
                 Chat
               </Link>
+              <Link to="/fb/sponsor-marketplace" className="profile-chat-link" style={{ marginLeft: '0.5rem' }}>
+                Sponsor Market
+              </Link>
+              <Link to="/fb/sponsor-requests" className="profile-chat-link" style={{ marginLeft: '0.5rem' }}>
+                Sponsor Requests
+              </Link>
             </div>
           </div>
 

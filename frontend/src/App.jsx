@@ -21,6 +21,10 @@ const FirebaseAdminTopupsPage = lazy(() => import('./pages/FirebaseAdminTopupsPa
 const FirebaseAdminUPIPaymentsPage = lazy(() => import('./pages/FirebaseAdminUPIPaymentsPage.jsx'));
 const FirebaseAdminToolsPage = lazy(() => import('./pages/FirebaseAdminToolsPage.jsx'));
 const FirebaseAdminQueuePage = lazy(() => import('./pages/FirebaseAdminQueuePage.jsx'));
+const SponsorMarketplacePage = lazy(() => import('./pages/SponsorMarketplacePage.jsx'));
+const SponsorRequestsPage = lazy(() => import('./pages/SponsorRequestsPage.jsx'));
+const AdminSponsorTransfersPage = lazy(() => import('./pages/AdminSponsorTransfersPage.jsx'));
+const AdminPendingPaymentsPage = lazy(() => import('./pages/AdminPendingPaymentsPage.jsx'));
 
 const SESSION_DURATION = 24 * 3600 * 1000;
 
@@ -106,6 +110,8 @@ export default function App() {
         <Route path="/fb/dashboard" element={<ProtectedFirebase><FirebaseUserDashboard /></ProtectedFirebase>} />
         <Route path="/fb/messages" element={<ProtectedFirebase><UserMessageCenter /></ProtectedFirebase>} />
         <Route path="/fb/chat" element={<ProtectedFirebase><UserChat /></ProtectedFirebase>} />
+        <Route path="/fb/sponsor-marketplace" element={<ProtectedFirebase><SponsorMarketplacePage /></ProtectedFirebase>} />
+        <Route path="/fb/sponsor-requests" element={<ProtectedFirebase><SponsorRequestsPage /></ProtectedFirebase>} />
 
         {/* Firebase Admin routes */}
         <Route path="/fb-admin" element={<FirebaseAdminLoginPage />} />
@@ -120,6 +126,8 @@ export default function App() {
         <Route path="/fb-admin/upi-payments" element={<ProtectedFirebaseAdmin><FirebaseAdminUPIPaymentsPage /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/tools" element={<ProtectedFirebaseAdmin><FirebaseAdminToolsPage /></ProtectedFirebaseAdmin>} />
         <Route path="/fb-admin/queue" element={<ProtectedFirebaseAdmin><FirebaseAdminQueuePage /></ProtectedFirebaseAdmin>} />
+        <Route path="/fb-admin/sponsor-transfers" element={<ProtectedFirebaseAdmin><AdminSponsorTransfersPage /></ProtectedFirebaseAdmin>} />
+        <Route path="/fb-admin/pending-queue" element={<ProtectedFirebaseAdmin><AdminPendingPaymentsPage /></ProtectedFirebaseAdmin>} />
 
         <Route path="*" element={<Navigate to="/fb/register" replace />} />
       </Routes>
