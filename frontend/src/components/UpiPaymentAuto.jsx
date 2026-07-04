@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import MobilePaymentOption from './MobilePaymentOption.jsx';
 
 const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 const UPI_POLL_INTERVAL = 5000;
@@ -49,6 +50,7 @@ export default function UpiPaymentAuto({ type, pendingRegId, userId, onSuccess, 
   const [showQR, setShowQR] = useState(false);
   const [qrTimer, setQrTimer] = useState(null);
   const [elapsed, setElapsed] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState('upi');
 
   const pollTimerRef = useRef(null);
   const pollStartRef = useRef(null);
@@ -326,53 +328,79 @@ export default function UpiPaymentAuto({ type, pendingRegId, userId, onSuccess, 
 
           {selectedAmount && (
             <div style={{ marginTop: '1rem' }}>
-              {showAppSelector && deviceInfo?.isMobile && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', textAlign: 'center' }}>
-                    Choose your UPI app:
-                  </p>
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    {deviceInfo.apps.filter(a => !a.universal).map(app => (
-                      <button key={app.id} type="button"
-                        onClick={() => createUPIOrderAndPay(app.id)}
+              <div className="payment-method-tabs">
+                <button type="button" className={`payment-method-tab${paymentMethod === 'upi' ? ' active' : ''}`}
+                  onClick={() => setPaymentMethod('upi')}>
+                  <span className="tab-icon">📱</span> Pay via UPI
+                </button>
+                <button type="button" className={`payment-method-tab${paymentMethod === 'mobile' ? ' active' : ''}`}
+                  onClick={() => setPaymentMethod('mobile')}>
+                  <span className="tab-icon">📞</span> Pay via Mobile
+                </button>
+              </div>
+
+              {paymentMethod === 'upi' && (
+                <>
+                  {showAppSelector && deviceInfo?.isMobile && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', textAlign: 'center' }}>
+                        Choose your UPI app:
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {deviceInfo.apps.filter(a => !a.universal).map(app => (
+                          <button key={app.id} type="button"
+                            onClick={() => createUPIOrderAndPay(app.id)}
+                            disabled={verifying}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '0.4rem',
+                              padding: '0.5rem 0.75rem', borderRadius: '8px',
+                              border: '1px solid var(--border)', background: 'white',
+                              cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500,
+                            }}>
+                            <span style={{
+                              width: 24, height: 24, borderRadius: '50%',
+                              background: app.color, color: '#fff',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.65rem', fontWeight: 700,
+                            }}>{app.icon}</span>
+                            {app.name}
+                          </button>
+                        ))}
+                      </div>
+                      <button type="button"
+                        onClick={() => createUPIOrderAndPay('GENERIC')}
                         disabled={verifying}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: '0.4rem',
-                          padding: '0.5rem 0.75rem', borderRadius: '8px',
-                          border: '1px solid var(--border)', background: 'white',
-                          cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500,
+                          display: 'block', margin: '0.5rem auto 0',
+                          padding: '0.4rem 1rem', borderRadius: '6px',
+                          border: '1px dashed var(--border)', background: 'transparent',
+                          cursor: 'pointer', fontSize: '0.8rem', color: 'var(--muted)',
                         }}>
-                        <span style={{
-                          width: 24, height: 24, borderRadius: '50%',
-                          background: app.color, color: '#fff',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '0.65rem', fontWeight: 700,
-                        }}>{app.icon}</span>
-                        {app.name}
+                        Other UPI App
                       </button>
-                    ))}
-                  </div>
-                  <button type="button"
-                    onClick={() => createUPIOrderAndPay('GENERIC')}
-                    disabled={verifying}
-                    style={{
-                      display: 'block', margin: '0.5rem auto 0',
-                      padding: '0.4rem 1rem', borderRadius: '6px',
-                      border: '1px dashed var(--border)', background: 'transparent',
-                      cursor: 'pointer', fontSize: '0.8rem', color: 'var(--muted)',
-                    }}>
-                    Other UPI App
-                  </button>
-                </div>
+                    </div>
+                  )}
+                  {(!deviceInfo?.isMobile || !showAppSelector) && (
+                    <button type="button"
+                      className={`btn btn-primary w-full${verifying ? ' btn-loading' : ''}`}
+                      onClick={() => createUPIOrderAndPay('GENERIC')}
+                      disabled={verifying}
+                      style={{ marginTop: '0.5rem' }}>
+                      {verifying ? 'Creating order...' : `Pay ₹${selectedAmount} via UPI`}
+                    </button>
+                  )}
+                </>
               )}
-              {(!deviceInfo?.isMobile || !showAppSelector) && (
-                <button type="button"
-                  className={`btn btn-primary w-full${verifying ? ' btn-loading' : ''}`}
-                  onClick={() => createUPIOrderAndPay('GENERIC')}
-                  disabled={verifying}
-                  style={{ marginTop: '0.5rem' }}>
-                  {verifying ? 'Creating order...' : `Pay ₹${selectedAmount} via UPI`}
-                </button>
+
+              {paymentMethod === 'mobile' && (
+                <MobilePaymentOption
+                  type={type}
+                  amount={selectedAmount}
+                  pendingRegId={pendingRegId}
+                  userId={userId}
+                  onSuccess={onSuccess}
+                  onError={onError}
+                />
               )}
             </div>
           )}

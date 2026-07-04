@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import MobilePaymentOption from './MobilePaymentOption.jsx';
 
 const TEST_MODE = import.meta.env.VITE_TEST_MODE === 'true' || true;
 
@@ -31,6 +32,7 @@ export default function UpiPayment({ type, pendingRegId, userId, onSuccess, onEr
   const [upiIntentUrl, setUpiIntentUrl] = useState(null);
   const [upiStatus, setUpiStatus] = useState(null);
   const [polling, setPolling] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('upi');
 
   const pollTimerRef = useRef(null);
   const pollStartRef = useRef(null);
@@ -215,9 +217,35 @@ export default function UpiPayment({ type, pendingRegId, userId, onSuccess, onEr
           </div>
 
           {selectedAmount && (
-            <button type="button" className={`btn btn-primary w-full${verifying ? ' btn-loading' : ''}`} style={{ marginTop: '0.75rem' }} onClick={createUPIOrderAndPay} disabled={verifying}>
-              {verifying ? 'Creating order...' : `Pay ₹${selectedAmount} via UPI`}
-            </button>
+            <div style={{ marginTop: '0.75rem' }}>
+              <div className="payment-method-tabs">
+                <button type="button" className={`payment-method-tab${paymentMethod === 'upi' ? ' active' : ''}`}
+                  onClick={() => setPaymentMethod('upi')}>
+                  <span className="tab-icon">📱</span> Pay via UPI
+                </button>
+                <button type="button" className={`payment-method-tab${paymentMethod === 'mobile' ? ' active' : ''}`}
+                  onClick={() => setPaymentMethod('mobile')}>
+                  <span className="tab-icon">📞</span> Pay via Mobile
+                </button>
+              </div>
+
+              {paymentMethod === 'upi' && (
+                <button type="button" className={`btn btn-primary w-full${verifying ? ' btn-loading' : ''}`} onClick={createUPIOrderAndPay} disabled={verifying}>
+                  {verifying ? 'Creating order...' : `Pay ₹${selectedAmount} via UPI`}
+                </button>
+              )}
+
+              {paymentMethod === 'mobile' && (
+                <MobilePaymentOption
+                  type={type}
+                  amount={selectedAmount}
+                  pendingRegId={pendingRegId}
+                  userId={userId}
+                  onSuccess={onSuccess}
+                  onError={onError}
+                />
+              )}
+            </div>
           )}
         </div>
       )}

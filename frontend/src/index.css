@@ -8948,4 +8948,234 @@ html {
   pointer-events: none;
   opacity: 0.7;
 }
+/* ===== Mobile Payment Option ===== */
+
+.mobile-payment-option {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 0.5rem 0;
+}
+
+.mobile-number-card {
+  background: linear-gradient(135deg, var(--primary-bg, rgba(99,102,241,0.06)), rgba(99,102,241,0.02));
+  border: 1.5px solid var(--primary, #6366f1);
+  border-radius: 14px;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+
+.mobile-number-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--primary, #6366f1);
+  margin-bottom: 0.4rem;
+}
+
+.mobile-number-display {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text, #1e293b);
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  margin: 0.25rem 0;
+}
+
+.mobile-number-sub {
+  font-size: 0.78rem;
+  color: var(--muted, #64748b);
+  margin-top: 0.25rem;
+}
+
+.mobile-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.mobile-app-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 400px) {
+  .mobile-app-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.mobile-app-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.65rem 0.25rem;
+  border-radius: 10px;
+  border: 1.5px solid var(--border, #e2e8f0);
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.8rem;
+}
+
+.mobile-app-btn:hover:not(:disabled) {
+  border-color: var(--app-color, var(--primary));
+  background: color-mix(in srgb, var(--app-color, var(--primary)) 6%, white);
+  transform: translateY(-1px);
+}
+
+.mobile-app-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mobile-app-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--app-color, #6b7280);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.mobile-app-name {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text, #1e293b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.mobile-divider {
+  display: flex;
+  align-items: center;
+  margin: 0.75rem 0;
+  gap: 0.75rem;
+}
+
+.mobile-divider::before,
+.mobile-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border, #e2e8f0);
+}
+
+.mobile-divider span {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.mobile-fallback {
+  text-align: center;
+}
+
+.mobile-qr-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 0;
+  animation: fadeIn 0.3s ease;
+}
+
+.mobile-upi-id-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 8px;
+  border: 1px solid var(--border, #e2e8f0);
+}
+
+.mobile-upi-id-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted, #64748b);
+}
+
+.mobile-upi-id-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text, #1e293b);
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+.qr-code-display {
+  display: flex;
+  justify-content: center;
+}
+
+.qr-code-display canvas {
+  max-width: 100%;
+  height: auto !important;
+}
+
+/* ===== Payment Method Tabs ===== */
+
+.payment-method-tabs {
+  display: flex;
+  gap: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid var(--border, #e2e8f0);
+  margin-bottom: 1rem;
+}
+
+.payment-method-tab {
+  flex: 1;
+  padding: 0.65rem 0.5rem;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: white;
+  color: var(--muted, #64748b);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.payment-method-tab:not(:last-child) {
+  border-right: 1px solid var(--border, #e2e8f0);
+}
+
+.payment-method-tab.active {
+  background: var(--primary, #6366f1);
+  color: #fff;
+}
+
+.payment-method-tab:hover:not(.active) {
+  background: var(--bg-secondary, #f8fafc);
+  color: var(--text, #1e293b);
+}
+
+.payment-method-tab .tab-icon {
+  font-size: 1rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* --- End of all CSS --- */

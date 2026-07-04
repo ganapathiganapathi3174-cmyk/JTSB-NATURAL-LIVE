@@ -2,6 +2,7 @@ const crypto = require('crypto');
 
 const MERCHANT_NAME = 'JTSB Natural';
 const UPI_ID = '9655897523@ptyes';
+const MOBILE_NUMBER = '9655897523';
 const DEFAULT_TIMEOUT_MINUTES = 10;
 
 const UPI_APPS = {
@@ -58,6 +59,53 @@ function generateUPIIntentForApp(orderId, amount, description, appScheme) {
     return 'amazonpay://upi/pay?' + upiUri.split('?')[1];
   }
   return upiUri;
+}
+
+function generateMobileUPIIntentUrl(orderId, amount, description) {
+  const params = [
+    'pa=' + upiEncode(MOBILE_NUMBER + '@upi', true),
+    'pn=' + upiEncode(MERCHANT_NAME),
+    'am=' + upiEncode(amount.toFixed(2)),
+    'tr=' + upiEncode(orderId),
+    'tn=' + upiEncode((description || 'Payment').substring(0, 30)),
+    'cu=' + upiEncode('INR'),
+    'mc=' + upiEncode('0000'),
+    'mode=' + upiEncode('04'),
+  ];
+  return 'upi://pay?' + params.join('&');
+}
+
+function generateMobileUPIIntentForApp(orderId, amount, description, appScheme) {
+  const upiUri = generateMobileUPIIntentUrl(orderId, amount, description);
+  if (appScheme === 'tez') {
+    return 'tez://upi/pay?' + upiUri.split('?')[1];
+  }
+  if (appScheme === 'phonepe') {
+    return 'phonepe://pay?' + upiUri.split('?')[1];
+  }
+  if (appScheme === 'paytmmp') {
+    return 'paytmmp://pay?' + upiUri.split('?')[1];
+  }
+  if (appScheme === 'bhim') {
+    return 'bhim://upi/pay?' + upiUri.split('?')[1];
+  }
+  if (appScheme === 'amazonpay') {
+    return 'amazonpay://upi/pay?' + upiUri.split('?')[1];
+  }
+  return upiUri;
+}
+
+function getMobileUPIDeeplinks(orderId, amount, description) {
+  const baseUri = generateMobileUPIIntentUrl(orderId, amount, description);
+  const apps = {};
+  for (const [name, config] of Object.entries(UPI_APPS)) {
+    apps[name] = {
+      intent: generateMobileUPIIntentForApp(orderId, amount, description, config.scheme),
+      packageName: config.pkg,
+      name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    };
+  }
+  return { baseUri, apps, mobileNumber: MOBILE_NUMBER, upiId: UPI_ID, merchantName: MERCHANT_NAME };
 }
 
 function getUPIDeeplinks(orderId, amount, description) {
@@ -161,6 +209,7 @@ module.exports = {
   generateOrderId,
   getUPIDeeplinks,
   UPI_ID,
+  MOBILE_NUMBER,
   MERCHANT_NAME,
   UPI_APPS,
   DEFAULT_TIMEOUT_MINUTES,
