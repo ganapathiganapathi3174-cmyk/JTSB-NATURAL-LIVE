@@ -1,4 +1,4 @@
-const { createUPIOrder } = require('../api/_orderManager.js');
+const { createPaymentOrder } = require('../api/_paymentOrderManager.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,7 +8,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
 
   try {
-    const { type, amount, userId, pendingRegId, plan } = req.body || {};
+    const { type, amount, userId, pendingRegId } = req.body || {};
     const errors = [];
     if (!type || !['registration', 'topup'].includes(type)) errors.push('type must be registration or topup');
     if (!amount || amount < 1) errors.push('Valid amount is required');
@@ -16,15 +16,11 @@ module.exports = async (req, res) => {
     if (type === 'topup' && !userId) errors.push('userId is required for topup');
     if (errors.length) { res.writeHead(400); res.end(JSON.stringify({ error: errors.join('. ') })); return; }
 
-
-    const result = await createUPIOrder(type, Number(amount), userId || null, pendingRegId || null, plan || null);
-
-    res.writeHead(200);
-    res.end(JSON.stringify(result));
+    const result = await createPaymentOrder(type, Number(amount), userId || null, pendingRegId || null);
+    res.writeHead(200); res.end(JSON.stringify(result));
   } catch (err) {
     const status = err.status || 500;
-    console.error('[createUPIOrder] Error:', err.message);
-    res.writeHead(status);
-    res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
+    console.error('[createPaymentOrder] Error:', err.message);
+    res.writeHead(status); res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
   }
 };

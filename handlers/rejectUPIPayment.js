@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
 
     // ATOMIC: Only reject if currently processable
     const claimed = await conditionalUpdateDoc(COL_UPI_PAYMENTS, paymentId, [
-      { field: 'status', op: 'IN', value: ['pending', 'manual_review', 'verifying'] },
+      { field: 'status', op: 'IN', value: ['pending', 'manual_review', 'pending_review', 'verifying'] },
     ], { status: 'rejected', rejection_reasons: reason ? [reason] : [], verified_at: new Date().toISOString() });
 
     if (claimed === 0) {

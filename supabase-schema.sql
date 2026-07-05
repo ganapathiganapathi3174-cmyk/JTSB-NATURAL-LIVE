@@ -326,13 +326,26 @@ create table if not exists public.topup_audit_log (
 create table if not exists public.payment_sessions (
   id text primary key,
   user_id text,
+  pending_reg_id text,
   type text default 'topup',
   amount numeric,
+  expected_amount numeric,
+  expected_upi_id text,
   status text default 'created',
+  verification_status text,
+  verification_score numeric(5,2),
+  screenshot_url text,
+  ocr_result jsonb,
+  rejection_reasons jsonb,
+  final_score numeric(5,2),
+  customer_email text,
+  customer_name text,
   paymentId text,
   expires_at timestamptz,
   completedAt timestamptz,
-  createdAt timestamptz default now()
+  createdAt timestamptz default now(),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
 
 -- ============================================================

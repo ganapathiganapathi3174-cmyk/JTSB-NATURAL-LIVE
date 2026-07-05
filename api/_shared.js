@@ -29,7 +29,7 @@ const COL_WALLET_TX = 'wallet_transactions';
 const COL_PENDING_REGS = 'pending_registrations';
 const COL_PROCESSED_PAYMENTS = 'processed_payments';
 const COL_SESSIONS = 'payment_sessions';
-// COL_RAZORPAY_ORDERS removed — webhook flow deprecated
+const COL_ORDERS = 'payment_sessions';
 const COL_UPI_PAYMENTS = 'upi_payments';
 const COL_TOPUP_INCOME = 'topup_referral_income';
 const COL_VERIFICATION_LOGS = 'verification_logs';
@@ -46,6 +46,7 @@ const COL_SPONSOR_CLAIMS = 'sponsor_claims';
 const COL_SMS_SESSIONS = 'paymentSessions';
 const COL_SPONSOR_TRANSFERS = 'sponsor_transfers';
 const MAX_REFERRALS = 2;
+const ADMIN_UPI_ID = '9655897523@ptyes';
 
 function randomString(length) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -63,10 +64,10 @@ function hashPassword(password) {
 
 module.exports = {
   COL_USERS, COL_TOPUPS, COL_WALLET_BALANCES, COL_WALLET_TX,
-  COL_PENDING_REGS, COL_PROCESSED_PAYMENTS, COL_SESSIONS,
+  COL_PENDING_REGS, COL_PROCESSED_PAYMENTS, COL_SESSIONS, COL_ORDERS,
   COL_UPI_PAYMENTS, COL_TOPUP_INCOME, COL_VERIFICATION_LOGS, COL_DELETION_AUDIT_LOGS,
   COL_REFERRALS, COL_NOTIFICATIONS, COL_CHAT_MESSAGES, COL_CHAT_CONVOS,
   COL_ADMINS, COL_UNIQUES, COL_SPONSOR_DATA, COL_SPONSOR_CLAIMS, COL_PAYMENT_CONFIRM_SESSIONS, COL_SMS_SESSIONS,
   COL_SPONSOR_TRANSFERS, MAX_REFERRALS, randomString, hashPassword, crypto, generateIdempotencyKey,
-  TEST_MODE, TEST_PAYMENT_AMOUNT, TEST_UPI_ID, TEST_PAYEE_NAME,
+  TEST_MODE, TEST_PAYMENT_AMOUNT, TEST_UPI_ID, TEST_PAYEE_NAME, ADMIN_UPI_ID,
 };

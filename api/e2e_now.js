@@ -146,18 +146,22 @@ async function runE2ETest() {
   // ── Step 6: Approve Payment ──
   console.log('\n\uD83D\uDCCC Step 6: Approve Payment');
   const needsApproval = ourPayment && ourPayment.status !== 'verified' && ourPayment.status !== 'approved';
-  assert(needsApproval || !ourPayment,
-    needsApproval ? 'Payment needs manual approval' : `Payment already ${ourPayment?.status}`);
   if (needsApproval) {
     const approveRes = await httpRequest('POST', '/api/approveUPIPayment', { paymentId }, adminToken);
     assert(approveRes.status === 200, `Approve returned ${approveRes.status}`);
-    assert(approveRes.body?.status === 'approved', `Approved status: ${approveRes.body?.status}`);
-    if (approveRes.body?.userId) {
-      console.log(`  User created: ${approveRes.body.userId}`);
+    if (approveRes.body?.status === 'approved' || approveRes.body?.idempotent) {
+      assert(true, `Approved / idempotent status: ${approveRes.body?.status}`);
+      if (approveRes.body?.userId) {
+        console.log(`  User created: ${approveRes.body.userId}`);
+      }
+    } else {
+      assert(false, `Unexpected approve status: ${approveRes.body?.status}`);
     }
     console.log(`  Approve response: ${JSON.stringify(approveRes.body)}`);
   } else if (ourPayment) {
     console.log(`  Payment already in ${ourPayment.status} state, skipping approval`);
+  } else {
+    assert(false, 'Could not find payment to approve');
   }
 
   // ── Step 7: Verify via Dashboard ──

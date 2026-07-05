@@ -1,4 +1,4 @@
-const { getOrderStatus } = require('../api/_orderManager.js');
+const { getPaymentOrder } = require('../api/_paymentOrderManager.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,14 +16,23 @@ module.exports = async (req, res) => {
     }
     if (!orderId) { res.writeHead(400); res.end(JSON.stringify({ error: 'orderId is required' })); return; }
 
-    const order = await getOrderStatus(orderId);
+    const order = await getPaymentOrder(orderId);
     if (!order) { res.writeHead(404); res.end(JSON.stringify({ error: 'Order not found' })); return; }
 
-    res.writeHead(200);
-    res.end(JSON.stringify(order));
+    res.writeHead(200); res.end(JSON.stringify({
+      orderId: order.id,
+      type: order.type,
+      amount: Number(order.amount),
+      status: order.status,
+      verificationStatus: order.verification_status,
+      verificationScore: order.verification_score,
+      screenshotUrl: order.screenshot_url,
+      createdAt: order.created_at,
+      expiresAt: order.expires_at,
+      rejectionReasons: order.rejection_reasons,
+    }));
   } catch (err) {
-    console.error('[getUPIOrderStatus] Error:', err.message);
-    res.writeHead(500);
-    res.end(JSON.stringify({ error: 'Internal server error' }));
+    console.error('[getPaymentOrderStatus] Error:', err.message);
+    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };

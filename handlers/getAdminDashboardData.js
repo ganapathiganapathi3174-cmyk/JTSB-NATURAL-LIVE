@@ -132,6 +132,7 @@ module.exports = async (req, res) => {
         rejection_reasons: up.rejection_reasons,
         ocr_result: up.ocr_result,
         final_score: up.final_score,
+        fraud_score: up.fraud_score || 0,
         screenshot_hash: up.screenshot_hash,
         status: up.status,
         payment_status: mappedStatus,
@@ -154,12 +155,18 @@ module.exports = async (req, res) => {
         extractedTime: ocr.extractedTime || null,
         extractedStatus: ocr.extractedStatus || null,
         extractedBankName: ocr.extractedBankName || null,
+        extractedTxnId: ocr.extractedTxnId || null,
+        receiverName: ocr.receiverName || null,
+        senderName: ocr.senderName || null,
         ocrText: ocr.rawText || '',
-        // Match booleans (stored inside ocr_result jsonb)
-        matchedAmount: ocr.matchedAmount !== undefined ? ocr.matchedAmount : null,
-        matchedReceiver: ocr.matchedReceiver !== undefined ? ocr.matchedReceiver : null,
-        matchedUtr: ocr.matchedUtr !== undefined ? ocr.matchedUtr : null,
-        matchedDate: ocr.matchedDate !== undefined ? ocr.matchedDate : null,
+        wordCount: ocr.wordCount || 0,
+        fieldCount: ocr.fieldCount || 0,
+        // Match booleans
+        matchedAmount: up.matched_amount !== undefined ? up.matched_amount : null,
+        matchedReceiver: up.matched_receiver !== undefined ? up.matched_receiver : null,
+        matchedUtr: up.matched_utr !== undefined ? up.matched_utr : null,
+        matchedDate: up.matched_date !== undefined ? up.matched_date : null,
+        matchedStatus: up.matched_status !== undefined ? up.matched_status : null,
       };
     });
 

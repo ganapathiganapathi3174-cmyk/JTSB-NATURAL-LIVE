@@ -1,0 +1,470 @@
+const crypto = require('crypto');
+const {
+  COL_USERS, COL_PENDING_REGS, COL_UPI_PAYMENTS, COL_ORDERS,
+  COL_WALLET_BALANCES, COL_WALLET_TX, COL_TOPUP_INCOME,
+  COL_REFERRALS, COL_NOTIFICATIONS, COL_VERIFICATION_LOGS,
+  MAX_REFERRALS, randomString, ADMIN_UPI_ID,
+} = require('./_shared.js');
+const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet, getSupabaseClient } = require('./_supabase.js');
+const { broadcast } = require('./_sse.js');
+const { runAiVerification } = require('./_aiVerificationEngine.js');
+
+const ORDER_TTL_MS = 30 * 60 * 1000;
+const VERIFY_TIMEOUT_MS = 180 * 1000;
+
+function log(msg) {
+  console.log(`[${new Date().toISOString().slice(0, 19).replace('T', ' ')}] [ORDER-MGR] ${msg}`);
+}
+function now() { return new Date().toISOString(); }
+
+async function lookupUser(userId) {
+  try { const u = await getDoc(COL_USERS, userId); if (u) return u; } catch {}
+  const found = await runQuery(COL_USERS, [{ field: 'email', op: 'EQUAL', value: userId }], { limit: 1 });
+  if (found.length) return found[0];
+  return null;
+}
+
+async function createPaymentOrder(type, amount, userId, pendingRegId) {
+  if (!type || !['registration', 'topup'].includes(type)) {
+    throw Object.assign(new Error('Invalid payment type'), { status: 400 });
+  }
+  if (!amount || amount < 1) {
+    throw Object.assign(new Error('Valid amount is required'), { status: 400 });
+  }
+  if (type === 'registration' && !pendingRegId) {
+    throw Object.assign(new Error('pendingRegId is required for registration'), { status: 400 });
+  }
+  if (type === 'topup' && !userId) {
+    throw Object.assign(new Error('userId is required for topup'), { status: 400 });
+  }
+
+  let customerEmail = '';
+  let customerName = '';
+
+  if (type === 'registration' && pendingRegId) {
+    const pending = await getDoc(COL_PENDING_REGS, pendingRegId);
+    if (!pending) throw Object.assign(new Error('Pending registration not found'), { status: 404 });
+    customerEmail = pending.email || '';
+    customerName = pending.name || '';
+  } else if (type === 'topup' && userId) {
+    const user = await lookupUser(userId);
+    if (!user) throw Object.assign(new Error('User not found'), { status: 404 });
+    customerEmail = user.email || '';
+    customerName = user.name || '';
+  }
+
+  const orderId = 'ORD-' + randomString(12);
+  const expiresAt = new Date(Date.now() + ORDER_TTL_MS).toISOString();
+
+  const orderData = {
+    id: orderId,
+    user_id: userId || null,
+    type,
+    amount: Number(amount),
+    status: 'pending',
+    expires_at: expiresAt,
+    pending_reg_id: type === 'registration' ? pendingRegId : null,
+    expected_upi_id: ADMIN_UPI_ID,
+    customer_email: customerEmail,
+    customer_name: customerName,
+  };
+
+  let saved = null;
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.from(COL_ORDERS).insert(orderData).select('id').single();
+    if (!error && data) saved = data;
+  } catch (e) {
+    log('Direct insert to payment_sessions failed: ' + e.message);
+  }
+
+  if (!saved || !saved.id) {
+    const fallbackId = 'ORD-' + randomString(12);
+    orderData.id = fallbackId;
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.from(COL_ORDERS).insert(orderData).select('id').single();
+      if (!error && data) saved = data;
+      else saved = { id: fallbackId };
+    } catch (e) {
+      saved = { id: fallbackId };
+    }
+  }
+
+  const finalOrderId = saved.id || orderId;
+
+  let paymentUserId = null;
+  let paymentPendingRegId = null;
+  if (type === 'registration') {
+    paymentPendingRegId = pendingRegId;
+  } else {
+    paymentUserId = userId;
+  }
+
+  await addDoc(COL_UPI_PAYMENTS, {
+    utr: null,
+    upi_id: ADMIN_UPI_ID,
+    amount: Number(amount),
+    amount_option: String(amount),
+    payment_type: type,
+    screenshot_url: null,
+    status: 'pending',
+    user_id: paymentUserId,
+    pending_reg_id: paymentPendingRegId,
+    payment_date: now(),
+    verification_locked: false,
+    created_at: now(),
+  }).catch(() => {});
+
+  log(`CREATE order=${finalOrderId} type=${type} amount=${amount} expectedUpi=${ADMIN_UPI_ID}`);
+
+  try { broadcast('paymentCreated', { orderId: finalOrderId, type, amount, status: 'pending' }); } catch {}
+
+  return {
+    orderId: finalOrderId,
+    type,
+    amount: Number(amount),
+    expectedUpi: ADMIN_UPI_ID,
+    status: 'pending',
+    expiresAt,
+    customerEmail,
+    customerName,
+  };
+}
+
+async function getPaymentOrder(orderId) {
+  const order = await getDoc(COL_ORDERS, orderId).catch(() => null);
+  if (!order) return null;
+  if (order.status === 'pending' && order.expires_at && Date.now() > new Date(order.expires_at).getTime()) {
+    order.status = 'expired';
+    await updateDoc(COL_ORDERS, orderId, { status: 'expired', updated_at: now() }).catch(() => {});
+    broadcast('paymentUpdated', { orderId, status: 'expired' }).catch(() => {});
+  }
+  return order;
+}
+
+async function submitPaymentProof(orderId, screenshotUrl) {
+  const order = await getPaymentOrder(orderId);
+  if (!order) throw Object.assign(new Error('Order not found'), { status: 404 });
+  if (order.status === 'expired') throw Object.assign(new Error('Order expired'), { status: 400 });
+  if (order.status === 'verified') throw Object.assign(new Error('Order already verified'), { status: 400 });
+  if (order.verification_status === 'processing') throw Object.assign(new Error('Verification already in progress'), { status: 409 });
+
+  await updateDoc(COL_ORDERS, orderId, {
+    status: 'verifying',
+    verification_status: 'processing',
+    updated_at: now(),
+  });
+
+  const verificationResult = await runAiVerification(order, screenshotUrl);
+
+  const isVerified = verificationResult.status === 'verified';
+  const isRejected = verificationResult.status === 'rejected';
+  const finalOrderStatus = isVerified ? 'verified' : (isRejected ? 'rejected' : 'manual_review');
+
+  const updatePayload = {
+    status: finalOrderStatus,
+    verification_status: verificationResult.status,
+    verification_score: verificationResult.verificationScore || 0,
+    screenshot_url: screenshotUrl,
+    ocr_result: verificationResult.ocrData || null,
+    rejection_reasons: verificationResult.reasons || [],
+    final_score: verificationResult.verificationScore || 0,
+    fraud_score: verificationResult.fraudScore || 0,
+    updated_at: now(),
+  };
+
+  if (isVerified || isRejected) {
+    updatePayload.verified_at = now();
+    updatePayload.verification_completed_at = now();
+  }
+
+  await updateDoc(COL_ORDERS, orderId, updatePayload);
+
+  const updatedOrder = await getPaymentOrder(orderId);
+
+  if (isVerified) {
+    await executeVerifiedOrder(updatedOrder, verificationResult);
+  } else {
+    const msg = isRejected
+      ? 'Your payment of ₹' + order.amount + ' was rejected. Reasons: ' + (verificationResult.reasons || []).join(', ')
+      : 'Your payment of ₹' + order.amount + ' has been flagged for manual review.';
+    const title = isRejected ? 'Payment Rejected' : 'Payment Under Review';
+    await addDoc('notifications', {
+      receiverId: order.user_id || '',
+      title,
+      message: msg,
+      type: isRejected ? 'payment_rejected' : 'payment_manual_review', status: 'unread', created_at: now(),
+      senderId: 'system', senderName: 'System',
+    }).catch(() => {});
+  }
+
+  try { broadcast('paymentUpdated', { orderId, status: finalOrderStatus, type: order.type }); } catch {}
+
+  let syncedPaymentId = null;
+  try {
+    let existingPayments = [];
+    if (order.type === 'registration' && order.pending_reg_id) {
+      existingPayments = await runQuery(COL_UPI_PAYMENTS, [
+        { field: 'pending_reg_id', op: 'EQUAL', value: order.pending_reg_id },
+      ], { limit: 10 });
+    } else if (order.type === 'topup' && order.user_id) {
+      existingPayments = await runQuery(COL_UPI_PAYMENTS, [
+        { field: 'user_id', op: 'EQUAL', value: order.user_id },
+      ], { limit: 10 });
+    }
+    if (existingPayments.length > 0) {
+      const target = existingPayments.find(p => p.status === 'pending') || existingPayments[0];
+      syncedPaymentId = target.id;
+      await updateDoc(COL_UPI_PAYMENTS, target.id, {
+        status: finalOrderStatus,
+        ocr_result: verificationResult.ocrData || null,
+        final_score: verificationResult.verificationScore || 0,
+        fraud_score: verificationResult.fraudScore || 0,
+        verified_at: finalOrderStatus === 'verified' ? now() : target.verified_at,
+        verification_completed_at: now(),
+        verification_locked: false,
+        rejection_reasons: verificationResult.reasons || [],
+      }).catch(() => {});
+    }
+  } catch (e) { log('Failed to sync payment status: ' + e.message); }
+
+  return {
+    orderId,
+    paymentId: syncedPaymentId || orderId,
+    status: finalOrderStatus,
+    verificationStatus: verificationResult.status,
+    verificationScore: verificationResult.verificationScore,
+    ocrData: verificationResult.ocrData,
+    reasons: verificationResult.reasons,
+    matchedAmount: verificationResult.matchedAmount,
+    matchedReceiver: verificationResult.matchedReceiver,
+    matchedUtr: verificationResult.matchedUtr,
+    matchedDate: verificationResult.matchedDate,
+    fraudScore: verificationResult.fraudScore,
+    checks: verificationResult.checks,
+  };
+}
+
+async function executeVerifiedOrder(order, verificationResult) {
+  const type = order.type;
+  const amount = Number(order.amount);
+  const orderId = order.id;
+  const completedAt = now();
+
+  if (type === 'registration') {
+    const pendingRegId = order.pending_reg_id;
+    if (!pendingRegId) {
+      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['No registration session linked'], updated_at: now() });
+      return;
+    }
+    const pendingReg = await getDoc(COL_PENDING_REGS, pendingRegId);
+    if (!pendingReg) {
+      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['Registration session expired'], updated_at: now() });
+      return;
+    }
+
+    const newUserId = crypto.randomUUID();
+    let referredByUserId = null;
+    let referredByCode = null;
+    const refCode = pendingReg.referral_code;
+    if (refCode) {
+      const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: refCode.toUpperCase() }], { limit: 1 });
+      if (refUsers.length) { referredByUserId = refUsers[0].id; referredByCode = refCode.toUpperCase(); }
+    }
+
+    const userName = pendingReg.name || '';
+    const userEmail = pendingReg.email || '';
+    const userPhone = pendingReg.phone || '';
+    if (!userName || !userEmail || !userPhone) {
+      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['Invalid registration data'], updated_at: now() });
+      return;
+    }
+
+    await writeDoc(COL_USERS, newUserId, {
+      id: newUserId, email: userEmail, name: userName, phone: userPhone,
+      password_hash: pendingReg.password_hash, referral_code: randomString(8),
+      referred_by: referredByCode, account_status: 'active', payment_status: 'success',
+      approved: true, active: true, membership_paid: true,
+      joined_date: completedAt, approved_date: completedAt,
+    });
+
+    await writeDoc(COL_WALLET_BALANCES, newUserId, { balance: 0, total_earned: amount });
+    await addDoc(COL_WALLET_TX, {
+      user_id: newUserId, type: 'deposit', amount,
+      description: 'Registration payment (verified)', reference_id: orderId, balance_after: amount,
+    });
+
+    if (referredByUserId) {
+      await atomicCreditWallet(referredByUserId, amount * 0.1, orderId, 'Referral bonus for ' + newUserId, 'referral_bonus');
+      const referrerDoc = await getDoc(COL_USERS, referredByUserId);
+      if (referrerDoc) {
+        const currentCount = (referrerDoc.referrals_count || 0) + 1;
+        const limitReached = currentCount >= MAX_REFERRALS;
+        const updates = {
+          referrals_count: currentCount,
+          total_referral_count: (referrerDoc.total_referral_count || 0) + 1,
+          referral_limit_reached: limitReached,
+          referral_active: !limitReached,
+          is_qualified: limitReached,
+        };
+        if (limitReached) {
+          updates.account_status = 'inactive';
+          updates.inactive_reason = 'Referral Limit Reached';
+          updates.referral_expires_at = completedAt;
+        }
+        await updateDoc(COL_USERS, referredByUserId, updates);
+        if (limitReached) {
+          try {
+            await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Referral limit reached.', type: 'referral_limit_reached', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' });
+          } catch {}
+          try {
+            await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: 'system', details: { referralCode: referredByCode, referralCount: currentCount }, created_at: completedAt });
+          } catch {}
+        }
+      }
+    }
+
+    try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch {}
+
+    await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Welcome! Your registration payment of ₹' + amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(() => {});
+    try {
+      await addDoc('audit_logs', { action: 'auto_approve_registration', target_id: orderId, target_type: 'payment_order', admin_id: 'system', details: { userId: newUserId, amount, verificationScore: verificationResult.verificationScore }, created_at: completedAt });
+    } catch {}
+
+    await addDoc(COL_UPI_PAYMENTS, {
+      utr: verificationResult.ocrData?.extractedUtr || orderId,
+      upi_id: ADMIN_UPI_ID,
+      amount, amount_option: String(amount), payment_type: 'registration',
+      screenshot_url: order.screenshot_url,
+      status: 'verified',
+      ocr_result: verificationResult.ocrData || null,
+      final_score: verificationResult.verificationScore || 0,
+      fraud_score: verificationResult.fraudScore || 0,
+      user_id: newUserId,
+      pending_reg_id: pendingRegId,
+      payment_date: completedAt,
+      verified_at: completedAt,
+      verification_locked: false,
+      verification_completed_at: completedAt,
+      verification_duration: VERIFY_TIMEOUT_MS,
+    }).catch(() => {});
+  } else if (type === 'topup') {
+    const userId = order.user_id;
+    if (!userId) {
+      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['User not identified'], updated_at: now() });
+      return;
+    }
+    const userDoc = await lookupUser(userId);
+    if (!userDoc) {
+      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['User account not found'], updated_at: now() });
+      return;
+    }
+
+    await atomicCreditWallet(userId, amount, orderId, 'Topup via verified payment');
+    const topupId = (await addDoc(COL_TOPUPS, {
+      user_id: userId, amount, utr: verificationResult.ocrData?.extractedUtr || orderId,
+      screenshot_url: order.screenshot_url, status: 'approved', verified_at: completedAt,
+    })).id;
+
+    const referredByCode = userDoc.referred_by || null;
+    if (referredByCode) {
+      try {
+        const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: referredByCode }], { limit: 1 });
+        const referrer = refUsers.length ? refUsers[0] : null;
+        if (referrer) {
+          const sponsorTopups = await runQuery(COL_TOPUPS, [
+            { field: 'user_id', op: 'EQUAL', value: referrer.id },
+            { field: 'status', op: 'EQUAL', value: 'approved' },
+          ], { limit: 1 });
+          const incomeStatus = sponsorTopups.length > 0 ? 'eligible' : 'locked';
+          await addDoc(COL_TOPUP_INCOME, {
+            user_id: referrer.id, from_user_id: userId, topup_id: topupId,
+            amount, level: 1, status: incomeStatus,
+          });
+          const currentCount = referrer.topup_referral_qualified_count || 0;
+          const newCount = currentCount + 1;
+          await updateDoc(COL_USERS, referrer.id, {
+            topup_referral_qualified_count: newCount,
+            topup_referral_qualified: (referrer.referrals_count || 0) + newCount >= MAX_REFERRALS,
+          });
+          if (userDoc.referred_by_status !== 'approved') {
+            await updateDoc(COL_USERS, userId, { referred_by_status: 'approved' });
+          }
+        }
+      } catch (e) { log('Topup referral failed: ' + e.message); }
+    }
+
+    if (userDoc.topup_referral_qualified && !userDoc.sponsor_topup_completed) {
+      try {
+        await updateDoc(COL_USERS, userId, { account_status: 'inactive', inactive_reason: 'Sponsor Claim Pending Admin Approval', sponsor_topup_completed: true, sponsor_awaiting_credit: true });
+        const lockedIncome = await runQuery(COL_TOPUP_INCOME, [
+          { field: 'user_id', op: 'EQUAL', value: userId },
+          { field: 'status', op: 'EQUAL', value: 'locked' },
+        ], { limit: 100 });
+        for (const inc of lockedIncome) await updateDoc(COL_TOPUP_INCOME, inc.id, { status: 'eligible' });
+      } catch (e) { log('Sponsor topup unlock failed: ' + e.message); }
+    }
+
+    await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Your topup of ₹' + amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(() => {});
+    try {
+      await addDoc('audit_logs', { action: 'auto_approve_topup', target_id: orderId, target_type: 'payment_order', admin_id: 'system', details: { userId, amount, topupId, verificationScore: verificationResult.verificationScore }, created_at: completedAt });
+    } catch {}
+
+    await addDoc(COL_UPI_PAYMENTS, {
+      utr: verificationResult.ocrData?.extractedUtr || orderId,
+      upi_id: ADMIN_UPI_ID,
+      amount, amount_option: String(amount), payment_type: 'topup',
+      screenshot_url: order.screenshot_url,
+      status: 'verified',
+      ocr_result: verificationResult.ocrData || null,
+      final_score: verificationResult.verificationScore || 0,
+      fraud_score: verificationResult.fraudScore || 0,
+      user_id: userId,
+      payment_date: completedAt,
+      verified_at: completedAt,
+      verification_locked: false,
+      verification_completed_at: completedAt,
+      verification_duration: VERIFY_TIMEOUT_MS,
+    }).catch(() => {});
+  }
+}
+
+async function retryPaymentOrder(orderId) {
+  const order = await getDoc(COL_ORDERS, orderId);
+  if (!order) throw Object.assign(new Error('Order not found'), { status: 404 });
+  if (order.status === 'pending' || order.status === 'expired') {
+    const newExpiresAt = new Date(Date.now() + ORDER_TTL_MS).toISOString();
+    await updateDoc(COL_ORDERS, orderId, {
+      status: 'pending',
+      expires_at: newExpiresAt,
+      updated_at: now(),
+    });
+    return { orderId, status: 'pending', expiresAt: newExpiresAt };
+  }
+  if (order.verification_status === 'rejected' || order.verification_status === 'manual_review') {
+    const newExpiresAt = new Date(Date.now() + ORDER_TTL_MS).toISOString();
+    await updateDoc(COL_ORDERS, orderId, {
+      status: 'pending',
+      verification_status: null,
+      verification_score: null,
+      ocr_result: null,
+      rejection_reasons: [],
+      screenshot_url: null,
+      expires_at: newExpiresAt,
+      updated_at: now(),
+    });
+    return { orderId, status: 'pending', expiresAt: newExpiresAt };
+  }
+  throw Object.assign(new Error('Order cannot be retried'), { status: 400 });
+}
+
+module.exports = {
+  createPaymentOrder,
+  getPaymentOrder,
+  submitPaymentProof,
+  retryPaymentOrder,
+  executeVerifiedOrder,
+  ORDER_TTL_MS,
+  VERIFY_TIMEOUT_MS,
+};

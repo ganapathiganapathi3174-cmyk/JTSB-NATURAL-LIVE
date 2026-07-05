@@ -90,7 +90,7 @@ async function getDoc(table, id) {
       supabase.from(table).select('*').eq('id', id).single(),
       `getDoc ${table}/${id}`
     );
-    if (error && error.code === 'PGRST116') return null;
+    if (error && (error.code === 'PGRST116' || error.code === '22P02')) return null;
     if (error) throw new Error(`GET error: ${JSON.stringify(error)}`);
     return decryptSensitive(data, table);
   } catch (err) {

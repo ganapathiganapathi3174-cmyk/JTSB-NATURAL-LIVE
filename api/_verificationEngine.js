@@ -1,68 +1,92 @@
-const { COL_UPI_PAYMENTS } = require('./_shared.js');
+const { analyzeScreenshot } = require('./_enhancedOcr.js');
 const { runQuery } = require('./_supabase.js');
+const { COL_UPI_PAYMENTS } = require('./_shared.js');
 const metrics = require('./_metrics.js');
 
-function getAI() {
-  return require('./_ai_bridge.js');
-}
+const OCR_THRESHOLD = 60;
+const DUPLICATE_UTR_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function log(msg) {
   console.log('[' + new Date().toISOString().slice(0, 19).replace('T', ' ') + '] [ENGINE] ' + msg);
 }
 
-async function runVerification(payment) {
-  const paymentId = payment.id;
-  const amountNum = Number(payment.amount) || 0;
-  const expectedUpiId = (payment.upi_id || '').toLowerCase().trim();
-  const expectedUtr = (payment.utr || '').toUpperCase().trim();
+async function analyzeImageIntegrity(imageUrl) {
+  try {
+    const https = require('https');
+    const http = require('http');
+    const u = new URL(imageUrl);
+    const mod = u.protocol === 'https:' ? https : http;
+    const buf = await new Promise((resolve, reject) => {
+      mod.get(imageUrl, { timeout: 15000 }, (res) => {
+        if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error('HTTP ' + res.statusCode));
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+      }).on('error', reject);
+    });
+    const { analyzeImageQuality } = require('./_imageQuality.js');
+    const quality = await analyzeImageQuality(buf);
+    return { passed: quality.passed, grade: quality.overallGrade, issues: quality.issues, warnings: quality.warnings, blurScore: quality.blurScore, cropRatio: quality.cropRatio, dimensions: quality.dimensions };
+  } catch (e) {
+    log('Image integrity check failed: ' + e.message);
+    return { passed: true, grade: 'unknown', issues: ['Could not analyze image: ' + e.message], warnings: [], blurScore: 0, cropRatio: 1.0, dimensions: { width: 0, height: 0 } };
+  }
+}
+
+async function runVerification(order, screenshotUrl) {
   const startTime = Date.now();
+  const expectedAmount = Number(order.amount || order.expected_amount) || 0;
+  const expectedUpi = ((order.expected_upi_id || order.upi_id || '')).toLowerCase().trim();
+  const expectedUtr = (order.utr || '').toUpperCase().trim();
+  const expectedDate = order.payment_date || order.payment_date || order.created_at || new Date().toISOString().split('T')[0];
+  const type = order.type || order.order_type || order.payment_type || 'unknown';
+  const orderId = order.id;
 
   const report = {
-    paymentId,
     status: 'manual_review',
     reasons: [],
     verificationScore: 0,
     verificationDuration: 0,
-    autoVerified: false,
-    manualReviewRequired: true,
     ocrData: null,
-    aiResult: null,
-    // Backward-compat fields for processPendingPayments
     fraudScore: 0,
     matchedAmount: false,
     matchedReceiver: false,
     matchedUtr: false,
     matchedDate: false,
+    steps: [],
+    imageQuality: null,
   };
 
   try {
-    log('=== Verify payment ' + paymentId + ' ===');
-    log('Amount=' + amountNum + ', UPI=' + expectedUpiId + ', UTR=' + (expectedUtr ? expectedUtr.substring(0, 6) + '****' : '—'));
+    log('=== Verify order ' + orderId + ' ===');
+    log('Type=' + type + ', Amount=' + expectedAmount + ', ExpectedUPI=' + expectedUpi);
 
-    // PHASE 0: SCREENSHOT CHECK
-    if (!payment.screenshot_url) {
-      log('No screenshot uploaded');
+    if (!screenshotUrl) {
       report.status = 'manual_review';
-      report.reasons.push('No screenshot uploaded');
-      report.manualReviewRequired = true;
+      report.reasons.push('No screenshot provided');
       report.verificationDuration = Date.now() - startTime;
       return report;
     }
 
-    // PHASE 1: AI ENGINE
-    log('Running AI Engine...');
+    // PHASE 1: OCR + AI ANALYSIS
+    log('Running OCR/AI analysis...');
     let aiOutput = null;
     let lastAiError = null;
+    let ocrResult = null;
 
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        log('Attempt ' + attempt + '/2...');
-        aiOutput = await getAI().analyzeWithAI(payment.screenshot_url, {
-          amount: amountNum,
-          receiverUpi: expectedUpiId,
-          utr: expectedUtr,
-          date: payment.payment_date,
-        });
+        if (attempt === 1) {
+          const { analyzeWithAI, mapAIResultToVerificationFormat } = require('./_ai_bridge.js');
+          aiOutput = await analyzeWithAI(screenshotUrl, {
+            amount: expectedAmount,
+            receiverUpi: expectedUpi,
+            utr: expectedUtr,
+            date: expectedDate,
+          });
+        } else {
+          ocrResult = await analyzeScreenshot(screenshotUrl);
+        }
         if (aiOutput && !aiOutput.error) {
           lastAiError = null;
           break;
@@ -78,79 +102,122 @@ async function runVerification(payment) {
       if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
     }
 
-    const mapped = getAI().mapAIResultToVerificationFormat(aiOutput);
-    const { ocrResult, parsed, aiResult } = mapped;
-    report.ocrData = ocrResult;
-    report.aiResult = aiResult;
-
-    const aiSuccess = aiResult && aiResult.status !== 'failed' && !aiOutput.error;
-    metrics.trackOCR(aiSuccess);
-
-    if (!aiSuccess) {
-      log('AI Engine failed');
+    if (aiOutput && !aiOutput.error) {
+      const { mapAIResultToVerificationFormat } = require('./_ai_bridge.js');
+      const mapped = mapAIResultToVerificationFormat(aiOutput);
+      ocrResult = mapped.ocrResult;
+      report.steps.push({ name: 'ai_analysis', passed: true, engines: ocrResult.engines || [] });
+    } else if (ocrResult && ocrResult.ocrAvailable) {
+      report.steps.push({ name: 'ocr_fallback', passed: true, confidence: ocrResult.confidence });
+    } else {
       report.status = 'manual_review';
-      report.reasons.push('AI engine could not analyze screenshot');
-      report.manualReviewRequired = true;
+      report.reasons.push('AI/OCR engine could not analyze screenshot');
       report.verificationDuration = Date.now() - startTime;
+      metrics.trackOCR(false);
       return report;
     }
 
-    // Populate backward-compat fields from AI output
-    const presence = parsed?.presence || {};
-    const mf = parsed?.matchedFields || {};
-    report.matchedAmount = presence.amount?.found || false;
-    report.matchedReceiver = presence.upi_id?.found || false;
-    report.matchedUtr = presence.utr?.found || false;
-    report.matchedDate = presence.date?.found || false;
-
-    // Backward-compat ocrData fields for processPendingPayments
-    if (report.ocrData) {
-      report.ocrData.ocrText = '';
-      report.ocrData.confidence = 0;
-      report.ocrData.extractedAmount = presence.amount?.found ? String(amountNum) : null;
-      report.ocrData.extractedUtr = presence.utr?.found ? expectedUtr : null;
-      report.ocrData.extractedReceiverUpi = presence.upi_id?.found ? expectedUpiId : null;
-      report.ocrData.extractedSenderUpi = null;
-      report.ocrData.extractedDate = presence.date?.found ? (presence.date?.expected || null) : null;
-      report.ocrData.extractedTime = null;
-      report.ocrData.extractedStatus = null;
-      report.ocrData.extractedBankName = null;
-      report.ocrData.extractedTxnId = null;
-      report.ocrData.wordCount = 0;
-      report.ocrData.ambiguous = false;
+    const confidence = ocrResult.confidence || 0;
+    if (confidence < OCR_THRESHOLD) {
+      report.status = 'manual_review';
+      report.reasons.push('OCR confidence too low: ' + confidence + '%');
+      report.verificationDuration = Date.now() - startTime;
+      metrics.trackOCR(false);
+      return report;
     }
+    metrics.trackOCR(true);
 
-    log('AI: ' + aiResult.status + ', reasons=' + aiResult.reasons.join('; '));
+    const presence = aiOutput ? (aiOutput.matched_fields || {}) : {};
+    const extractedAmount = presence.amount?.found ? Number(presence.amount?.value || expectedAmount) : null;
+    const extractedUtr = presence.utr?.found ? (presence.utr?.value || '') : '';
+    const extractedReceiverUpi = presence.upi_id?.found ? (presence.upi_id?.value || '') : '';
+    const extractedDate = presence.date?.found ? (presence.date?.value || '') : '';
+    const extractedStatus = aiOutput?.stages?.stage7_quality?.paymentStatus || '';
 
-    // PHASE 2: DUPLICATE CHECK (DB-side)
-    const screenshotHash = aiOutput.stages.stage1_opencv?.perceptualHash || '';
-    const recentPayments = await runQuery(COL_UPI_PAYMENTS, [], { limit: 500 }).catch(() => []);
-    const dupReasons = [];
+    const matchAmount = extractedAmount !== null && Math.abs(extractedAmount - expectedAmount) < 0.01;
+    const matchUtr = extractedUtr && extractedUtr.length >= 12;
+    const matchUpi = extractedReceiverUpi && expectedUpi && extractedReceiverUpi.toLowerCase().includes(expectedUpi.split('@')[0] || expectedUpi.toLowerCase());
+    const matchStatus = extractedStatus && extractedStatus.toUpperCase().includes('SUCCESS');
+    const matchDate = extractedDate ? true : false;
 
-    if (expectedUtr) {
-      const dupUtr = recentPayments.filter(d =>
-        d.id !== paymentId && d.utr && d.utr.toUpperCase() === expectedUtr && d.status !== 'rejected'
-      );
-      if (dupUtr.length > 0) {
-        dupReasons.push('Duplicate UTR — payment ' + dupUtr[0].id);
+    report.ocrData = {
+      ...ocrResult,
+      extractedAmount: extractedAmount || null,
+      extractedUtr: extractedUtr || null,
+      extractedReceiverUpi: extractedReceiverUpi || null,
+      extractedSenderUpi: extractedReceiverUpi || null,
+      extractedDate: extractedDate || null,
+      extractedTime: null,
+      extractedStatus: extractedStatus || null,
+      extractedBankName: null,
+      wordCount: ocrResult.rawTextLen || 0,
+      ambiguous: false,
+    };
+    report.matchedAmount = matchAmount;
+    report.matchedReceiver = matchUpi;
+    report.matchedUtr = matchUtr;
+    report.matchedDate = matchDate;
+    report.steps.push({ name: 'amount_match', passed: matchAmount, extracted: extractedAmount, expected: expectedAmount });
+    report.steps.push({ name: 'upi_match', passed: matchUpi, extracted: extractedReceiverUpi, expected: expectedUpi });
+    report.steps.push({ name: 'utr_match', passed: matchUtr, extracted: extractedUtr ? 'present' : 'missing' });
+    report.steps.push({ name: 'status_match', passed: matchStatus, extracted: extractedStatus });
+
+    // PHASE 2: IMAGE INTEGRITY
+    log('Checking image integrity...');
+    const imageQuality = await analyzeImageIntegrity(screenshotUrl);
+    report.imageQuality = imageQuality;
+    report.steps.push({ name: 'image_quality', passed: imageQuality.passed, grade: imageQuality.grade, issues: imageQuality.issues });
+
+    if (!imageQuality.passed) {
+      const criticalIssues = imageQuality.issues.filter(i => i.includes('blur') || i.includes('dark') || i.includes('cropped') || i.includes('poor'));
+      if (criticalIssues.length > 0) {
+        report.reasons.push('Image quality issues: ' + criticalIssues.join(', '));
       }
     }
-    if (screenshotHash) {
-      const dupHash = recentPayments.filter(d =>
-        d.id !== paymentId && d.screenshot_hash === screenshotHash && d.status !== 'rejected'
-      );
-      if (dupHash.length > 0) {
-        dupReasons.push('Same screenshot as payment ' + dupHash[0].id);
+
+    // PHASE 3: DUPLICATE CHECK
+    log('Checking duplicates...');
+    let dupReasons = [];
+    if (matchUtr) {
+      try {
+        const recentPayments = await runQuery(COL_UPI_PAYMENTS, [], { limit: 500 });
+        const dupUtr = recentPayments.filter(d =>
+          d.utr && d.utr.toUpperCase() === extractedUtr.toUpperCase() && d.status !== 'rejected'
+        );
+        if (dupUtr.length > 0) {
+          dupReasons.push('Duplicate UTR detected with payment ' + dupUtr[0].id);
+        }
+      } catch (e) {
+        log('Duplicate check failed: ' + e.message);
       }
     }
+    report.steps.push({ name: 'duplicate_check', passed: dupReasons.length === 0, reasons: dupReasons });
 
-    // PHASE 3: FINAL DECISION
-    let finalStatus = aiResult.status;
-    let finalReasons = [...aiResult.reasons];
+    // PHASE 4: RULE-BASED DECISION ENGINE
+    const strongRejectSignals = [];
+    if (!matchAmount) strongRejectSignals.push('amount_mismatch');
+    if (!matchUpi) strongRejectSignals.push('upi_mismatch');
+    if (!matchUtr) strongRejectSignals.push('utr_missing');
+    if (!matchStatus) strongRejectSignals.push('payment_not_success');
+    if (dupReasons.length > 0) strongRejectSignals.push('duplicate_utr');
+    if (imageQuality.blurScore > 80) strongRejectSignals.push('image_blurred');
+    if (imageQuality.cropRatio < 0.5) strongRejectSignals.push('image_cropped');
 
-    if (dupReasons.length > 0) {
+    let finalStatus = 'manual_review';
+    let finalReasons = [];
+
+    if (matchUtr && matchDate && matchAmount) {
+      finalStatus = 'approved';
+      finalReasons = ['UTR matched successfully', 'Amount matched successfully', 'Payment status verified'];
+    } else if (strongRejectSignals.length >= 2) {
       finalStatus = 'rejected';
-      finalReasons = ['Duplicate payment detected'].concat(dupReasons);
+      finalReasons = dupReasons.length > 0 ? dupReasons : ['Multiple verification failures: ' + strongRejectSignals.slice(0, 2).join(', ')];
+    } else if (strongRejectSignals.length === 1 && strongRejectSignals[0] !== 'amount_mismatch') {
+      finalStatus = 'manual_review';
+      finalReasons = ['Verification inconclusive: ' + strongRejectSignals.join(', ')];
+    } else {
+      finalStatus = 'manual_review';
+      finalReasons = ['Insufficient verification confidence'];
     }
 
     report.status = finalStatus;
@@ -160,6 +227,10 @@ async function runVerification(payment) {
     report.verificationScore = finalStatus === 'approved' ? 100 : (finalStatus === 'rejected' ? 0 : 50);
     report.fraudScore = dupReasons.length > 0 ? 80 : 0;
     report.verificationDuration = Date.now() - startTime;
+
+    if (finalStatus === 'approved') metrics.trackPaymentApproved('auto');
+    else if (finalStatus === 'rejected') metrics.trackPaymentRejected('auto');
+    else metrics.trackPaymentManualReview();
 
     log('DECISION: ' + finalStatus.toUpperCase() + ' — ' + finalReasons.join('; '));
 

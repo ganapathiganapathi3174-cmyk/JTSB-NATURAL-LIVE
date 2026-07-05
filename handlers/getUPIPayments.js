@@ -29,33 +29,59 @@ module.exports = async (req, res) => {
 };
 
 function mapFields(payments) {
-  return payments.map(p => ({
-    paymentId: p.id,
-    userId: p.user_id,
-    pendingRegId: p.pending_reg_id,
-    fullName: p._userName || (p.pendingRegId ? null : null),
-    userEmail: p._userEmail || '',
-    userMobile: p._userPhone || '',
-    amount: p.amount,
-    utr: p.utr,
-    upiId: p.upi_id,
-    screenshotUrl: p.screenshot_url,
-    status: p.status,
-    verificationReason: (p.rejection_reasons && Array.isArray(p.rejection_reasons))
-      ? p.rejection_reasons.join('; ')
-      : (p.rejection_reasons ? String(p.rejection_reasons) : ''),
-    rejection_reasons: p.rejection_reasons,
-    paymentType: p.payment_type,
-    paymentDate: p.payment_date,
-    createdAt: p.created_at,
-    verifiedAt: p.verified_at,
-    userName: p._userName,
-    userEmail: p._userEmail,
-    userPhone: p._userPhone,
-    screenshot_url: p.screenshot_url,
-    created_at: p.created_at,
-    status: p.status,
-  }));
+  return payments.map(p => {
+    const ocr = p.ocr_result || {};
+    return {
+      paymentId: p.id,
+      userId: p.user_id,
+      pendingRegId: p.pending_reg_id,
+      fullName: p._userName || (p.pendingRegId ? null : null),
+      userEmail: p._userEmail || '',
+      userMobile: p._userPhone || '',
+      amount: p.amount,
+      utr: p.utr,
+      upiId: p.upi_id,
+      screenshotUrl: p.screenshot_url,
+      status: p.status,
+      verificationReason: (p.rejection_reasons && Array.isArray(p.rejection_reasons))
+        ? p.rejection_reasons.join('; ')
+        : (p.rejection_reasons ? String(p.rejection_reasons) : ''),
+      rejection_reasons: p.rejection_reasons,
+      paymentType: p.payment_type,
+      paymentDate: p.payment_date,
+      createdAt: p.created_at,
+      verifiedAt: p.verified_at,
+      userName: p._userName,
+      userEmail: p._userEmail,
+      userPhone: p._userPhone,
+      screenshot_url: p.screenshot_url,
+      created_at: p.created_at,
+      status: p.status,
+      ocrConfidence: ocr.confidence || 0,
+      extractedAmount: ocr.extractedAmount || null,
+      extractedUtr: ocr.extractedUtr || null,
+      extractedReceiverUpi: ocr.extractedReceiverUpi || null,
+      extractedSenderUpi: ocr.extractedSenderUpi || null,
+      extractedDate: ocr.extractedDate || null,
+      extractedTime: ocr.extractedTime || null,
+      extractedStatus: ocr.extractedStatus || null,
+      extractedBankName: ocr.extractedBankName || null,
+      extractedTxnId: ocr.extractedTxnId || null,
+      receiverName: ocr.receiverName || null,
+      senderName: ocr.senderName || null,
+      matchedAmount: p.matched_amount !== undefined ? p.matched_amount : null,
+      matchedReceiver: p.matched_receiver !== undefined ? p.matched_receiver : null,
+      matchedUtr: p.matched_utr !== undefined ? p.matched_utr : null,
+      matchedDate: p.matched_date !== undefined ? p.matched_date : null,
+      matchedStatus: p.matched_status !== undefined ? p.matched_status : null,
+      final_score: p.final_score || null,
+      fraud_score: p.fraud_score || null,
+      verificationResult: p.verification_result || null,
+      rawText: ocr.rawText || ocr.ocrText || '',
+      wordCount: ocr.wordCount || 0,
+      fieldCount: ocr.fieldCount || 0,
+    };
+  });
 }
 
 async function enrichWithUserInfo(payments) {

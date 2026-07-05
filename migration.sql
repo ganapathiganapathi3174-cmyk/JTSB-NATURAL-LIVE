@@ -458,13 +458,26 @@ CREATE TABLE IF NOT EXISTS public.topup_audit_log (
 CREATE TABLE IF NOT EXISTS public.payment_sessions (
   id text PRIMARY KEY,
   user_id text,
+  pending_reg_id text,
   type text DEFAULT 'topup',
   amount numeric,
+  expected_amount numeric,
+  expected_upi_id text,
   status text DEFAULT 'created',
+  verification_status text,
+  verification_score numeric(5,2),
+  screenshot_url text,
+  ocr_result jsonb,
+  rejection_reasons jsonb,
+  final_score numeric(5,2),
+  customer_email text,
+  customer_name text,
   paymentId text,
   expires_at timestamptz,
   completedAt timestamptz,
-  createdAt timestamptz DEFAULT now()
+  createdAt timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
 );
 
 -- ============================================================

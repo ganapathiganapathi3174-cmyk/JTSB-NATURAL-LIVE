@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import UpiPaymentAuto from '../components/UpiPaymentAuto.jsx';
+import UpiPayment from '../components/UpiPayment.jsx';
 
 export default function PaymentPage() {
   const navigate = useNavigate();
@@ -40,7 +40,7 @@ export default function PaymentPage() {
         <div className="card" style={{ maxWidth: 480, margin: '2rem auto', textAlign: 'center', padding: '2rem' }}>
           <div style={{
             width: 64, height: 64, borderRadius: '50%',
-            background: 'var(--success, #16a34a)', color: '#fff',
+            background: '#16a34a', color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '1.75rem', margin: '0 auto 1.25rem',
           }}>✓</div>
@@ -76,7 +76,7 @@ export default function PaymentPage() {
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="upi-payment-wrap">
-          <UpiPaymentAuto
+          <UpiPayment
             type="topup"
             userId={topupUserId}
             onSuccess={handleUpiSuccess}

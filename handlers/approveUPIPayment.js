@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
     // ATOMIC: Claim payment — only succeeds if status is processable
     const now = new Date().toISOString();
     const claimed = await conditionalUpdateDoc(COL_UPI_PAYMENTS, paymentId, [
-      { field: 'status', op: 'IN', value: ['pending', 'manual_review'] },
+      { field: 'status', op: 'IN', value: ['pending', 'manual_review', 'pending_review'] },
     ], { status: 'verified', verified_at: now });
 
     if (claimed === 0) {
