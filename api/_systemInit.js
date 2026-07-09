@@ -58,7 +58,33 @@ async function initSystemUsers() {
       .maybeSingle();
 
     if (existingByCode.data) {
-      console.log('[SYSTEM-INIT] User ' + userDef.referral_code + ' already exists (id=' + existingByCode.data.id + '), skipping');
+      const existingId = existingByCode.data.id;
+      // Fix encrypted email → plain text so frontend findByEmail works
+      const fullRecord = await supabase.from('users').select('email,phone,password_hash,password').eq('id', existingId).maybeSingle();
+      if (!fullRecord.data) { console.log('[SYSTEM-INIT] Could not fetch full record for ' + userDef.referral_code); continue; }
+      const updates = {};
+      // Fix encrypted email → plain text so frontend findByEmail works
+      if (fullRecord.data.email && fullRecord.data.email.includes(':')) {
+        console.log('[SYSTEM-INIT] Fixing encrypted email for ' + userDef.referral_code + ' (id=' + existingId + ')');
+        updates.email = userDef.email.toLowerCase();
+      }
+      // Fix encrypted phone
+      if (fullRecord.data.phone && fullRecord.data.phone.includes(':')) {
+        updates.phone = userDef.phone;
+      }
+      // Fix missing password_hash
+      if (!fullRecord.data.password_hash) {
+        updates.password_hash = hashPassword(userDef.password);
+      }
+      // Fix missing password field (frontend login reads user.password)
+      if (!fullRecord.data.password) {
+        updates.password = hashPassword(userDef.password);
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('users').update(updates).eq('id', existingId);
+        console.log('[SYSTEM-INIT] Fixed ' + Object.keys(updates).join(',') + ' for ' + userDef.referral_code);
+      }
+      console.log('[SYSTEM-INIT] User ' + userDef.referral_code + ' already exists (id=' + existingId + '), skipping');
       continue;
     }
 
@@ -82,10 +108,11 @@ async function initSystemUsers() {
 
     const userData = {
       id: userId,
-      email: encrypt(userDef.email),
+      email: userDef.email.toLowerCase(),
       name: userDef.name,
-      phone: encrypt(userDef.phone),
+      phone: userDef.phone,
       password_hash: hashPassword(userDef.password),
+      password: hashPassword(userDef.password),
       referral_code: userDef.referral_code,
       referred_by: userDef.sponsor_code,
       account_status: 'active',
