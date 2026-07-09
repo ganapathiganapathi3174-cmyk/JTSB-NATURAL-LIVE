@@ -26,150 +26,99 @@ initSystemUsers().catch(err => {
   console.error('[SYSTEM-INIT] Startup initialization error: ' + err.message);
 });
 
-// Helper: wrap a handler in an error handler if it's falsy
-function guard(name, mod) {
-  if (typeof mod === 'function') return mod;
-  if (mod && typeof mod.handler === 'function') return mod.handler;
-  if (mod && typeof mod.default === 'function') return mod.default;
-  if (!mod) { console.error('[INDEX] ' + name + ' is null/falsy'); return (req, res) => { res.writeHead(500); res.end(JSON.stringify({ error: name + ' is null' })); }; }
-  console.error('[INDEX] ' + name + ' unexpected type: ' + typeof mod);
-  return (req, res) => { res.writeHead(500); res.end(JSON.stringify({ error: name + ' invalid type' })); };
-}
-
-// IMPORTANT: Each require() is a TOP-LEVEL call with a hardcoded string literal.
-// Vercel's static analyzer uses this to include handler files in the Lambda bundle.
-// Any single require() failure is caught individually so the rest still work.
-
-let _adminLogin, _preRegister, _createTopupSessionHttp, _createPaymentOrder, _submitPaymentProof;
-let _getPaymentOrderStatus, _retryPaymentOrder, _verifyUPIPayment, _uploadScreenshot;
-let _getUPIPayments, _getUPIDashboardStats, _processPendingPayments, _deleteUPIPayment;
-let _approveUPIPayment, _rejectUPIPayment, _restoreUPIPayment, _getVerificationLogs;
-let _adminDeleteRecord, _getHealthStatus, _supabaseProxy, _getAdminDashboardData;
-let _cleanupDemoData, _approvePendingRegistration, _bulkDeleteUsers, _getRecentActivity;
-let _updateUserStatus, _createPaymentSession, _paymentConfirm, _createSmsSession;
-let _smsPaymentConfirm, _getQueueStatus, _rerunOcr, _rerunVerification, _getReports;
-let _getAuditLogs, _adminLogout, _enterprisePayment, _enterpriseVerifyOtp, _enterpriseResendOtp;
-let _pipelinePayment, _pipelineVerifyOtp, _pipelineResendOtp, _createUPIOrder;
-let _getUPIOrderStatus, _webhookUPIConfirm, _retryUPIOrder, _companionPayment;
-let _getCompanionStatus, _getSponsorMarketplace, _createSponsorTransfer, _getSponsorRequests;
-let _handleSponsorTransfer, _getUserSponsorInfo, _getAdminSponsorTransfers, _getPendingPaymentsQueue;
-
-try { _adminLogin = require('../handlers/adminLogin.js'); } catch (e) { console.error('[INDEX] adminLogin FAILED: ' + e.message); }
-try { _preRegister = require('../handlers/preRegister.js'); } catch (e) { console.error('[INDEX] preRegister FAILED: ' + e.message); }
-try { _createTopupSessionHttp = require('../handlers/createTopupSessionHttp.js'); } catch (e) { console.error('[INDEX] createTopupSessionHttp FAILED: ' + e.message); }
-try { _createPaymentOrder = require('../handlers/createPaymentOrder.js'); } catch (e) { console.error('[INDEX] createPaymentOrder FAILED: ' + e.message); }
-try { _submitPaymentProof = require('../handlers/submitPaymentProof.js'); } catch (e) { console.error('[INDEX] submitPaymentProof FAILED: ' + e.message); }
-try { _getPaymentOrderStatus = require('../handlers/getPaymentOrderStatus.js'); } catch (e) { console.error('[INDEX] getPaymentOrderStatus FAILED: ' + e.message); }
-try { _retryPaymentOrder = require('../handlers/retryPaymentOrder.js'); } catch (e) { console.error('[INDEX] retryPaymentOrder FAILED: ' + e.message); }
-try { _verifyUPIPayment = require('../handlers/verifyUPIPayment.js'); } catch (e) { console.error('[INDEX] verifyUPIPayment FAILED: ' + e.message); }
-try { _uploadScreenshot = require('../handlers/uploadScreenshot.js'); } catch (e) { console.error('[INDEX] uploadScreenshot FAILED: ' + e.message); }
-try { _getHealthStatus = require('../handlers/getHealthStatus.js'); } catch (e) { console.error('[INDEX] getHealthStatus FAILED: ' + e.message); }
-try { _createPaymentSession = require('../handlers/createPaymentSession.js'); } catch (e) { console.error('[INDEX] createPaymentSession FAILED: ' + e.message); }
-try { _paymentConfirm = require('../handlers/paymentConfirm.js'); } catch (e) { console.error('[INDEX] paymentConfirm FAILED: ' + e.message); }
-try { _createSmsSession = require('../handlers/createSmsSession.js'); } catch (e) { console.error('[INDEX] createSmsSession FAILED: ' + e.message); }
-try { _smsPaymentConfirm = require('../handlers/smsPaymentConfirm.js'); } catch (e) { console.error('[INDEX] smsPaymentConfirm FAILED: ' + e.message); }
-try { _enterprisePayment = require('../handlers/enterprisePaymentSubmit.js'); } catch (e) { console.error('[INDEX] enterprisePayment FAILED: ' + e.message); }
-try { _enterpriseVerifyOtp = require('../handlers/enterpriseVerifyOtp.js'); } catch (e) { console.error('[INDEX] enterpriseVerifyOtp FAILED: ' + e.message); }
-try { _enterpriseResendOtp = require('../handlers/enterpriseResendOtp.js'); } catch (e) { console.error('[INDEX] enterpriseResendOtp FAILED: ' + e.message); }
-try { _pipelinePayment = require('../handlers/pipelinePaymentSubmit.js'); } catch (e) { console.error('[INDEX] pipelinePayment FAILED: ' + e.message); }
-try { _pipelineVerifyOtp = require('../handlers/pipelineVerifyOtp.js'); } catch (e) { console.error('[INDEX] pipelineVerifyOtp FAILED: ' + e.message); }
-try { _pipelineResendOtp = require('../handlers/pipelineResendOtp.js'); } catch (e) { console.error('[INDEX] pipelineResendOtp FAILED: ' + e.message); }
-try { _createUPIOrder = require('../handlers/createUPIOrder.js'); } catch (e) { console.error('[INDEX] createUPIOrder FAILED: ' + e.message); }
-try { _getUPIOrderStatus = require('../handlers/getUPIOrderStatus.js'); } catch (e) { console.error('[INDEX] getUPIOrderStatus FAILED: ' + e.message); }
-try { _webhookUPIConfirm = require('../handlers/webhookUPIConfirm.js'); } catch (e) { console.error('[INDEX] webhookUPIConfirm FAILED: ' + e.message); }
-try { _retryUPIOrder = require('../handlers/retryUPIOrder.js'); } catch (e) { console.error('[INDEX] retryUPIOrder FAILED: ' + e.message); }
-try { _companionPayment = require('../handlers/companionPayment.js'); } catch (e) { console.error('[INDEX] companionPayment FAILED: ' + e.message); }
-try { _getSponsorMarketplace = require('../handlers/getSponsorMarketplace.js'); } catch (e) { console.error('[INDEX] getSponsorMarketplace FAILED: ' + e.message); }
-try { _createSponsorTransfer = require('../handlers/createSponsorTransfer.js'); } catch (e) { console.error('[INDEX] createSponsorTransfer FAILED: ' + e.message); }
-try { _getSponsorRequests = require('../handlers/getSponsorRequests.js'); } catch (e) { console.error('[INDEX] getSponsorRequests FAILED: ' + e.message); }
-try { _handleSponsorTransfer = require('../handlers/handleSponsorTransfer.js'); } catch (e) { console.error('[INDEX] handleSponsorTransfer FAILED: ' + e.message); }
-try { _getUserSponsorInfo = require('../handlers/getUserSponsorInfo.js'); } catch (e) { console.error('[INDEX] getUserSponsorInfo FAILED: ' + e.message); }
-try { _adminLogout = require('../handlers/adminLogout.js'); } catch (e) { console.error('[INDEX] adminLogout FAILED: ' + e.message); }
-// Admin handlers
-try { _getUPIPayments = require('../handlers/getUPIPayments.js'); } catch (e) { console.error('[INDEX] getUPIPayments FAILED: ' + e.message); }
-try { _getUPIDashboardStats = require('../handlers/getUPIDashboardStats.js'); } catch (e) { console.error('[INDEX] getUPIDashboardStats FAILED: ' + e.message); }
-try { _processPendingPayments = require('../handlers/processPendingPayments.js'); } catch (e) { console.error('[INDEX] processPendingPayments FAILED: ' + e.message); }
-try { _deleteUPIPayment = require('../handlers/deleteUPIPayment.js'); } catch (e) { console.error('[INDEX] deleteUPIPayment FAILED: ' + e.message); }
-try { _approveUPIPayment = require('../handlers/approveUPIPayment.js'); } catch (e) { console.error('[INDEX] approveUPIPayment FAILED: ' + e.message); }
-try { _rejectUPIPayment = require('../handlers/rejectUPIPayment.js'); } catch (e) { console.error('[INDEX] rejectUPIPayment FAILED: ' + e.message); }
-try { _restoreUPIPayment = require('../handlers/restoreUPIPayment.js'); } catch (e) { console.error('[INDEX] restoreUPIPayment FAILED: ' + e.message); }
-try { _getVerificationLogs = require('../handlers/getVerificationLogs.js'); } catch (e) { console.error('[INDEX] getVerificationLogs FAILED: ' + e.message); }
-try { _adminDeleteRecord = require('../handlers/adminDeleteRecord.js'); } catch (e) { console.error('[INDEX] adminDeleteRecord FAILED: ' + e.message); }
-try { _supabaseProxy = require('../handlers/supabaseProxy.js'); } catch (e) { console.error('[INDEX] supabaseProxy FAILED: ' + e.message); }
-try { _getAdminDashboardData = require('../handlers/getAdminDashboardData.js'); } catch (e) { console.error('[INDEX] getAdminDashboardData FAILED: ' + e.message); }
-try { _cleanupDemoData = require('../handlers/cleanupDemoData.js'); } catch (e) { console.error('[INDEX] cleanupDemoData FAILED: ' + e.message); }
-try { _approvePendingRegistration = require('../handlers/approvePendingRegistration.js'); } catch (e) { console.error('[INDEX] approvePendingRegistration FAILED: ' + e.message); }
-try { _bulkDeleteUsers = require('../handlers/bulkDeleteUsers.js'); } catch (e) { console.error('[INDEX] bulkDeleteUsers FAILED: ' + e.message); }
-try { _getRecentActivity = require('../handlers/getRecentActivity.js'); } catch (e) { console.error('[INDEX] getRecentActivity FAILED: ' + e.message); }
-try { _updateUserStatus = require('../handlers/updateUserStatus.js'); } catch (e) { console.error('[INDEX] updateUserStatus FAILED: ' + e.message); }
-try { _getQueueStatus = require('../handlers/getQueueStatus.js'); } catch (e) { console.error('[INDEX] getQueueStatus FAILED: ' + e.message); }
-try { _rerunOcr = require('../handlers/rerunOcr.js'); } catch (e) { console.error('[INDEX] rerunOcr FAILED: ' + e.message); }
-try { _rerunVerification = require('../handlers/rerunVerification.js'); } catch (e) { console.error('[INDEX] rerunVerification FAILED: ' + e.message); }
-try { _getReports = require('../handlers/getReports.js'); } catch (e) { console.error('[INDEX] getReports FAILED: ' + e.message); }
-try { _getAuditLogs = require('../handlers/getAuditLogs.js'); } catch (e) { console.error('[INDEX] getAuditLogs FAILED: ' + e.message); }
-try { _getCompanionStatus = require('../handlers/getCompanionStatus.js'); } catch (e) { console.error('[INDEX] getCompanionStatus FAILED: ' + e.message); }
-try { _getAdminSponsorTransfers = require('../handlers/getAdminSponsorTransfers.js'); } catch (e) { console.error('[INDEX] getAdminSponsorTransfers FAILED: ' + e.message); }
-try { _getPendingPaymentsQueue = require('../handlers/getPendingPaymentsQueue.js'); } catch (e) { console.error('[INDEX] getPendingPaymentsQueue FAILED: ' + e.message); }
-
-const handlers = {
-  adminLogin: guard('adminLogin', _adminLogin),
-  preRegister: guard('preRegister', _preRegister),
-  createTopupSessionHttp: guard('createTopupSessionHttp', _createTopupSessionHttp),
-  createPaymentOrder: guard('createPaymentOrder', _createPaymentOrder),
-  submitPaymentProof: guard('submitPaymentProof', _submitPaymentProof),
-  getPaymentOrderStatus: guard('getPaymentOrderStatus', _getPaymentOrderStatus),
-  retryPaymentOrder: guard('retryPaymentOrder', _retryPaymentOrder),
-  verifyUPIPayment: guard('verifyUPIPayment', _verifyUPIPayment),
-  uploadScreenshot: guard('uploadScreenshot', _uploadScreenshot),
-  getHealthStatus: guard('getHealthStatus', _getHealthStatus),
-  createPaymentSession: guard('createPaymentSession', _createPaymentSession),
-  paymentConfirm: guard('paymentConfirm', _paymentConfirm),
-  createSmsSession: guard('createSmsSession', _createSmsSession),
-  smsPaymentConfirm: guard('smsPaymentConfirm', _smsPaymentConfirm),
-  enterprisePayment: guard('enterprisePayment', _enterprisePayment),
-  enterpriseVerifyOtp: guard('enterpriseVerifyOtp', _enterpriseVerifyOtp),
-  enterpriseResendOtp: guard('enterpriseResendOtp', _enterpriseResendOtp),
-  pipelinePayment: guard('pipelinePayment', _pipelinePayment),
-  pipelineVerifyOtp: guard('pipelineVerifyOtp', _pipelineVerifyOtp),
-  pipelineResendOtp: guard('pipelineResendOtp', _pipelineResendOtp),
-  createUPIOrder: guard('createUPIOrder', _createUPIOrder),
-  getUPIOrderStatus: guard('getUPIOrderStatus', _getUPIOrderStatus),
-  webhookUPIConfirm: guard('webhookUPIConfirm', _webhookUPIConfirm),
-  retryUPIOrder: guard('retryUPIOrder', _retryUPIOrder),
-  companionPayment: guard('companionPayment', _companionPayment),
-  getSponsorMarketplace: guard('getSponsorMarketplace', _getSponsorMarketplace),
-  createSponsorTransfer: guard('createSponsorTransfer', _createSponsorTransfer),
-  getSponsorRequests: guard('getSponsorRequests', _getSponsorRequests),
-  handleSponsorTransfer: guard('handleSponsorTransfer', _handleSponsorTransfer),
-  getUserSponsorInfo: guard('getUserSponsorInfo', _getUserSponsorInfo),
-  adminLogout: guard('adminLogout', _adminLogout),
-  // Admin-wrapped handlers (need auth)
-  getUPIPayments: requireAdmin(guard('getUPIPayments', _getUPIPayments)),
-  getUPIDashboardStats: requireAdmin(guard('getUPIDashboardStats', _getUPIDashboardStats)),
-  processPendingPayments: requireAdmin(guard('processPendingPayments', _processPendingPayments)),
-  deleteUPIPayment: requireAdmin(guard('deleteUPIPayment', _deleteUPIPayment)),
-  approveUPIPayment: requireAdmin(guard('approveUPIPayment', _approveUPIPayment)),
-  rejectUPIPayment: requireAdmin(guard('rejectUPIPayment', _rejectUPIPayment)),
-  restoreUPIPayment: requireAdmin(guard('restoreUPIPayment', _restoreUPIPayment)),
-  getVerificationLogs: requireAdmin(guard('getVerificationLogs', _getVerificationLogs)),
-  adminDeleteRecord: requireAdmin(guard('adminDeleteRecord', _adminDeleteRecord)),
-  supabaseProxy: requireAdmin(guard('supabaseProxy', _supabaseProxy)),
-  getAdminDashboardData: requireAdmin(guard('getAdminDashboardData', _getAdminDashboardData)),
-  cleanupDemoData: requireAdmin(guard('cleanupDemoData', _cleanupDemoData)),
-  approvePendingRegistration: requireAdmin(guard('approvePendingRegistration', _approvePendingRegistration)),
-  bulkDeleteUsers: requireAdmin(guard('bulkDeleteUsers', _bulkDeleteUsers)),
-  getRecentActivity: requireAdmin(guard('getRecentActivity', _getRecentActivity)),
-  updateUserStatus: requireAdmin(guard('updateUserStatus', _updateUserStatus)),
-  getQueueStatus: requireAdmin(guard('getQueueStatus', _getQueueStatus)),
-  rerunOcr: requireAdmin(guard('rerunOcr', _rerunOcr)),
-  rerunVerification: requireAdmin(guard('rerunVerification', _rerunVerification)),
-  getReports: requireAdmin(guard('getReports', _getReports)),
-  getAuditLogs: requireAdmin(guard('getAuditLogs', _getAuditLogs)),
-  getCompanionStatus: requireAdmin(guard('getCompanionStatus', _getCompanionStatus)),
-  getAdminSponsorTransfers: requireAdmin(guard('getAdminSponsorTransfers', _getAdminSponsorTransfers)),
-  getPendingPaymentsQueue: requireAdmin(guard('getPendingPaymentsQueue', _getPendingPaymentsQueue)),
+// Lazy module loader: require() is deferred until first request to this path.
+// Each require() still uses a hardcoded string literal so Vercel's static
+// analyzer includes the file in the Lambda deployment bundle.
+// If a module fails to load, only its endpoint returns 500 — not the whole API.
+const handlerModules = {};
+const lazy = (name, modulePath) => {
+  return (req, res) => {
+    if (!handlerModules[name]) {
+      try {
+        let mod = require(modulePath);
+        if (typeof mod === 'function') handlerModules[name] = mod;
+        else if (mod && typeof mod.handler === 'function') handlerModules[name] = mod.handler;
+        else if (mod && typeof mod.default === 'function') handlerModules[name] = mod.default;
+        else throw new Error('unexpected export type: ' + typeof mod);
+        console.error('[INDEX] Loaded: ' + name);
+      } catch (e) {
+        console.error('[INDEX] FAILED: ' + name + ' (' + modulePath + '): ' + e.message);
+        handlerModules[name] = (rq, rs) => { rs.writeHead(500); rs.end(JSON.stringify({ error: name + ' load failed', detail: e.message })); };
+      }
+    }
+    return handlerModules[name](req, res);
+  };
 };
-console.error('[INDEX] All ' + Object.keys(handlers).length + ' handlers loaded');
+
+// Override lazy with requireAdmin wrapper for admin-endpoints
+const _requireAdmin = requireAdmin;
+const adminEndpoints = [
+  'getUPIPayments','getUPIDashboardStats','processPendingPayments','deleteUPIPayment',
+  'approveUPIPayment','rejectUPIPayment','restoreUPIPayment','getVerificationLogs',
+  'adminDeleteRecord','supabaseProxy','getAdminDashboardData','cleanupDemoData',
+  'approvePendingRegistration','bulkDeleteUsers','getRecentActivity','updateUserStatus',
+  'getQueueStatus','rerunOcr','rerunVerification','getReports','getAuditLogs',
+  'getCompanionStatus','getAdminSponsorTransfers','getPendingPaymentsQueue',
+];
+
+const handlerMap = {
+  adminLogin: lazy('adminLogin', '../handlers/adminLogin.js'),
+  preRegister: lazy('preRegister', '../handlers/preRegister.js'),
+  createTopupSessionHttp: lazy('createTopupSessionHttp', '../handlers/createTopupSessionHttp.js'),
+  createPaymentOrder: lazy('createPaymentOrder', '../handlers/createPaymentOrder.js'),
+  submitPaymentProof: lazy('submitPaymentProof', '../handlers/submitPaymentProof.js'),
+  getPaymentOrderStatus: lazy('getPaymentOrderStatus', '../handlers/getPaymentOrderStatus.js'),
+  retryPaymentOrder: lazy('retryPaymentOrder', '../handlers/retryPaymentOrder.js'),
+  verifyUPIPayment: lazy('verifyUPIPayment', '../handlers/verifyUPIPayment.js'),
+  uploadScreenshot: lazy('uploadScreenshot', '../handlers/uploadScreenshot.js'),
+  getHealthStatus: lazy('getHealthStatus', '../handlers/getHealthStatus.js'),
+  createPaymentSession: lazy('createPaymentSession', '../handlers/createPaymentSession.js'),
+  paymentConfirm: lazy('paymentConfirm', '../handlers/paymentConfirm.js'),
+  createSmsSession: lazy('createSmsSession', '../handlers/createSmsSession.js'),
+  smsPaymentConfirm: lazy('smsPaymentConfirm', '../handlers/smsPaymentConfirm.js'),
+  enterprisePayment: lazy('enterprisePayment', '../handlers/enterprisePaymentSubmit.js'),
+  enterpriseVerifyOtp: lazy('enterpriseVerifyOtp', '../handlers/enterpriseVerifyOtp.js'),
+  enterpriseResendOtp: lazy('enterpriseResendOtp', '../handlers/enterpriseResendOtp.js'),
+  pipelinePayment: lazy('pipelinePayment', '../handlers/pipelinePaymentSubmit.js'),
+  pipelineVerifyOtp: lazy('pipelineVerifyOtp', '../handlers/pipelineVerifyOtp.js'),
+  pipelineResendOtp: lazy('pipelineResendOtp', '../handlers/pipelineResendOtp.js'),
+  createUPIOrder: lazy('createUPIOrder', '../handlers/createUPIOrder.js'),
+  getUPIOrderStatus: lazy('getUPIOrderStatus', '../handlers/getUPIOrderStatus.js'),
+  webhookUPIConfirm: lazy('webhookUPIConfirm', '../handlers/webhookUPIConfirm.js'),
+  retryUPIOrder: lazy('retryUPIOrder', '../handlers/retryUPIOrder.js'),
+  companionPayment: lazy('companionPayment', '../handlers/companionPayment.js'),
+  getSponsorMarketplace: lazy('getSponsorMarketplace', '../handlers/getSponsorMarketplace.js'),
+  createSponsorTransfer: lazy('createSponsorTransfer', '../handlers/createSponsorTransfer.js'),
+  getSponsorRequests: lazy('getSponsorRequests', '../handlers/getSponsorRequests.js'),
+  handleSponsorTransfer: lazy('handleSponsorTransfer', '../handlers/handleSponsorTransfer.js'),
+  getUserSponsorInfo: lazy('getUserSponsorInfo', '../handlers/getUserSponsorInfo.js'),
+  adminLogout: lazy('adminLogout', '../handlers/adminLogout.js'),
+  // Admin-wrapped — auth check happens at request time
+  getUPIPayments: _requireAdmin(lazy('getUPIPayments', '../handlers/getUPIPayments.js')),
+  getUPIDashboardStats: _requireAdmin(lazy('getUPIDashboardStats', '../handlers/getUPIDashboardStats.js')),
+  processPendingPayments: _requireAdmin(lazy('processPendingPayments', '../handlers/processPendingPayments.js')),
+  deleteUPIPayment: _requireAdmin(lazy('deleteUPIPayment', '../handlers/deleteUPIPayment.js')),
+  approveUPIPayment: _requireAdmin(lazy('approveUPIPayment', '../handlers/approveUPIPayment.js')),
+  rejectUPIPayment: _requireAdmin(lazy('rejectUPIPayment', '../handlers/rejectUPIPayment.js')),
+  restoreUPIPayment: _requireAdmin(lazy('restoreUPIPayment', '../handlers/restoreUPIPayment.js')),
+  getVerificationLogs: _requireAdmin(lazy('getVerificationLogs', '../handlers/getVerificationLogs.js')),
+  adminDeleteRecord: _requireAdmin(lazy('adminDeleteRecord', '../handlers/adminDeleteRecord.js')),
+  supabaseProxy: _requireAdmin(lazy('supabaseProxy', '../handlers/supabaseProxy.js')),
+  getAdminDashboardData: _requireAdmin(lazy('getAdminDashboardData', '../handlers/getAdminDashboardData.js')),
+  cleanupDemoData: _requireAdmin(lazy('cleanupDemoData', '../handlers/cleanupDemoData.js')),
+  approvePendingRegistration: _requireAdmin(lazy('approvePendingRegistration', '../handlers/approvePendingRegistration.js')),
+  bulkDeleteUsers: _requireAdmin(lazy('bulkDeleteUsers', '../handlers/bulkDeleteUsers.js')),
+  getRecentActivity: _requireAdmin(lazy('getRecentActivity', '../handlers/getRecentActivity.js')),
+  updateUserStatus: _requireAdmin(lazy('updateUserStatus', '../handlers/updateUserStatus.js')),
+  getQueueStatus: _requireAdmin(lazy('getQueueStatus', '../handlers/getQueueStatus.js')),
+  rerunOcr: _requireAdmin(lazy('rerunOcr', '../handlers/rerunOcr.js')),
+  rerunVerification: _requireAdmin(lazy('rerunVerification', '../handlers/rerunVerification.js')),
+  getReports: _requireAdmin(lazy('getReports', '../handlers/getReports.js')),
+  getAuditLogs: _requireAdmin(lazy('getAuditLogs', '../handlers/getAuditLogs.js')),
+  getCompanionStatus: _requireAdmin(lazy('getCompanionStatus', '../handlers/getCompanionStatus.js')),
+  getAdminSponsorTransfers: _requireAdmin(lazy('getAdminSponsorTransfers', '../handlers/getAdminSponsorTransfers.js')),
+  getPendingPaymentsQueue: _requireAdmin(lazy('getPendingPaymentsQueue', '../handlers/getPendingPaymentsQueue.js')),
+};
 
 module.exports = async (req, res) => {
   const url = req.url.split('?')[0];
@@ -180,7 +129,7 @@ module.exports = async (req, res) => {
     const sseHandler = require('../handlers/sseDashboard.js');
     return sseHandler(req, res);
   }
-  const handler = handlers[path];
+  const handler = handlerMap[path];
 
   // Rate limiting by IP
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
