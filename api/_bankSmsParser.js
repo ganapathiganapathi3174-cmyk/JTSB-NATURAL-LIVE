@@ -71,8 +71,8 @@ function extractSmsAmount(lines) {
 
 function extractSmsUtr(lines) {
   const patterns = [
-    /(?:UPI\s*(?:REF|REFERENCE|TRANSACTION\s*(?:REF|ID)?|TRXN|TXN)?\s*:?\s*([A-Z0-9]{10,30}))/i,
-    /(?:REF|REFERENCE|TRANSACTION\s*(?:ID|REF)?|TXN?\s*(?:ID|No|NUMBER)?|RRN|RR\s*NUMBER)\s*:?\s*([A-Z0-9]{10,30})/i,
+    /(?:UPI\s*(?:REF|REFERENCE|TRANSACTION\s*(?:REF|ID)?|TRXN|TXN)?\s*(?:No|NUMBER|ID|REF|no|number|id|ref)?\.?\s*:?\s*([A-Z0-9]{10,30}))/i,
+    /(?:REF|REFERENCE|TRANSACTION\s*(?:ID|REF)?|TXN?\s*(?:ID|No|NUMBER)?|RRN|RR\s*NUMBER)\s*(?:No|NUMBER|ID|REF|no|number|id|ref)?\.?\s*:?\s*([A-Z0-9]{10,30})/i,
     /(?:UTR|NEFT\s*UTR)\s*:?\s*([A-Z0-9]{10,30})/i,
   ];
   const found = [];
@@ -142,8 +142,8 @@ function extractSmsReceiverAccount(lines) {
   for (const line of lines) {
     const upper = line.toUpperCase();
     if (/A\/?C|AC(?:COUNT)?\s*(?:NO|NUMBER)?/.test(upper)) {
-      const m = line.match(/[AX]\/?C(?:\s*NO|NUMBER)?\.?\s*:?\s*[X\*]?(\d{4,})/i) ||
-               line.match(/ACCOUNT\s*(?:NO|NUMBER)?\.?\s*:?\s*[X\*]?(\d{4,})/i);
+      const m = line.match(/[AX]\/?C(?:\s*(?:NO|NUMBER))?\.?\s*:?\s*[X\*]?(\d{4,})/i) ||
+               line.match(/ACCOUNT(?:\s*(?:NO|NUMBER))?\.?\s*:?\s*[X\*]?(\d{4,})/i);
       if (m) return m[1].trim();
     }
   }
@@ -156,7 +156,7 @@ function extractSmsReceiverAccount(lines) {
 
 function extractSmsBankName(lines) {
   const sorted = [...KNOWN_BANKS].sort((a, b) => b.length - a.length);
-  const pat = new RegExp('(' + sorted.map(n => n.replace(/[ .]/g, '[\\s.]?')).join('|') + ')', 'i');
+  const pat = new RegExp('(?:^|[^a-zA-Z0-9])(' + sorted.map(n => n.replace(/[ .]/g, '[\\s.]?')).join('|') + ')(?:$|[^a-zA-Z0-9])', 'i');
   for (const line of lines) {
     const m = line.match(pat);
     if (m) {
@@ -251,18 +251,52 @@ function extractSmsPaymentStatus(lines) {
   return null;
 }
 
+function extractSmsTransactionType(lines) {
+  for (const line of lines) {
+    const upper = line.toUpperCase();
+    if (/\bCREDITED\b/.test(upper)) return 'CREDITED';
+    if (/\bDEBITED\b/.test(upper)) return 'DEBITED';
+    if (/\bPAID\b/.test(upper)) return 'PAID';
+    if (/\bSENT\b/.test(upper)) return 'SENT';
+    if (/\bRECEIVED\b/.test(upper)) return 'RECEIVED';
+    if (/\bTRANSFER\b|\bTRANSFERRED\b/.test(upper)) return 'TRANSFER';
+    if (/\bREFUND\b/.test(upper)) return 'REFUND';
+    if (/\bWITHDRAWAL\b|\bWITHDRAWN\b/.test(upper)) return 'WITHDRAWAL';
+  }
+  return null;
+}
+
+function extractSmsHeader(lines) {
+  const knownBankNames = [...KNOWN_BANKS, ...KNOWN_APPS];
+  const sorted = [...knownBankNames].sort((a, b) => b.length - a.length);
+  const pat = new RegExp('^\\s*(' + sorted.map(n => n.replace(/[ .]/g, '[\\\\s.]?')).join('|') + ')', 'i');
+  for (const line of lines) {
+    const m = line.match(pat);
+    if (m) return m[1].trim();
+  }
+  for (const line of lines) {
+    const m = line.match(/^[,\s]*([A-Z][A-Za-z0-9 .]+?)(?:\s*-|\s*:|\s*\|)/);
+    if (m) {
+      const h = m[1].trim();
+      if (h.length >= 3 && h.length <= 40) return h;
+    }
+  }
+  return null;
+}
+
 function computeSmsConfidence(parsed, rawText) {
   let score = 0;
   const weights = {
     extractedAmount: 25,
     extractedUtr: 25,
-    extractedBankName: 15,
-    extractedDate: 15,
+    extractedBankName: 10,
+    extractedDate: 12,
     extractedTime: 5,
     extractedPaymentStatus: 10,
     extractedSenderVpa: 3,
     extractedReceiverName: 1,
-    extractedReceiverAccount: 1,
+    extractedReceiverAccount: 4,
+    extractedTransactionType: 5,
   };
   for (const [field, weight] of Object.entries(weights)) {
     if (parsed[field] !== null && parsed[field] !== undefined && parsed[field] !== '') {
@@ -291,6 +325,8 @@ function parseBankSmsOcr(fullText) {
     extractedDate: null,
     extractedTime: null,
     extractedPaymentStatus: null,
+    extractedTransactionType: null,
+    extractedSmsHeader: null,
     confidence: 0,
     wordCount: 0,
     fieldCount: 0,
@@ -326,9 +362,11 @@ function parseBankSmsOcr(fullText) {
     result.extractedDate = extractSmsDate(lines);
     result.extractedTime = extractSmsTime(lines);
     result.extractedPaymentStatus = extractSmsPaymentStatus(lines);
+    result.extractedTransactionType = extractSmsTransactionType(lines);
+    result.extractedSmsHeader = extractSmsHeader(lines);
   }
 
-  const fieldNames = ['extractedAmount', 'extractedUtr', 'extractedTransactionRef', 'extractedSenderVpa', 'extractedReceiverName', 'extractedReceiverAccount', 'extractedBankName', 'extractedDate', 'extractedTime', 'extractedPaymentStatus'];
+  const fieldNames = ['extractedAmount', 'extractedUtr', 'extractedTransactionRef', 'extractedSenderVpa', 'extractedReceiverName', 'extractedReceiverAccount', 'extractedBankName', 'extractedDate', 'extractedTime', 'extractedPaymentStatus', 'extractedTransactionType', 'extractedSmsHeader'];
   result.fieldCount = fieldNames.filter(f => result[f] !== null && result[f] !== undefined && result[f] !== '').length;
 
   if (result.fieldCount === 0 && rawText.length > 50) {

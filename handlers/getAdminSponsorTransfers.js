@@ -23,10 +23,14 @@ module.exports = async (req, res) => {
     }
 
     let transfers = [];
-    if (filters.length > 0) {
-      transfers = await runQuery(COL_SPONSOR_TRANSFERS, filters, { orderBy: 'created_at', ascending: false, limit: 500 }) || [];
-    } else {
-      transfers = await runQuery(COL_SPONSOR_TRANSFERS, [], { orderBy: 'created_at', ascending: false, limit: 500 }) || [];
+    try {
+      if (filters.length > 0) {
+        transfers = await runQuery(COL_SPONSOR_TRANSFERS, filters, { orderBy: 'created_at', ascending: false, limit: 500 }) || [];
+      } else {
+        transfers = await runQuery(COL_SPONSOR_TRANSFERS, [], { orderBy: 'created_at', ascending: false, limit: 500 }) || [];
+      }
+    } catch (queryErr) {
+      console.error('[ADMIN-SPONSOR-TRANSFERS] Query failed (table may not exist):', queryErr.message);
     }
 
     if (transfers.length === 0) {

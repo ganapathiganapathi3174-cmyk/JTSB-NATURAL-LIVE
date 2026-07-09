@@ -87,9 +87,7 @@ module.exports = async (req, res) => {
       ...result,
       message: result.status === 'verified'
         ? 'Payment verified successfully'
-        : result.status === 'rejected'
-          ? 'Payment verification failed'
-          : 'Payment submitted for manual review',
+        : 'Payment verification failed',
     }));
   } catch (err) {
     const totalMs = Date.now() - reqStart;

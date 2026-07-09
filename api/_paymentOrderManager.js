@@ -157,8 +157,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   const verificationResult = await runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null);
 
   const isVerified = verificationResult.status === 'verified';
-  const isRejected = verificationResult.status === 'rejected';
-  const finalOrderStatus = isVerified ? 'verified' : (isRejected ? 'rejected' : 'manual_review');
+  const finalOrderStatus = isVerified ? 'verified' : 'rejected';
 
   await updateDoc(COL_ORDERS, orderId, {
     status: finalOrderStatus,
@@ -169,23 +168,20 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     rejection_reasons: verificationResult.reasons || [],
     final_score: verificationResult.verificationScore || 0,
     fraud_score: verificationResult.fraudScore || 0,
-    verified_at: isVerified || isRejected ? now() : null,
-    verification_completed_at: isVerified || isRejected ? now() : null,
+    verified_at: now(),
+    verification_completed_at: now(),
     updated_at: now(),
   });
 
   if (isVerified) {
     await executeVerifiedOrder(order, verificationResult, extra);
   } else {
-    const msg = isRejected
-      ? 'Your payment of ₹' + order.amount + ' was rejected. Reasons: ' + (verificationResult.reasons || []).join(', ')
-      : 'Your payment of ₹' + order.amount + ' has been flagged for manual review.';
-    const title = isRejected ? 'Payment Rejected' : 'Payment Under Review';
+    const msg = 'Your payment of ₹' + order.amount + ' was rejected. Reasons: ' + (verificationResult.reasons || []).join(', ');
     await addDoc('notifications', {
       receiverId: order.user_id || '',
-      title,
+      title: 'Payment Rejected',
       message: msg,
-      type: isRejected ? 'payment_rejected' : 'payment_manual_review', status: 'unread', created_at: now(),
+      type: 'payment_rejected', status: 'unread', created_at: now(),
       senderId: 'system', senderName: 'System',
     }).catch(() => {});
   }

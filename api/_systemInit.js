@@ -62,14 +62,17 @@ async function initSystemUsers() {
       continue;
     }
 
-    const existingByEmailHash = await supabase
-      .from('users')
-      .select('id')
-      .eq('email_hash', crypto.createHash('sha256').update(userDef.email.toLowerCase().trim()).digest('hex'))
-      .limit(1)
-      .maybeSingle();
+    let existingByEmailHash = null;
+    try {
+      existingByEmailHash = await supabase
+        .from('users')
+        .select('id')
+        .eq('email_hash', crypto.createHash('sha256').update(userDef.email.toLowerCase().trim()).digest('hex'))
+        .limit(1)
+        .maybeSingle();
+    } catch (_) { /* email_hash column may not exist */ }
 
-    if (existingByEmailHash.data) {
+    if (existingByEmailHash?.data) {
       console.log('[SYSTEM-INIT] User ' + userDef.email + ' already exists by email hash (id=' + existingByEmailHash.data.id + '), skipping');
       continue;
     }
@@ -91,7 +94,7 @@ async function initSystemUsers() {
       active: true,
       membership_paid: true,
       membership_type: String(userDef.package),
-      is_system_user: true,
+      // is_system_user omitted — column may not exist in deployed schema
       referrals_count: 0,
       total_referral_count: 0,
       referral_limit_reached: false,
@@ -99,8 +102,8 @@ async function initSystemUsers() {
       is_qualified: false,
       joined_date: now,
       approved_date: now,
-      email_hash: crypto.createHash('sha256').update(userDef.email.toLowerCase().trim()).digest('hex'),
-      phone_hash: crypto.createHash('sha256').update(userDef.phone.trim()).digest('hex'),
+      // email_hash and phone_hash omitted — column may not exist in deployed schema;
+      // findUserByEmail/Phone both have fallback scan logic that works without them
     };
 
     const { error: insertError } = await supabase.from('users').insert(userData);

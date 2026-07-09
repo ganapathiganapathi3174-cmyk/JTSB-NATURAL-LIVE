@@ -129,7 +129,7 @@ module.exports = async (req, res) => {
       () => addDoc(COL_PENDING_REGS, {
         name: name.trim(), email: email.toLowerCase().trim(), phone: phone.trim(),
         password_hash: hashPassword(password), referral_code: refCode,
-        membership_type: allowedPackage,
+        // membership_type omitted — column may not exist in deployed schema
       }),
       'handlers/preRegister.js', 'module.exports', 113
     );

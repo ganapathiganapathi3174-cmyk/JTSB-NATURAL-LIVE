@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import QrCodeDisplay from './QrCodeDisplay.jsx';
 
 const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 const ADMIN_UPI = 'jayarajj-3@okicici';
+const MERCHANT_NAME = 'JTSB Natural';
+const MOBILE_NUMBER = '9655897523';
 
 const PROGRESS_STEPS = [
   'Uploading Screenshot...',
@@ -13,6 +16,32 @@ const PROGRESS_STEPS = [
   'Checking Duplicate...',
   'Running Fraud Detection...',
   'Verification Completed.',
+];
+
+function buildUpiIntent(upiId, amount, orderId, description) {
+  const params = new URLSearchParams({
+    pa: upiId,
+    pn: MERCHANT_NAME,
+    am: Number(amount).toFixed(2),
+    tr: orderId,
+    tn: (description || 'Payment').substring(0, 30),
+    cu: 'INR',
+    mc: '0000',
+    mode: '04',
+  });
+  return 'upi://pay?' + params.toString();
+}
+
+function buildAppDeeplink(intentUri, scheme) {
+  const qs = intentUri.split('?')[1];
+  return scheme + '://pay?' + qs;
+}
+
+const UPI_APPS = [
+  { id: 'GOOGLE_PAY', name: 'Google Pay', icon: 'G', color: '#4285F4', scheme: 'tez' },
+  { id: 'PHONE_PE', name: 'PhonePe', icon: 'P', color: '#5F259F', scheme: 'phonepe' },
+  { id: 'PAYTM', name: 'Paytm', icon: 'PT', color: '#00BAF2', scheme: 'paytmmp' },
+  { id: 'BHIM', name: 'BHIM', icon: 'B', color: '#1F7A1F', scheme: 'bhim' },
 ];
 
 export default function UpiPayment({ type, pendingRegId, userId, allowedPackage, onSuccess, onError }) {
@@ -27,6 +56,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
   const [verifyResult, setVerifyResult] = useState(null);
   const [progressIndex, setProgressIndex] = useState(0);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const fileRef = useRef(null);
   const timerRef = useRef(null);
@@ -99,7 +129,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
       if (!resp.ok) throw new Error(data.error || 'Failed to create payment order');
 
       setOrderId(data.orderId);
-      setStep('verify');
+      setStep('pay');
     } catch (err) {
       setError(err.message || 'Failed to create payment order');
       setSelectedAmount(null);
@@ -295,27 +325,23 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
     );
   }
 
-  if (verifyResult && (verifyResult.status === 'rejected' || verifyResult.status === 'manual_review' || verifyResult.status === 'error')) {
+  if (verifyResult && (verifyResult.status === 'rejected' || verifyResult.status === 'error')) {
     const isRejected = verifyResult.status === 'rejected';
     const isError = verifyResult.status === 'error';
     return (
       <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%',
-          background: isError ? 'linear-gradient(135deg, #FB7185, #F43F5E)' : isRejected ? '#FB7185' : '#FBBF24',
+          background: 'linear-gradient(135deg, #FB7185, #F43F5E)',
           color: '#fff', display: 'flex', alignItems: 'center',
           justifyContent: 'center', fontSize: '1.75rem',
           margin: '0 auto 1.25rem',
-          boxShadow: isError
-            ? '0 0 30px rgba(251,113,133,0.3)'
-            : isRejected
-              ? '0 0 30px rgba(251,113,133,0.3)'
-              : '0 0 30px rgba(251,191,36,0.3)',
+          boxShadow: '0 0 30px rgba(251,113,133,0.3)',
         }}>
-          {isError ? '!' : isRejected ? '✗' : '⏳'}
+          {isError ? '!' : '✗'}
         </div>
-        <h3 style={{ margin: 0, fontSize: '1.1rem', color: isError || isRejected ? '#FB7185' : '#FBBF24' }}>
-          {isError ? 'Verification Failed' : isRejected ? 'Payment Rejected' : 'Under Manual Review'}
+        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#FB7185' }}>
+          {isError ? 'Verification Failed' : 'Payment Rejected'}
         </h3>
         {(verifyResult.reasons?.length > 0) && (
           <div style={{ marginTop: '0.75rem' }}>
@@ -373,6 +399,90 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
     );
   }
 
+  if (step === 'pay') {
+    const intentUri = buildUpiIntent(ADMIN_UPI, selectedAmount, orderId, type === 'registration' ? 'Registration' : 'Topup');
+    return (
+      <div style={{ animation: 'fadeIn 0.3s ease' }}>
+        {error && (
+          <div className="alert alert-error" style={{ marginBottom: '1rem', whiteSpace: 'pre-line' }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{
+          background: 'var(--surface)', borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border)', padding: '1.25rem',
+          marginBottom: '1rem',
+        }}>
+          <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', textAlign: 'center' }}>
+            Pay ₹{selectedAmount}
+          </h3>
+
+          <p style={{ fontSize: '0.8rem', color: 'var(--muted)', textAlign: 'center', marginBottom: '1rem' }}>
+            Scan QR or tap an app to pay
+          </p>
+
+          <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+            <QrCodeDisplay value={intentUri} size={180} />
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
+            {UPI_APPS.map(app => (
+              <a
+                key={app.id}
+                href={buildAppDeeplink(intentUri, app.scheme)}
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                  padding: '0.5rem 0.75rem', borderRadius: 8,
+                  background: app.color, color: '#fff',
+                  textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600,
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                <span style={{
+                  width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.7rem', fontWeight: 700, flexShrink: 0,
+                }}>{app.icon}</span>
+                {app.name}
+              </a>
+            ))}
+          </div>
+
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            justifyContent: 'center', marginBottom: '1rem',
+          }}>
+            <code style={{
+              fontSize: '0.85rem', padding: '0.4rem 0.75rem',
+              background: 'var(--surface-2)', borderRadius: 6,
+              userSelect: 'all', color: 'var(--accent)',
+            }}>{ADMIN_UPI}</code>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => { navigator.clipboard.writeText(ADMIN_UPI); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary w-full"
+            onClick={() => setStep('verify')}
+            style={{ padding: '0.8rem', fontSize: '1rem', fontWeight: 600, borderRadius: 10 }}
+          >
+            I've Paid — Upload SMS Screenshot →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (step === 'verify') {
     return (
       <div style={{ animation: 'fadeIn 0.3s ease' }}>
@@ -388,16 +498,16 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
           marginBottom: '1rem',
         }}>
           <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', textAlign: 'center' }}>
-            Complete Your Payment
+            Upload Bank SMS Screenshot
           </h3>
 
           <p style={{
             fontSize: '0.85rem', color: 'var(--muted)', textAlign: 'center',
             marginBottom: '1.25rem', lineHeight: 1.6,
           }}>
-            Pay <strong style={{ color: 'var(--text)' }}>₹{selectedAmount}</strong> to{' '}
+            Paid <strong style={{ color: 'var(--text)' }}>₹{selectedAmount}</strong> to{' '}
             <strong style={{ color: 'var(--accent)', userSelect: 'all' }}>{ADMIN_UPI}</strong>
-            {' '}via any UPI app (GPay / PhonePe / Paytm / BHIM / Bank App), then upload your bank SMS screenshot below.
+            ? Upload your bank SMS screenshot below to verify.
           </p>
         </div>
 
