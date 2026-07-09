@@ -96,12 +96,12 @@ module.exports = async (req, res) => {
       referrer = refUser;
 
       if (referrer && referrer.referral_limit_reached && !isSystemReferralCode(referrer.referral_code)) {
-        res.writeHead(400); res.end(JSON.stringify({ error: 'Referral Link Expired — this referral link has already been used for the maximum number of registrations.' }));
+        res.writeHead(400); res.end(JSON.stringify({ error: 'You have reached your maximum referral limit.' }));
         LOG(`Response: referral limit reached — total ${Date.now() - reqStart}ms`);
         return;
       }
       if (referrer && referrer.referral_active === false && !isSystemReferralCode(referrer.referral_code)) {
-        res.writeHead(400); res.end(JSON.stringify({ error: 'Referral Link Expired — this referral link is no longer active.' }));
+        res.writeHead(400); res.end(JSON.stringify({ error: 'You have reached your maximum referral limit.' }));
         LOG(`Response: referral inactive — total ${Date.now() - reqStart}ms`);
         return;
       }
