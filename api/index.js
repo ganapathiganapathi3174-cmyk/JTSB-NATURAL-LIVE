@@ -13,9 +13,31 @@ try {
   }
 } catch (_) {}
 
-const { requireAdmin } = require('./_auth.js');
-const metrics = require('./_metrics.js');
-const { initSystemUsers } = require('./_systemInit.js');
+// Helper: try to require a module, return error-handler on failure (with logging)
+function tryRequire(name, modulePath) {
+  let err = null;
+  try {
+    const mod = require(modulePath);
+    if (typeof mod === 'function') return mod;
+    if (mod && typeof mod.handler === 'function') return mod.handler;
+    if (mod && typeof mod.default === 'function') return mod.default;
+    console.error('[INDEX] ' + name + ' exports unexpected type: ' + typeof mod);
+    err = new Error('unexpected export type: ' + typeof mod);
+  } catch (e) {
+    console.error('[INDEX] FAILED: ' + name + ' (' + modulePath + '): ' + e.message);
+    err = e;
+  }
+  const errDetail = err ? err.message : 'unknown';
+  return (req, res) => { res.writeHead(500); res.end(JSON.stringify({ error: name + ' failed to load', detail: errDetail })); };
+}
+
+const { requireAdmin } = (() => {
+  try { return require('./_auth.js'); } catch (e) { console.error('[INDEX] _auth.js failed: ' + e.message); return { requireAdmin: (fn) => fn }; }
+})();
+let metrics = {};
+try { metrics = require('./_metrics.js'); } catch (e) { console.error('[INDEX] _metrics.js failed: ' + e.message); }
+let initSystemUsers = async () => {};
+try { const sys = require('./_systemInit.js'); initSystemUsers = sys.initSystemUsers || (async () => {}); } catch (e) { console.error('[INDEX] _systemInit.js failed: ' + e.message); }
 
 // Initialize system users on first cold start (idempotent — skips if already exist)
 initSystemUsers().catch(err => {
@@ -32,21 +54,6 @@ function rateLimit(key, maxRequests = 30, windowMs = 60000) {
   rateLimitStore.set(key, entry);
   if (entry.count > maxRequests) return { limited: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
   return { limited: false };
-}
-
-// Helper: try to require a module, return error-handler on failure (with logging)
-function tryRequire(name, modulePath) {
-  try {
-    const mod = require(modulePath);
-    if (typeof mod === 'function') return mod;
-    if (mod && typeof mod.handler === 'function') return mod.handler;
-    if (mod && typeof mod.default === 'function') return mod.default;
-    console.error('[INDEX] ' + name + ' exports unexpected type: ' + typeof mod);
-  } catch (e) {
-    console.error('[INDEX] FAILED: ' + name + ' (' + modulePath + '): ' + e.message);
-  }
-  // Return error-handler on failure
-  return (req, res) => { res.writeHead(500); res.end(JSON.stringify({ error: name + ' failed to load' })); };
 }
 
 // IMPORTANT: Each require() uses a hardcoded string literal so Vercel's static
