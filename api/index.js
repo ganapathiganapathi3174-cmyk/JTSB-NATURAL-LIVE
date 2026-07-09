@@ -148,10 +148,14 @@ module.exports = async (req, res) => {
   };
   await handler(req, res).catch(err => {
     clearTimeout(abortTimer);
+    const errMsg = err?.message || 'Unknown error';
+    const errStack = err?.stack?.split('\n').slice(0,4).join('\n') || '';
+    console.error('[API ERROR] Path=' + path + ' Error=' + errMsg);
+    console.error('[API ERROR] Stack=' + errStack);
     metrics.trackAPICall(path, req.method, 500);
     if (!res.headersSent) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Internal server error' }));
+      res.end(JSON.stringify({ error: errMsg, path }));
     }
   });
 };

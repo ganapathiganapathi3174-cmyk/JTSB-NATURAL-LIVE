@@ -40,17 +40,6 @@ function getSupabaseClient() {
   }
   return createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      fetch: (url, opts) => {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 30000);
-        const origSignal = opts?.signal;
-        if (origSignal) {
-          origSignal.addEventListener('abort', () => controller.abort(), { once: true });
-        }
-        return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(timer));
-      },
-    },
   });
 }
 
