@@ -15,6 +15,7 @@ const metrics = require('./_metrics.js');
 const { initSystemUsers } = require('./_systemInit.js');
 initSystemUsers().catch(err => console.error('[SYSTEM-INIT] Error: ' + err.message));
 
+// Rate limiter
 const rateLimitStore = new Map();
 function rateLimit(key, max = 60, windowMs = 60000) {
   const now = Date.now();
@@ -26,84 +27,75 @@ function rateLimit(key, max = 60, windowMs = 60000) {
   return { limited: false };
 }
 
-// Lazy-load handlers on first request
-const cache = {};
-function load(name, path) {
-  return (req, res) => {
-    if (!cache[name]) {
-      try {
-        let m = require(path);
-        if (typeof m === 'function') cache[name] = m;
-        else if (m && typeof m.handler === 'function') cache[name] = m.handler;
-        else if (m && typeof m.default === 'function') cache[name] = m.default;
-        else { cache[name] = (r, s) => { s.writeHead(500); s.end(JSON.stringify({ error: name + ' invalid export' })); }; }
-      } catch (e) {
-        cache[name] = (r, s) => { s.writeHead(500); s.end(JSON.stringify({ error: name + ' load failed', detail: e.message })); };
-      }
-    }
-    return cache[name](req, res);
-  };
+// Load all handlers at top level so Vercel's static analyzer includes them.
+// Each is wrapped in try/catch so one failure doesn't crash the whole module.
+function safeHandler(name, fn) {
+  if (typeof fn === 'function') return fn;
+  if (fn && typeof fn.handler === 'function') return fn.handler;
+  if (fn && typeof fn.default === 'function') return fn.default;
+  console.error('[INDEX] ' + name + ' invalid export: ' + typeof fn);
+  return (r, s) => { s.writeHead(500); s.end(JSON.stringify({ error: name + ' invalid' })); };
 }
 
-const map = {
-  // Public endpoints
-  adminLogin: load('adminLogin', '../handlers/adminLogin.js'),
-  preRegister: load('preRegister', '../handlers/preRegister.js'),
-  getHealthStatus: load('getHealthStatus', '../handlers/getHealthStatus.js'),
-  getSponsorMarketplace: load('getSponsorMarketplace', '../handlers/getSponsorMarketplace.js'),
-  createSponsorTransfer: load('createSponsorTransfer', '../handlers/createSponsorTransfer.js'),
-  getSponsorRequests: load('getSponsorRequests', '../handlers/getSponsorRequests.js'),
-  handleSponsorTransfer: load('handleSponsorTransfer', '../handlers/handleSponsorTransfer.js'),
-  getUserSponsorInfo: load('getUserSponsorInfo', '../handlers/getUserSponsorInfo.js'),
-  createTopupSessionHttp: load('createTopupSessionHttp', '../handlers/createTopupSessionHttp.js'),
-  createPaymentOrder: load('createPaymentOrder', '../handlers/createPaymentOrder.js'),
-  submitPaymentProof: load('submitPaymentProof', '../handlers/submitPaymentProof.js'),
-  getPaymentOrderStatus: load('getPaymentOrderStatus', '../handlers/getPaymentOrderStatus.js'),
-  retryPaymentOrder: load('retryPaymentOrder', '../handlers/retryPaymentOrder.js'),
-  verifyUPIPayment: load('verifyUPIPayment', '../handlers/verifyUPIPayment.js'),
-  uploadScreenshot: load('uploadScreenshot', '../handlers/uploadScreenshot.js'),
-  createPaymentSession: load('createPaymentSession', '../handlers/createPaymentSession.js'),
-  paymentConfirm: load('paymentConfirm', '../handlers/paymentConfirm.js'),
-  createSmsSession: load('createSmsSession', '../handlers/createSmsSession.js'),
-  smsPaymentConfirm: load('smsPaymentConfirm', '../handlers/smsPaymentConfirm.js'),
-  enterprisePayment: load('enterprisePayment', '../handlers/enterprisePaymentSubmit.js'),
-  enterpriseVerifyOtp: load('enterpriseVerifyOtp', '../handlers/enterpriseVerifyOtp.js'),
-  enterpriseResendOtp: load('enterpriseResendOtp', '../handlers/enterpriseResendOtp.js'),
-  pipelinePayment: load('pipelinePayment', '../handlers/pipelinePaymentSubmit.js'),
-  pipelineVerifyOtp: load('pipelineVerifyOtp', '../handlers/pipelineVerifyOtp.js'),
-  pipelineResendOtp: load('pipelineResendOtp', '../handlers/pipelineResendOtp.js'),
-  createUPIOrder: load('createUPIOrder', '../handlers/createUPIOrder.js'),
-  getUPIOrderStatus: load('getUPIOrderStatus', '../handlers/getUPIOrderStatus.js'),
-  webhookUPIConfirm: load('webhookUPIConfirm', '../handlers/webhookUPIConfirm.js'),
-  retryUPIOrder: load('retryUPIOrder', '../handlers/retryUPIOrder.js'),
-  companionPayment: load('companionPayment', '../handlers/companionPayment.js'),
-  adminLogout: load('adminLogout', '../handlers/adminLogout.js'),
-  // Admin endpoints
-  getUPIPayments: requireAdmin(load('getUPIPayments', '../handlers/getUPIPayments.js')),
-  getUPIDashboardStats: requireAdmin(load('getUPIDashboardStats', '../handlers/getUPIDashboardStats.js')),
-  processPendingPayments: requireAdmin(load('processPendingPayments', '../handlers/processPendingPayments.js')),
-  deleteUPIPayment: requireAdmin(load('deleteUPIPayment', '../handlers/deleteUPIPayment.js')),
-  approveUPIPayment: requireAdmin(load('approveUPIPayment', '../handlers/approveUPIPayment.js')),
-  rejectUPIPayment: requireAdmin(load('rejectUPIPayment', '../handlers/rejectUPIPayment.js')),
-  restoreUPIPayment: requireAdmin(load('restoreUPIPayment', '../handlers/restoreUPIPayment.js')),
-  getVerificationLogs: requireAdmin(load('getVerificationLogs', '../handlers/getVerificationLogs.js')),
-  adminDeleteRecord: requireAdmin(load('adminDeleteRecord', '../handlers/adminDeleteRecord.js')),
-  supabaseProxy: requireAdmin(load('supabaseProxy', '../handlers/supabaseProxy.js')),
-  getAdminDashboardData: requireAdmin(load('getAdminDashboardData', '../handlers/getAdminDashboardData.js')),
-  cleanupDemoData: requireAdmin(load('cleanupDemoData', '../handlers/cleanupDemoData.js')),
-  approvePendingRegistration: requireAdmin(load('approvePendingRegistration', '../handlers/approvePendingRegistration.js')),
-  bulkDeleteUsers: requireAdmin(load('bulkDeleteUsers', '../handlers/bulkDeleteUsers.js')),
-  getRecentActivity: requireAdmin(load('getRecentActivity', '../handlers/getRecentActivity.js')),
-  updateUserStatus: requireAdmin(load('updateUserStatus', '../handlers/updateUserStatus.js')),
-  getQueueStatus: requireAdmin(load('getQueueStatus', '../handlers/getQueueStatus.js')),
-  rerunOcr: requireAdmin(load('rerunOcr', '../handlers/rerunOcr.js')),
-  rerunVerification: requireAdmin(load('rerunVerification', '../handlers/rerunVerification.js')),
-  getReports: requireAdmin(load('getReports', '../handlers/getReports.js')),
-  getAuditLogs: requireAdmin(load('getAuditLogs', '../handlers/getAuditLogs.js')),
-  getCompanionStatus: requireAdmin(load('getCompanionStatus', '../handlers/getCompanionStatus.js')),
-  getAdminSponsorTransfers: requireAdmin(load('getAdminSponsorTransfers', '../handlers/getAdminSponsorTransfers.js')),
-  getPendingPaymentsQueue: requireAdmin(load('getPendingPaymentsQueue', '../handlers/getPendingPaymentsQueue.js')),
-};
+let handlers = {};
+try { handlers.adminLogin = safeHandler('adminLogin', require('../handlers/adminLogin.js')); } catch (e) { handlers.adminLogin = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'adminLogin load failed',detail:e.message})); }; }
+try { handlers.preRegister = safeHandler('preRegister', require('../handlers/preRegister.js')); } catch (e) { handlers.preRegister = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'preRegister load failed',detail:e.message})); }; }
+try { handlers.getHealthStatus = safeHandler('getHealthStatus', require('../handlers/getHealthStatus.js')); } catch (e) { handlers.getHealthStatus = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getHealthStatus load failed',detail:e.message})); }; }
+try { handlers.getSponsorMarketplace = safeHandler('getSponsorMarketplace', require('../handlers/getSponsorMarketplace.js')); } catch (e) { handlers.getSponsorMarketplace = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getSponsorMarketplace load failed',detail:e.message})); }; }
+try { handlers.createSponsorTransfer = safeHandler('createSponsorTransfer', require('../handlers/createSponsorTransfer.js')); } catch (e) { handlers.createSponsorTransfer = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'createSponsorTransfer load failed',detail:e.message})); }; }
+try { handlers.getSponsorRequests = safeHandler('getSponsorRequests', require('../handlers/getSponsorRequests.js')); } catch (e) { handlers.getSponsorRequests = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getSponsorRequests load failed',detail:e.message})); }; }
+try { handlers.handleSponsorTransfer = safeHandler('handleSponsorTransfer', require('../handlers/handleSponsorTransfer.js')); } catch (e) { handlers.handleSponsorTransfer = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handleSponsorTransfer load failed',detail:e.message})); }; }
+try { handlers.getUserSponsorInfo = safeHandler('getUserSponsorInfo', require('../handlers/getUserSponsorInfo.js')); } catch (e) { handlers.getUserSponsorInfo = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUserSponsorInfo load failed',detail:e.message})); }; }
+try { handlers.createTopupSessionHttp = safeHandler('createTopupSessionHttp', require('../handlers/createTopupSessionHttp.js')); } catch (e) { handlers.createTopupSessionHttp = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'createTopupSessionHttp load failed',detail:e.message})); }; }
+try { handlers.createPaymentOrder = safeHandler('createPaymentOrder', require('../handlers/createPaymentOrder.js')); } catch (e) { handlers.createPaymentOrder = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'createPaymentOrder load failed',detail:e.message})); }; }
+try { handlers.submitPaymentProof = safeHandler('submitPaymentProof', require('../handlers/submitPaymentProof.js')); } catch (e) { handlers.submitPaymentProof = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'submitPaymentProof load failed',detail:e.message})); }; }
+try { handlers.getPaymentOrderStatus = safeHandler('getPaymentOrderStatus', require('../handlers/getPaymentOrderStatus.js')); } catch (e) { handlers.getPaymentOrderStatus = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getPaymentOrderStatus load failed',detail:e.message})); }; }
+try { handlers.retryPaymentOrder = safeHandler('retryPaymentOrder', require('../handlers/retryPaymentOrder.js')); } catch (e) { handlers.retryPaymentOrder = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'retryPaymentOrder load failed',detail:e.message})); }; }
+try { handlers.verifyUPIPayment = safeHandler('verifyUPIPayment', require('../handlers/verifyUPIPayment.js')); } catch (e) { handlers.verifyUPIPayment = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'verifyUPIPayment load failed',detail:e.message})); }; }
+try { handlers.uploadScreenshot = safeHandler('uploadScreenshot', require('../handlers/uploadScreenshot.js')); } catch (e) { handlers.uploadScreenshot = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'uploadScreenshot load failed',detail:e.message})); }; }
+try { handlers.createPaymentSession = safeHandler('createPaymentSession', require('../handlers/createPaymentSession.js')); } catch (e) { handlers.createPaymentSession = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'createPaymentSession load failed',detail:e.message})); }; }
+try { handlers.paymentConfirm = safeHandler('paymentConfirm', require('../handlers/paymentConfirm.js')); } catch (e) { handlers.paymentConfirm = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'paymentConfirm load failed',detail:e.message})); }; }
+try { handlers.createSmsSession = safeHandler('createSmsSession', require('../handlers/createSmsSession.js')); } catch (e) { handlers.createSmsSession = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'createSmsSession load failed',detail:e.message})); }; }
+try { handlers.smsPaymentConfirm = safeHandler('smsPaymentConfirm', require('../handlers/smsPaymentConfirm.js')); } catch (e) { handlers.smsPaymentConfirm = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'smsPaymentConfirm load failed',detail:e.message})); }; }
+try { handlers.enterprisePayment = safeHandler('enterprisePayment', require('../handlers/enterprisePaymentSubmit.js')); } catch (e) { handlers.enterprisePayment = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'enterprisePayment load failed',detail:e.message})); }; }
+try { handlers.enterpriseVerifyOtp = safeHandler('enterpriseVerifyOtp', require('../handlers/enterpriseVerifyOtp.js')); } catch (e) { handlers.enterpriseVerifyOtp = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'enterpriseVerifyOtp load failed',detail:e.message})); }; }
+try { handlers.enterpriseResendOtp = safeHandler('enterpriseResendOtp', require('../handlers/enterpriseResendOtp.js')); } catch (e) { handlers.enterpriseResendOtp = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'enterpriseResendOtp load failed',detail:e.message})); }; }
+try { handlers.pipelinePayment = safeHandler('pipelinePayment', require('../handlers/pipelinePaymentSubmit.js')); } catch (e) { handlers.pipelinePayment = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'pipelinePayment load failed',detail:e.message})); }; }
+try { handlers.pipelineVerifyOtp = safeHandler('pipelineVerifyOtp', require('../handlers/pipelineVerifyOtp.js')); } catch (e) { handlers.pipelineVerifyOtp = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'pipelineVerifyOtp load failed',detail:e.message})); }; }
+try { handlers.pipelineResendOtp = safeHandler('pipelineResendOtp', require('../handlers/pipelineResendOtp.js')); } catch (e) { handlers.pipelineResendOtp = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'pipelineResendOtp load failed',detail:e.message})); }; }
+try { handlers.createUPIOrder = safeHandler('createUPIOrder', require('../handlers/createUPIOrder.js')); } catch (e) { handlers.createUPIOrder = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'createUPIOrder load failed',detail:e.message})); }; }
+try { handlers.getUPIOrderStatus = safeHandler('getUPIOrderStatus', require('../handlers/getUPIOrderStatus.js')); } catch (e) { handlers.getUPIOrderStatus = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUPIOrderStatus load failed',detail:e.message})); }; }
+try { handlers.webhookUPIConfirm = safeHandler('webhookUPIConfirm', require('../handlers/webhookUPIConfirm.js')); } catch (e) { handlers.webhookUPIConfirm = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'webhookUPIConfirm load failed',detail:e.message})); }; }
+try { handlers.retryUPIOrder = safeHandler('retryUPIOrder', require('../handlers/retryUPIOrder.js')); } catch (e) { handlers.retryUPIOrder = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'retryUPIOrder load failed',detail:e.message})); }; }
+try { handlers.companionPayment = safeHandler('companionPayment', require('../handlers/companionPayment.js')); } catch (e) { handlers.companionPayment = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'companionPayment load failed',detail:e.message})); }; }
+try { handlers.adminLogout = safeHandler('adminLogout', require('../handlers/adminLogout.js')); } catch (e) { handlers.adminLogout = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'adminLogout load failed',detail:e.message})); }; }
+// Admin endpoints
+try { handlers.getUPIPayments = requireAdmin(safeHandler('getUPIPayments', require('../handlers/getUPIPayments.js'))); } catch (e) { handlers.getUPIPayments = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUPIPayments load failed',detail:e.message})); }; }
+try { handlers.getUPIDashboardStats = requireAdmin(safeHandler('getUPIDashboardStats', require('../handlers/getUPIDashboardStats.js'))); } catch (e) { handlers.getUPIDashboardStats = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUPIDashboardStats load failed',detail:e.message})); }; }
+try { handlers.processPendingPayments = requireAdmin(safeHandler('processPendingPayments', require('../handlers/processPendingPayments.js'))); } catch (e) { handlers.processPendingPayments = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'processPendingPayments load failed',detail:e.message})); }; }
+try { handlers.deleteUPIPayment = requireAdmin(safeHandler('deleteUPIPayment', require('../handlers/deleteUPIPayment.js'))); } catch (e) { handlers.deleteUPIPayment = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'deleteUPIPayment load failed',detail:e.message})); }; }
+try { handlers.approveUPIPayment = requireAdmin(safeHandler('approveUPIPayment', require('../handlers/approveUPIPayment.js'))); } catch (e) { handlers.approveUPIPayment = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'approveUPIPayment load failed',detail:e.message})); }; }
+try { handlers.rejectUPIPayment = requireAdmin(safeHandler('rejectUPIPayment', require('../handlers/rejectUPIPayment.js'))); } catch (e) { handlers.rejectUPIPayment = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'rejectUPIPayment load failed',detail:e.message})); }; }
+try { handlers.restoreUPIPayment = requireAdmin(safeHandler('restoreUPIPayment', require('../handlers/restoreUPIPayment.js'))); } catch (e) { handlers.restoreUPIPayment = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'restoreUPIPayment load failed',detail:e.message})); }; }
+try { handlers.getVerificationLogs = requireAdmin(safeHandler('getVerificationLogs', require('../handlers/getVerificationLogs.js'))); } catch (e) { handlers.getVerificationLogs = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getVerificationLogs load failed',detail:e.message})); }; }
+try { handlers.adminDeleteRecord = requireAdmin(safeHandler('adminDeleteRecord', require('../handlers/adminDeleteRecord.js'))); } catch (e) { handlers.adminDeleteRecord = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'adminDeleteRecord load failed',detail:e.message})); }; }
+try { handlers.supabaseProxy = requireAdmin(safeHandler('supabaseProxy', require('../handlers/supabaseProxy.js'))); } catch (e) { handlers.supabaseProxy = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'supabaseProxy load failed',detail:e.message})); }; }
+try { handlers.getAdminDashboardData = requireAdmin(safeHandler('getAdminDashboardData', require('../handlers/getAdminDashboardData.js'))); } catch (e) { handlers.getAdminDashboardData = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getAdminDashboardData load failed',detail:e.message})); }; }
+try { handlers.cleanupDemoData = requireAdmin(safeHandler('cleanupDemoData', require('../handlers/cleanupDemoData.js'))); } catch (e) { handlers.cleanupDemoData = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'cleanupDemoData load failed',detail:e.message})); }; }
+try { handlers.approvePendingRegistration = requireAdmin(safeHandler('approvePendingRegistration', require('../handlers/approvePendingRegistration.js'))); } catch (e) { handlers.approvePendingRegistration = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'approvePendingRegistration load failed',detail:e.message})); }; }
+try { handlers.bulkDeleteUsers = requireAdmin(safeHandler('bulkDeleteUsers', require('../handlers/bulkDeleteUsers.js'))); } catch (e) { handlers.bulkDeleteUsers = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'bulkDeleteUsers load failed',detail:e.message})); }; }
+try { handlers.getRecentActivity = requireAdmin(safeHandler('getRecentActivity', require('../handlers/getRecentActivity.js'))); } catch (e) { handlers.getRecentActivity = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getRecentActivity load failed',detail:e.message})); }; }
+try { handlers.updateUserStatus = requireAdmin(safeHandler('updateUserStatus', require('../handlers/updateUserStatus.js'))); } catch (e) { handlers.updateUserStatus = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'updateUserStatus load failed',detail:e.message})); }; }
+try { handlers.getQueueStatus = requireAdmin(safeHandler('getQueueStatus', require('../handlers/getQueueStatus.js'))); } catch (e) { handlers.getQueueStatus = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getQueueStatus load failed',detail:e.message})); }; }
+try { handlers.rerunOcr = requireAdmin(safeHandler('rerunOcr', require('../handlers/rerunOcr.js'))); } catch (e) { handlers.rerunOcr = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'rerunOcr load failed',detail:e.message})); }; }
+try { handlers.rerunVerification = requireAdmin(safeHandler('rerunVerification', require('../handlers/rerunVerification.js'))); } catch (e) { handlers.rerunVerification = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'rerunVerification load failed',detail:e.message})); }; }
+try { handlers.getReports = requireAdmin(safeHandler('getReports', require('../handlers/getReports.js'))); } catch (e) { handlers.getReports = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getReports load failed',detail:e.message})); }; }
+try { handlers.getAuditLogs = requireAdmin(safeHandler('getAuditLogs', require('../handlers/getAuditLogs.js'))); } catch (e) { handlers.getAuditLogs = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getAuditLogs load failed',detail:e.message})); }; }
+try { handlers.getCompanionStatus = requireAdmin(safeHandler('getCompanionStatus', require('../handlers/getCompanionStatus.js'))); } catch (e) { handlers.getCompanionStatus = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getCompanionStatus load failed',detail:e.message})); }; }
+try { handlers.getAdminSponsorTransfers = requireAdmin(safeHandler('getAdminSponsorTransfers', require('../handlers/getAdminSponsorTransfers.js'))); } catch (e) { handlers.getAdminSponsorTransfers = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getAdminSponsorTransfers load failed',detail:e.message})); }; }
+try { handlers.getPendingPaymentsQueue = requireAdmin(safeHandler('getPendingPaymentsQueue', require('../handlers/getPendingPaymentsQueue.js'))); } catch (e) { handlers.getPendingPaymentsQueue = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getPendingPaymentsQueue load failed',detail:e.message})); }; }
+
+console.error('[INDEX] ' + Object.keys(handlers).length + ' handlers loaded');
 
 module.exports = async (req, res) => {
   const url = req.url.split('?')[0];
@@ -111,16 +103,15 @@ module.exports = async (req, res) => {
 
   if (url === '/api/sse/dashboard' || url === '/sse/dashboard') {
     try {
-      const h = require('../handlers/sseDashboard.js');
-      return h(req, res);
+      return require('../handlers/sseDashboard.js')(req, res);
     } catch (e) {
       res.writeHead(500);
-      res.end(JSON.stringify({ error: 'SSE handler load failed', detail: e.message }));
+      res.end(JSON.stringify({ error: 'SSE handler failed', detail: e.message }));
       return;
     }
   }
 
-  const handler = map[path];
+  const handler = handlers[path];
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
   const rl = rateLimit(ip, 60, 60000);
   if (rl.limited) {
