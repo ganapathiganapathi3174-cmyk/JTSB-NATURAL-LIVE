@@ -13,7 +13,9 @@ function isTokenBlacklisted(jti) {
 
 function getSecret() {
   if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET;
-  const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+  // Fall back to dev secret when running on Vercel (NODE_ENV=production by default)
+  // or in local dev. Set ADMIN_JWT_SECRET in production for real security.
+  const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV || !!process.env.VERCEL;
   if (isDev) {
     console.error('[AUTH] WARNING: Using dev JWT secret. Set ADMIN_JWT_SECRET in production.');
     return 'dev-jwt-secret-not-for-production';
