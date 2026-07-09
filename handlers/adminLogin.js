@@ -122,6 +122,7 @@ module.exports = async (req, res) => {
     res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid credentials' }));
   } catch (err) {
     console.error(`[ADMIN LOGIN] Error: ${err.message}`);
-    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
+    console.error(err.stack);
+    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error', detail: err.message }));
   }
 };
