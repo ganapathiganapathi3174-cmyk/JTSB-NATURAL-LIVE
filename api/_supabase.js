@@ -26,10 +26,17 @@ function isSensitiveTable(table) {
 }
 
 function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+  let supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_KEY || '').trim();
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_KEY must be set');
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in Vercel Environment Variables (Settings → Environment Variables) or in .env.local file.');
+  }
+  // Normalize URL: strip trailing slash, ensure https:// prefix
+  // This prevents "requested path is invalid" errors from malformed URLs
+  supabaseUrl = supabaseUrl.replace(/\/+$/, '');
+  if (!supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
+    supabaseUrl = 'https://' + supabaseUrl;
+    console.warn('[SUPABASE] Added https:// prefix to SUPABASE_URL');
   }
   return createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },

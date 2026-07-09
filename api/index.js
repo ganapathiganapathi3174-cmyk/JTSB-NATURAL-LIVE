@@ -1,3 +1,18 @@
+const fs = require('fs');
+const p = require('path');
+// Load .env.local as fallback for Vercel deployments with missing env vars
+try {
+  const envPath = p.join(__dirname, '..', '.env.local');
+  if (fs.existsSync(envPath)) {
+    fs.readFileSync(envPath, 'utf8').split('\n').forEach(l => {
+      const m = l.match(/^\s*([^#=]+)=(.*)/);
+      if (m && !process.env[m[1].trim()]) {
+        process.env[m[1].trim()] = m[2].trim();
+      }
+    });
+  }
+} catch (_) {}
+
 const { requireAdmin } = require('./_auth.js');
 const metrics = require('./_metrics.js');
 const { initSystemUsers } = require('./_systemInit.js');
