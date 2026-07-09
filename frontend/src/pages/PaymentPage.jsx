@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { FirebaseUser } from '../db/firebase-db.js';
 import UpiPayment from '../components/UpiPayment.jsx';
 
 export default function PaymentPage() {
@@ -9,8 +10,19 @@ export default function PaymentPage() {
   const isTopup = urlMode === 'topup';
 
   const [topupUserId] = useState(() => localStorage.getItem('fb_user_id') || '');
+  const [allowedPackage, setAllowedPackage] = useState(null);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (isTopup && topupUserId) {
+      FirebaseUser.findById(topupUserId).then(user => {
+        if (user && user.membership_type) {
+          setAllowedPackage(Number(user.membership_type));
+        }
+      }).catch(() => {});
+    }
+  }, [isTopup, topupUserId]);
 
   if (!isTopup) {
     navigate('/fb/register', { replace: true });
@@ -79,6 +91,7 @@ export default function PaymentPage() {
           <UpiPayment
             type="topup"
             userId={topupUserId}
+            allowedPackage={allowedPackage}
             onSuccess={handleUpiSuccess}
             onError={(msg) => setError(msg)}
           />

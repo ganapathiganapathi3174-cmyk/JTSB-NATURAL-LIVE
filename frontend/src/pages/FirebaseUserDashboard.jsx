@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseNewReferral, FirebaseReferralAccess, FirebaseTopup, FirebaseTopupReferral, FirebaseNotification, FirebaseWallet } from '../db/firebase-db.js';
+import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseTopup, FirebaseTopupReferral, FirebaseNotification, FirebaseWallet } from '../db/firebase-db.js';
 const QUOTA_KEY = 'fb_quota_exhausted';
 
 
@@ -189,18 +189,27 @@ export default function FirebaseUserDashboard() {
     setError('');
 
     try {
-      await FirebaseReferralAccess.check(userId);
-      await FirebaseNewReferral.create({
-        user_id: userId,
-        name: refName.trim(),
-        email: refEmail.trim(),
-        phone: refPhone.trim(),
+      const tempPwd = 'Temp@' + Date.now().toString(36);
+      const apiBase = import.meta.env.VITE_FUNCTIONS_URL || '/api';
+      const resp = await fetch(apiBase + '/preRegister', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: refName.trim(),
+          email: refEmail.trim(),
+          phone: refPhone.trim(),
+          password: tempPwd,
+          referralCode: user?.referral_code || '',
+        }),
       });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed to add referral');
       
       setRefName('');
       setRefEmail('');
       setRefPhone('');
       setShowReferralForm(false);
+      alert('Referral added! They will receive login instructions via email.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -210,12 +219,7 @@ export default function FirebaseUserDashboard() {
 
   async function handleRemoveReferral(referralId) {
     if (!window.confirm('Remove this referral?')) return;
-    
-    try {
-      await FirebaseNewReferral.delete(referralId);
-    } catch (err) {
-      setError(err.message);
-    }
+    setError('Remove referral is not available from dashboard. Please contact support.');
   }
 
   function handleProfilePicSelect(e) {

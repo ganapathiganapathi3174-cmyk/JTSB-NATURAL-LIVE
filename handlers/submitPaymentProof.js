@@ -44,28 +44,45 @@ async function uploadBase64Image(base64DataUrl) {
         const { data: urlData } = supabase.storage.from('payments').getPublicUrl(key);
         return urlData.publicUrl;
       }
-    } catch (e) { /* fall through */ }
+    } catch (e) { console.warn('[submitPaymentProof] Supabase upload failed, falling back to base64:', e.message); }
   }
 
   return base64DataUrl;
 }
 
 module.exports = async (req, res) => {
+  const reqStart = Date.now();
+  const logTiming = (stage) => console.log('[' + new Date().toISOString().slice(0, 19).replace('T', ' ') + '] [submitPaymentProof TIMING] ' + stage + ' at +' + (Date.now() - reqStart) + 'ms');
+  function bottleneckCheck(stage, elapsedMs) {
+    if (elapsedMs > 3000) console.log(`[submitPaymentProof BOTTLENECK] ⚠️ Stage "${stage}" took ${elapsedMs}ms (exceeds 3s threshold)`);
+  }
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.writeHead(200).end();
   if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
 
+  logTiming('Request Received');
+
   try {
-    const { orderId, screenshot } = req.body || {};
-    if (!orderId) { res.writeHead(400); res.end(JSON.stringify({ error: 'orderId is required' })); return; }
-    if (!screenshot) { res.writeHead(400); res.end(JSON.stringify({ error: 'screenshot is required' })); return; }
+    const { orderId, screenshot, utr } = req.body || {};
+    if (!orderId) { res.writeHead(400); res.end(JSON.stringify({ error: 'orderId is required' })); logTiming('Response Sent (missing orderId)'); return; }
+    if (!screenshot) { res.writeHead(400); res.end(JSON.stringify({ error: 'screenshot is required' })); logTiming('Response Sent (missing screenshot)'); return; }
+    logTiming('Order Validation');
 
     const uploadedUrl = await uploadBase64Image(screenshot);
+    const uploadMs = Date.now() - reqStart - (Date.now() - reqStart - (Date.now() - reqStart));
+    bottleneckCheck('Image Upload', Date.now() - reqStart - (reqStart));
+    logTiming('Image Load');
 
-    const result = await submitPaymentProof(orderId, uploadedUrl);
+    const result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null });
+    bottleneckCheck('Verification Pipeline', Date.now() - reqStart);
+    logTiming('Response Sent');
 
+    const totalMs = Date.now() - reqStart;
+    bottleneckCheck('Total', totalMs);
+    logTiming('Response Sent (total=' + totalMs + 'ms)');
     res.writeHead(200); res.end(JSON.stringify({
       ...result,
       message: result.status === 'verified'
@@ -75,8 +92,15 @@ module.exports = async (req, res) => {
           : 'Payment submitted for manual review',
     }));
   } catch (err) {
-    const status = err.status || 500;
-    console.error('[submitPaymentProof] Error:', err.message);
-    res.writeHead(status); res.end(JSON.stringify({ error: err.message || 'Verification failed' }));
+    const totalMs = Date.now() - reqStart;
+    console.error(`[submitPaymentProof ERROR] at +${totalMs}ms:`);
+    console.error(err.stack || err.message);
+    bottleneckCheck('Error path', totalMs);
+    if (!res.headersSent) {
+      const status = err.status || 500;
+      const devMsg = process.env.NODE_ENV !== 'production' ? err.message : 'Verification failed';
+      res.writeHead(status); res.end(JSON.stringify({ error: devMsg }));
+    }
+    logTiming('Response Sent (error=' + (err.message || '') + ')');
   }
 };

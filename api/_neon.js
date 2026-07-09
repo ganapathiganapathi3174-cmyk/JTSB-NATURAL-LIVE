@@ -30,15 +30,22 @@ async function query(text, params = []) {
   }
 }
 
+const ALLOWED_ANALYTICS_TABLES = ['verification_logs', 'payment_logs', 'audit_logs', 'admin_logs', 'analytics_events'];
+
+function validateTable(table) {
+  if (!ALLOWED_ANALYTICS_TABLES.includes(table)) throw new Error('Invalid table: ' + table);
+}
+
 async function insertAnalyticsLog(table, data) {
   const p = getPool();
   if (!p) return null;
+  try { validateTable(table); } catch { return null; }
   const keys = Object.keys(data);
   const values = Object.values(data);
   const placeholders = keys.map((_, i) => `$${i + 1}`);
   try {
     const result = await p.query(
-      `INSERT INTO ${table} (${keys.map(k => `"${k}"`).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING id`,
+      `INSERT INTO "${table}" (${keys.map(k => `"${k.replace(/[^a-z_]/g, '')}"`).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING id`,
       values
     );
     return result.rows[0]?.id || null;
@@ -51,29 +58,35 @@ async function insertAnalyticsLog(table, data) {
 async function getAnalyticsLogs(table, filters = {}, options = {}) {
   const p = getPool();
   if (!p) return [];
+  try { validateTable(table); } catch { return []; }
   let sql = `SELECT * FROM "${table}" WHERE 1=1`;
   const params = [];
   let idx = 1;
   for (const [field, value] of Object.entries(filters)) {
     if (value !== undefined && value !== null) {
+      const cleanField = field.replace(/[^a-z_]/g, '');
       if (field.endsWith('__gte')) {
-        sql += ` AND "${field.replace('__gte', '')}" >= $${idx}`;
+        sql += ` AND "${cleanField.replace('__gte', '')}" >= $${idx}`;
       } else if (field.endsWith('__lte')) {
-        sql += ` AND "${field.replace('__lte', '')}" <= $${idx}`;
+        sql += ` AND "${cleanField.replace('__lte', '')}" <= $${idx}`;
       } else if (field.endsWith('__neq')) {
-        sql += ` AND "${field.replace('__neq', '')}" != $${idx}`;
+        sql += ` AND "${cleanField.replace('__neq', '')}" != $${idx}`;
       } else {
-        sql += ` AND "${field}" = $${idx}`;
+        sql += ` AND "${cleanField}" = $${idx}`;
       }
       params.push(value);
       idx++;
     }
   }
   if (options.orderBy) {
-    sql += ` ORDER BY "${options.orderBy}" ${options.ascending ? 'ASC' : 'DESC'}`;
+    const cleanOrderBy = String(options.orderBy).replace(/[^a-z_]/g, '');
+    sql += ` ORDER BY "${cleanOrderBy}" ${options.ascending ? 'ASC' : 'DESC'}`;
   }
   if (options.limit) {
-    sql += ` LIMIT ${options.limit}`;
+    const cleanLimit = parseInt(options.limit, 10);
+    if (!isNaN(cleanLimit) && cleanLimit > 0 && cleanLimit <= 10000) {
+      sql += ` LIMIT ${cleanLimit}`;
+    }
   }
   try {
     const result = await p.query(sql, params);

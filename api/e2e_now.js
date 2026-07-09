@@ -100,7 +100,7 @@ async function runE2ETest() {
     type: 'registration',
     amount: 120,
     utr,
-    upiId: '9655897523@ptyes',
+    upiId: 'jayarajj-3@okicici',
     paymentDate: todayStr(),
     screenshotUrl: 'https://example.com/e2e_test.png',
   });

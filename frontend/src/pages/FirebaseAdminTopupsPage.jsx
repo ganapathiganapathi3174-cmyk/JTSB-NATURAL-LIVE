@@ -4,7 +4,7 @@ import { FirebaseTopup } from '../db/firebase-db.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
-const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL || '';
+const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 
 function authHeaders() {
   const t = localStorage.getItem(ADMIN_KEY);

@@ -31,7 +31,7 @@ export default function AdminSponsorTransfersPage() {
     setLoading(false);
   }
 
-  useEffect(() => { loadTransfers(filter, search); }, [filter]);
+  useEffect(() => { loadTransfers(filter, search); }, [filter, search]);
 
   function handleSearch() { loadTransfers(filter, search); }
 

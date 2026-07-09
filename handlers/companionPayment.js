@@ -293,11 +293,11 @@ module.exports = async (req, res) => {
     } catch (innerErr) {
       await conditionalUpdateDoc(COL_UPI_PAYMENTS, payment.id, [
         { field: 'status', op: 'EQUAL', value: 'verified' },
-      ], { status: 'failed', rejection_reasons: ['Companion approval failed: ' + innerErr.message] });
-      try { await addDoc('audit_logs', { action: 'companion_approve_failed', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { error: innerErr.message, payType, utr: utrStr }, created_at: now }); } catch {}
+      ], { status: 'failed', rejection_reasons: ['Companion approval failed'] });
+      try { await addDoc('audit_logs', { action: 'companion_approve_failed', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { payType, utr: utrStr }, created_at: now }); } catch {}
       log('ERROR', 'Approval failed for payment ' + payment.id + ': ' + innerErr.message);
-      recordError(innerErr.message);
-      res.writeHead(200); res.end(JSON.stringify({ status: 'failed', error: innerErr.message }));
+      recordError('Approval failed');
+      res.writeHead(200); res.end(JSON.stringify({ status: 'failed', error: 'Approval failed' }));
     }
   } catch (err) {
     log('FATAL', err.message);

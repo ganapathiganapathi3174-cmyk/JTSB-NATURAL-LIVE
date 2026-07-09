@@ -66,7 +66,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
   useEffect(() => {
     if (user?.id) {
       setLoading(true);
-      FirebaseUser.getAllReferralsByReferrerCode(user.referral_code).then(setReferrals).finally(() => setLoading(false));
+      FirebaseUser.getAllReferralsByReferrerCode(user.referral_code).then(setReferrals).catch(() => setReferrals([])).finally(() => setLoading(false));
     }
   }, [user?.id, user?.referral_code]);
 

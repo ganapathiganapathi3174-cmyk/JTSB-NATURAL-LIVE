@@ -6,14 +6,12 @@ export default function QrCodeDisplay({ value, size = 200, bgColor = '#ffffff', 
 
   useEffect(() => {
     if (!value || !canvasRef.current) return;
-    let cancelled = false;
     QRCode.toCanvas(canvasRef.current, value, {
       width: size,
       margin: 2,
       color: { dark: fgColor, light: bgColor },
       errorCorrectionLevel: 'M',
     }).catch(() => {});
-    return () => { cancelled = true; };
   }, [value, size, bgColor, fgColor]);
 
   if (!value) return null;

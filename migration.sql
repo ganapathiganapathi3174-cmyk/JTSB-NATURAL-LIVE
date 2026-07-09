@@ -7,7 +7,9 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 CREATE TABLE IF NOT EXISTS public.users (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   email text UNIQUE NOT NULL,
+  email_hash text,
   phone text,
+  phone_hash text,
   name text,
   password_hash text,
   password text,
@@ -78,6 +80,10 @@ CREATE INDEX IF NOT EXISTS idx_users_referred_by ON public.users (referred_by);
 CREATE INDEX IF NOT EXISTS idx_users_account_status ON public.users (account_status);
 CREATE INDEX IF NOT EXISTS idx_users_payment_status ON public.users (payment_status);
 
+-- Add hash columns for existing databases (CREATE TABLE IF NOT EXISTS skips existing tables)
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email_hash text;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone_hash text;
+
 -- ============================================================
 -- TABLE: uniques
 -- ============================================================
@@ -128,6 +134,7 @@ CREATE TABLE IF NOT EXISTS public.upi_payments (
   rejection_reasons jsonb,
   ocr_result jsonb,
   final_score numeric(5,2),
+  fraud_score numeric(5,2),
   payment_date timestamptz,
   verified_at timestamptz,
   screenshot_hash text,

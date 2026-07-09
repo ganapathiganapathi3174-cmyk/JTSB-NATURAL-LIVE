@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 const EXPECTED_AMOUNT = 120;
-const EXPECTED_UPI_ID = '9655897523@ptyes';
+const EXPECTED_UPI_ID = 'jayarajj-3@okicici';
 
 function normalizeUpi(upi) {
   return upi.toLowerCase().replace(/\s+/g, '');

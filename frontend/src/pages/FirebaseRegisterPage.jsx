@@ -27,6 +27,7 @@ export default function FirebaseRegisterPage() {
   const [paymentStep, setPaymentStep] = useState('form');
   const [showPassword, setShowPassword] = useState(false);
   const [pendingRegId, setPendingRegId] = useState(null);
+  const [allowedPackage, setAllowedPackage] = useState(null);
 
   const emailTimer = useRef(null);
   const phoneTimer = useRef(null);
@@ -188,7 +189,7 @@ export default function FirebaseRegisterPage() {
           password,
           referralCode: refCode || null,
         }),
-        signal: AbortSignal.timeout(45000),
+        signal: (() => { const c = new AbortController(); setTimeout(() => c.abort(), 90000); return c.signal; })(),
       });
 
       if (!preRegResp.ok) {
@@ -197,10 +198,12 @@ export default function FirebaseRegisterPage() {
       }
       const session = await preRegResp.json();
       setPendingRegId(session.pendingRegId);
+      if (session.allowedPackage) setAllowedPackage(session.allowedPackage);
       setLoading(false);
       setPaymentStep('upi');
     } catch (err) {
-      setError(`Payment service temporarily unavailable. ${err.message}`);
+      const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError' || (err.message && (err.message.toLowerCase().includes('timed out') || err.message.toLowerCase().includes('timeout')));
+      setError(isTimeout ? `Request timed out. ${err.message}` : err.message || 'Registration failed');
       setLoading(false);
     }
   }
@@ -312,6 +315,7 @@ export default function FirebaseRegisterPage() {
             <UpiPayment
               type="registration"
               pendingRegId={pendingRegId}
+              allowedPackage={allowedPackage}
               onSuccess={handleUpiSuccess}
               onError={(msg) => setError(msg)}
             />

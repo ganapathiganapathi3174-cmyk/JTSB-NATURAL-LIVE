@@ -2,13 +2,13 @@ const {
   COL_USERS, COL_PENDING_REGS, COL_TOPUPS, COL_WALLET_BALANCES, COL_WALLET_TX,
   COL_SMS_SESSIONS, MAX_REFERRALS, randomString,
   TEST_MODE, TEST_PAYMENT_AMOUNT,
+  PACKAGES, ALLOWED_PACKAGE_AMOUNTS, getPackageByReferral, getReferrerPackage, validatePackageAmount,
 } = require('./_shared.js');
 const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, atomicCreditWallet } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
 
 const SESSION_TTL_MS = 30 * 60 * 1000;
-const BASE_AMOUNTS = [120, 540, 1200];
-const ALLOWED_AMOUNTS = TEST_MODE ? [...BASE_AMOUNTS, TEST_PAYMENT_AMOUNT] : BASE_AMOUNTS;
+const ALLOWED_AMOUNTS = TEST_MODE ? [...ALLOWED_PACKAGE_AMOUNTS, TEST_PAYMENT_AMOUNT] : ALLOWED_PACKAGE_AMOUNTS;
 const memStore = new Map();
 let usingMemStore = false;
 
@@ -150,10 +150,27 @@ async function createSession(data) {
     if (!pending) throw Object.assign(new Error('Pending registration not found'), { status: 404 });
     session.metadata.email = pending.email || email || null;
     session.metadata.name = pending.name || null;
+    const refCode = pending.referral_code;
+    if (refCode) {
+      const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: refCode.toUpperCase() }], { limit: 1 });
+      let allowedPkg = null;
+      if (refUsers.length) {
+        allowedPkg = getReferrerPackage(refUsers[0]);
+      } else {
+        allowedPkg = getPackageByReferral(refCode);
+      }
+      if (allowedPkg && !validatePackageAmount(allowedPkg, finalAmount)) {
+        throw Object.assign(new Error('This referral link accepts only \u20B9' + allowedPkg + ' package. Selected \u20B9' + finalAmount + ' does not match.'), { status: 400 });
+      }
+    }
   } else if (pt === 'topup' && userId) {
     const user = await getDoc(COL_USERS, userId);
     if (!user) throw Object.assign(new Error('User not found'), { status: 404 });
     session.metadata.email = user.email || email || null;
+    const userPkg = getReferrerPackage(user);
+    if (userPkg && !validatePackageAmount(userPkg, finalAmount)) {
+      throw Object.assign(new Error('Your ' + userPkg + ' package only accepts \u20B9' + userPkg + ' topup. Selected \u20B9' + finalAmount + ' does not match.'), { status: 400 });
+    }
   }
 
   if (usingMemStore) {
@@ -274,12 +291,15 @@ async function approveRegistration(session, transactionReference) {
     if (refUsers.length) { referredByUserId = refUsers[0].id; referredByCode = pending.referral_code; }
   }
 
+  const userPkg = getReferrerPackage(pending) || getPackageByReferral(pending.referral_code) || String(session.amount);
+
   await writeDoc(COL_USERS, newUserId, {
     id: newUserId, email: pending.email || '', name: pending.name || '',
     phone: pending.phone || '', password_hash: pending.password_hash,
     referral_code: randomString(8), referred_by: referredByCode,
     account_status: 'active', payment_status: 'success',
     approved: true, active: true, membership_paid: true,
+    membership_type: userPkg,
     joined_date: now(), approved_date: now(), plan: session.plan || String(session.amount),
   });
 

@@ -66,7 +66,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
           setLogs(prev => [entry, ...prev].slice(0, 50));
         }
       }
-    } catch {}
+    } catch (e) { console.error('[UPI-Payments] processPending error:', e); }
     setProcessing(false);
   }, []);
 

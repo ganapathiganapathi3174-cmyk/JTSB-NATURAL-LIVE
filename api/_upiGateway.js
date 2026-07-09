@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 const MERCHANT_NAME = 'JTSB Natural';
-const UPI_ID = '9655897523@ptyes';
+const UPI_ID = 'jayarajj-3@okicici';
 const MOBILE_NUMBER = '9655897523';
 const DEFAULT_TIMEOUT_MINUTES = 10;
 
@@ -182,7 +182,6 @@ async function verifyWebhook(gatewayOrderId, signature, rawBody) {
     return true;
   }
   if (gatewayOrderId && signature === 'mock-webhook-secret') return true;
-  if (gatewayOrderId) return true;
   throw new Error('Invalid webhook signature');
 }
 

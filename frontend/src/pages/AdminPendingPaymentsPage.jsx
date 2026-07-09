@@ -39,7 +39,7 @@ export default function AdminPendingPaymentsPage() {
     const token = getToken();
     if (!token) return;
 
-    const eventSource = new EventSource(`${API_BASE}/sse/dashboard`);
+    const eventSource = new EventSource(`${API_BASE}/sse/dashboard?token=${encodeURIComponent(token)}`);
 
     eventSource.addEventListener('paymentCreated', () => { loadPayments(); });
     eventSource.addEventListener('paymentUpdated', () => { loadPayments(); });

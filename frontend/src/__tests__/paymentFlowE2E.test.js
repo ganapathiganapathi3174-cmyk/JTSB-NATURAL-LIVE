@@ -164,7 +164,7 @@ function createMockDB() {
       }
       if (!['registration', 'topup'].includes(type)) return { error: 'Invalid payment type' };
       if (![120, 500, 1000].includes(amount)) return { error: 'Invalid amount for ' + type };
-      if (upiId.toLowerCase() !== '9655897523@ptyes') return { error: 'Invalid UPI ID' };
+      if (upiId.toLowerCase() !== 'jayarajj-3@okicici') return { error: 'Invalid UPI ID' };
       if (!utr || utr.length < 12) return { error: 'UTR must be at least 12 characters' };
 
       // Check UTR uniqueness
@@ -370,7 +370,7 @@ describe('Registration → Payment → Approval → Wallet (E2E)', () => {
     // 3. Submit payment for registration
     const payResult = await db.verifyUPIPayment({
       pendingRegId: regResult.pendingRegId, type: 'registration', amount: 120,
-      utr: 'ABCD12345678', upiId: '9655897523@ptyes',
+      utr: 'ABCD12345678', upiId: 'jayarajj-3@okicici',
       screenshotUrl: 'https://example.com/ss.jpg',
     });
     expect(payResult.error).toBeUndefined();
@@ -426,7 +426,7 @@ describe('Registration → Payment → Approval → Wallet (E2E)', () => {
     // First submission — should succeed
     const firstPay = await db.verifyUPIPayment({
       pendingRegId: regResult.pendingRegId, type: 'registration', amount: 120,
-      utr: 'DUPLICATE123456', upiId: '9655897523@ptyes',
+      utr: 'DUPLICATE123456', upiId: 'jayarajj-3@okicici',
       screenshotUrl: 'https://example.com/ss.jpg',
     });
     expect(firstPay.paymentId).toBeTruthy();
@@ -434,7 +434,7 @@ describe('Registration → Payment → Approval → Wallet (E2E)', () => {
     // Second submission with same UTR — should fail
     const secondPay = await db.verifyUPIPayment({
       pendingRegId: regResult.pendingRegId, type: 'registration', amount: 120,
-      utr: 'DUPLICATE123456', upiId: '9655897523@ptyes',
+      utr: 'DUPLICATE123456', upiId: 'jayarajj-3@okicici',
       screenshotUrl: 'https://example.com/ss2.jpg',
     });
     expect(secondPay.error).toBe('UTR already submitted and is under review');
@@ -451,7 +451,7 @@ describe('Registration → Payment → Approval → Wallet (E2E)', () => {
     for (let i = 0; i < 3; i++) {
       const result = await db.verifyUPIPayment({
         pendingRegId: regResult.pendingRegId, type: 'registration', amount: 120,
-        utr: `UTR-${i}-123456789`, upiId: '9655897523@ptyes',
+        utr: `UTR-${i}-123456789`, upiId: 'jayarajj-3@okicici',
         screenshotUrl: `https://example.com/ss${i}.jpg`,
       });
       expect(result.paymentId).toBeTruthy();
@@ -460,7 +460,7 @@ describe('Registration → Payment → Approval → Wallet (E2E)', () => {
     // 4th should be rejected
     const fourth = await db.verifyUPIPayment({
       pendingRegId: regResult.pendingRegId, type: 'registration', amount: 120,
-      utr: 'UTR-X-1234567890', upiId: '9655897523@ptyes',
+      utr: 'UTR-X-1234567890', upiId: 'jayarajj-3@okicici',
       screenshotUrl: 'https://example.com/ss4.jpg',
     });
     expect(fourth.error).toBe('Maximum 3 payment attempts per day');
@@ -496,7 +496,7 @@ describe('Registration → Payment → Approval → Wallet (E2E)', () => {
     });
     const payReg = await db.verifyUPIPayment({
       pendingRegId: preReg.pendingRegId, type: 'registration', amount: 120,
-      utr: 'DUPECHECK12345', upiId: '9655897523@ptyes',
+      utr: 'DUPECHECK12345', upiId: 'jayarajj-3@okicici',
       screenshotUrl: 'https://example.com/dupe.jpg',
     });
     await db.approveRegistrationPayment(payReg.paymentId);
@@ -537,7 +537,7 @@ describe('Topup payment flow', () => {
     // Submit topup payment
     const payResult = await db.verifyUPIPayment({
       userId, type: 'topup', amount: 500,
-      utr: 'TOPUPUTR123456', upiId: '9655897523@ptyes',
+      utr: 'TOPUPUTR123456', upiId: 'jayarajj-3@okicici',
       screenshotUrl: 'https://example.com/topup.jpg',
     });
     expect(payResult.paymentId).toBeTruthy();
@@ -572,7 +572,7 @@ describe('Reject and restore payment flow', () => {
     });
     const payResult = await db.verifyUPIPayment({
       pendingRegId: regResult.pendingRegId, type: 'registration', amount: 120,
-      utr: 'REJECT12345678', upiId: '9655897523@ptyes',
+      utr: 'REJECT12345678', upiId: 'jayarajj-3@okicici',
       screenshotUrl: 'https://example.com/r.jpg',
     });
 
@@ -607,7 +607,7 @@ describe('Reject and restore payment flow', () => {
     });
     const payResult = await db.verifyUPIPayment({
       pendingRegId: regResult.pendingRegId, type: 'registration', amount: 120,
-      utr: 'DOUBLE12345678', upiId: '9655897523@ptyes',
+      utr: 'DOUBLE12345678', upiId: 'jayarajj-3@okicici',
       screenshotUrl: 'https://example.com/d.jpg',
     });
 

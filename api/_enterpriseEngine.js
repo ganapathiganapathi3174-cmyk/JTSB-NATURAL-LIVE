@@ -5,7 +5,7 @@ const { broadcast } = require('./_sse.js');
 
 const BASE_AMOUNTS = [120, 540, 1200];
 const ALLOWED_AMOUNTS = TEST_MODE ? [...BASE_AMOUNTS, TEST_PAYMENT_AMOUNT] : BASE_AMOUNTS;
-const ACCEPTED_UPI = '9655897523@ptyes';
+const ACCEPTED_UPI = 'jayarajj-3@okicici';
 const OTP_EXPIRY_MS = 300000;
 const MAX_OTP_ATTEMPTS = 3;
 const FRAUD_SCORE_REJECT = 60;

@@ -393,7 +393,8 @@ export default function FirebaseAdminDashboardPage() {
 
   useEffect(() => {
     const baseUrl = import.meta.env.VITE_FUNCTIONS_URL || '';
-    const eventSource = new EventSource(`${baseUrl}/sse/dashboard`);
+    const token = localStorage.getItem(ADMIN_KEY) || '';
+    const eventSource = new EventSource(`${baseUrl}/sse/dashboard?token=${encodeURIComponent(token)}`);
 
     eventSource.onopen = () => setSseConnected(true);
     eventSource.addEventListener('connected', () => setSseConnected(true));

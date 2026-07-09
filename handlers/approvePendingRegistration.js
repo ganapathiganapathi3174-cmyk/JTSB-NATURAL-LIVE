@@ -1,5 +1,5 @@
-const { COL_USERS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_PENDING_REGS, randomString, crypto } = require('../api/_shared.js');
-const { runQuery, writeDoc, addDoc, deleteDoc } = require('../api/_supabase.js');
+const { COL_USERS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_PENDING_REGS, randomString, crypto, MAX_REFERRALS, isSystemReferralCode, getReferrerPackage, getPackageByReferral } = require('../api/_shared.js');
+const { runQuery, writeDoc, updateDoc, addDoc, deleteDoc } = require('../api/_supabase.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,6 +28,8 @@ module.exports = async (req, res) => {
       if (refUsers.length) { referredByUserId = refUsers[0].id; referredByCode = pendingReg.referral_code; }
     }
 
+    const userPkg = getReferrerPackage(pendingReg) || getPackageByReferral(pendingReg.referral_code) || '120';
+
     await writeDoc(COL_USERS, newUserId, {
       id: newUserId,
       email: pendingReg.email,
@@ -41,6 +43,7 @@ module.exports = async (req, res) => {
       approved: true,
       active: true,
       membership_paid: true,
+      membership_type: userPkg,
       joined_date: now,
       approved_date: now,
     });
@@ -53,8 +56,9 @@ module.exports = async (req, res) => {
         const referrerDoc = await runQuery(COL_USERS, [{ field: 'id', op: 'EQUAL', value: referredByUserId }], { limit: 1 });
         if (referrerDoc && referrerDoc.length) {
           const referrer = referrerDoc[0];
+          const isSystemRef = isSystemReferralCode(referrer.referral_code);
           const currentCount = (referrer.referrals_count || 0) + 1;
-          const limitReached = currentCount >= MAX_REFERRALS;
+          const limitReached = !isSystemRef && currentCount >= MAX_REFERRALS;
           const updates = {
             referrals_count: currentCount,
             total_referral_count: (referrer.total_referral_count || 0) + 1,
@@ -62,14 +66,14 @@ module.exports = async (req, res) => {
             referral_active: !limitReached,
             is_qualified: limitReached,
           };
-          if (limitReached) {
+          if (limitReached && !isSystemRef) {
             updates.account_status = 'inactive';
             updates.inactive_reason = 'Referral Limit Reached (2 Successful Referrals)';
             updates.referral_expires_at = now;
           }
           await updateDoc(COL_USERS, referredByUserId, updates);
 
-          if (limitReached) {
+          if (limitReached && !isSystemRef) {
             try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been expired.', type: 'referral_limit_reached', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
             try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: req.admin?.email || 'system', details: { referralCode: referredByCode, referralCount: currentCount, reason: 'Auto-inactivated after ' + MAX_REFERRALS + ' referrals', registrationPlan: 'Direct Admin', paymentMethod: 'Admin' }, created_at: now }); } catch {}
           }

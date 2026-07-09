@@ -22,7 +22,8 @@ export default function FirebaseAdminLoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/adminLogin', {
+      const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
+      const res = await fetch(`${API_BASE}/adminLogin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),

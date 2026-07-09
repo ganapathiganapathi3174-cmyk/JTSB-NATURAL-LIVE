@@ -38,7 +38,7 @@ async function uploadFile(key, buffer, contentType = 'image/jpeg') {
     return { url: publicUrl, key };
   } catch (err) {
     console.error('[R2] uploadFile error:', err.message);
-    return { error: err.message };
+    return { error: 'Upload failed' };
   }
 }
 

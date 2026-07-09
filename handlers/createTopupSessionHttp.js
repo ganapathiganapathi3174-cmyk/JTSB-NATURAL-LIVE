@@ -1,5 +1,5 @@
-const { randomString } = require('../api/_shared.js');
-const { writeDoc } = require('../api/_supabase.js');
+const { randomString, COL_USERS, getReferrerPackage, validatePackageAmount } = require('../api/_shared.js');
+const { writeDoc, getDoc } = require('../api/_supabase.js');
 
 const COL_SESSIONS = 'payment_sessions';
 
@@ -14,6 +14,15 @@ module.exports = async (req, res) => {
     const { userId, amount } = req.body || {};
     if (!userId) { res.writeHead(400); res.end(JSON.stringify({ error: 'userId is required' })); return; }
     if (!amount || amount < 1) { res.writeHead(400); res.end(JSON.stringify({ error: 'Valid amount is required' })); return; }
+
+    // Package validation for topup
+    const user = await getDoc(COL_USERS, userId);
+    if (user) {
+      const userPkg = getReferrerPackage(user);
+      if (userPkg && !validatePackageAmount(userPkg, amount)) {
+        res.writeHead(400); res.end(JSON.stringify({ error: 'Your \u20B9' + userPkg + ' package only accepts \u20B9' + userPkg + ' topup. Selected \u20B9' + amount + ' does not match.' })); return;
+      }
+    }
 
     const sessionId = 'TOPUP-' + randomString(8);
     await writeDoc(COL_SESSIONS, sessionId, {

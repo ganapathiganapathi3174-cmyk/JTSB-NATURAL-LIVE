@@ -3,11 +3,12 @@ const {
   COL_USERS, COL_PENDING_REGS, COL_UPI_PAYMENTS, COL_ORDERS,
   COL_WALLET_BALANCES, COL_WALLET_TX, COL_TOPUP_INCOME,
   COL_REFERRALS, COL_NOTIFICATIONS, COL_VERIFICATION_LOGS,
-  MAX_REFERRALS, randomString, ADMIN_UPI_ID,
+  MAX_REFERRALS, randomString, ADMIN_UPI_ID, isSystemReferralCode,
+  getReferrerPackage, getPackageByReferral, validatePackageAmount,
 } = require('./_shared.js');
 const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet, getSupabaseClient } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
-const { runAiVerification } = require('./_aiVerificationEngine.js');
+const { runBankSmsVerification } = require('./_bankSmsVerificationEngine.js');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;
 const VERIFY_TIMEOUT_MS = 180 * 1000;
@@ -38,19 +39,33 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
     throw Object.assign(new Error('userId is required for topup'), { status: 400 });
   }
 
-  let customerEmail = '';
-  let customerName = '';
-
   if (type === 'registration' && pendingRegId) {
     const pending = await getDoc(COL_PENDING_REGS, pendingRegId);
     if (!pending) throw Object.assign(new Error('Pending registration not found'), { status: 404 });
-    customerEmail = pending.email || '';
-    customerName = pending.name || '';
+
+    // Package validation: check if referral chain restricts the amount
+    const refCode = pending.referral_code;
+    if (refCode) {
+      const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: refCode.toUpperCase() }], { limit: 1 });
+      let allowedPkg = null;
+      if (refUsers.length) {
+        allowedPkg = getReferrerPackage(refUsers[0]);
+      } else {
+        allowedPkg = getPackageByReferral(refCode);
+      }
+      if (allowedPkg && !validatePackageAmount(allowedPkg, amount)) {
+        throw Object.assign(new Error('This referral link accepts only the \u20B9' + allowedPkg + ' package. Selected \u20B9' + amount + ' does not match.'), { status: 400 });
+      }
+    }
   } else if (type === 'topup' && userId) {
     const user = await lookupUser(userId);
     if (!user) throw Object.assign(new Error('User not found'), { status: 404 });
-    customerEmail = user.email || '';
-    customerName = user.name || '';
+
+    // Topup package validation
+    const userPkg = getReferrerPackage(user);
+    if (userPkg && !validatePackageAmount(userPkg, amount)) {
+      throw Object.assign(new Error('Your ' + userPkg + ' package only accepts \u20B9' + userPkg + ' topup. Selected \u20B9' + amount + ' does not match.'), { status: 400 });
+    }
   }
 
   const orderId = 'ORD-' + randomString(12);
@@ -63,32 +78,15 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
     amount: Number(amount),
     status: 'pending',
     expires_at: expiresAt,
-    pending_reg_id: type === 'registration' ? pendingRegId : null,
-    expected_upi_id: ADMIN_UPI_ID,
-    customer_email: customerEmail,
-    customer_name: customerName,
   };
 
   let saved = null;
-  try {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.from(COL_ORDERS).insert(orderData).select('id').single();
-    if (!error && data) saved = data;
-  } catch (e) {
-    log('Direct insert to payment_sessions failed: ' + e.message);
-  }
-
-  if (!saved || !saved.id) {
-    const fallbackId = 'ORD-' + randomString(12);
-    orderData.id = fallbackId;
-    try {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase.from(COL_ORDERS).insert(orderData).select('id').single();
-      if (!error && data) saved = data;
-      else saved = { id: fallbackId };
-    } catch (e) {
-      saved = { id: fallbackId };
-    }
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from(COL_ORDERS).insert(orderData).select('id').single();
+  if (!error && data) saved = data;
+  else {
+    log('Order insert failed, tracking in-memory');
+    saved = { id: orderId };
   }
 
   const finalOrderId = saved.id || orderId;
@@ -127,8 +125,8 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
     expectedUpi: ADMIN_UPI_ID,
     status: 'pending',
     expiresAt,
-    customerEmail,
-    customerName,
+    pendingRegId: type === 'registration' ? pendingRegId : null,
+    userId: userId || paymentPendingRegId,
   };
 }
 
@@ -143,7 +141,7 @@ async function getPaymentOrder(orderId) {
   return order;
 }
 
-async function submitPaymentProof(orderId, screenshotUrl) {
+async function submitPaymentProof(orderId, screenshotUrl, extra) {
   const order = await getPaymentOrder(orderId);
   if (!order) throw Object.assign(new Error('Order not found'), { status: 404 });
   if (order.status === 'expired') throw Object.assign(new Error('Order expired'), { status: 400 });
@@ -156,13 +154,13 @@ async function submitPaymentProof(orderId, screenshotUrl) {
     updated_at: now(),
   });
 
-  const verificationResult = await runAiVerification(order, screenshotUrl);
+  const verificationResult = await runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null);
 
   const isVerified = verificationResult.status === 'verified';
   const isRejected = verificationResult.status === 'rejected';
   const finalOrderStatus = isVerified ? 'verified' : (isRejected ? 'rejected' : 'manual_review');
 
-  const updatePayload = {
+  await updateDoc(COL_ORDERS, orderId, {
     status: finalOrderStatus,
     verification_status: verificationResult.status,
     verification_score: verificationResult.verificationScore || 0,
@@ -171,20 +169,13 @@ async function submitPaymentProof(orderId, screenshotUrl) {
     rejection_reasons: verificationResult.reasons || [],
     final_score: verificationResult.verificationScore || 0,
     fraud_score: verificationResult.fraudScore || 0,
+    verified_at: isVerified || isRejected ? now() : null,
+    verification_completed_at: isVerified || isRejected ? now() : null,
     updated_at: now(),
-  };
-
-  if (isVerified || isRejected) {
-    updatePayload.verified_at = now();
-    updatePayload.verification_completed_at = now();
-  }
-
-  await updateDoc(COL_ORDERS, orderId, updatePayload);
-
-  const updatedOrder = await getPaymentOrder(orderId);
+  });
 
   if (isVerified) {
-    await executeVerifiedOrder(updatedOrder, verificationResult);
+    await executeVerifiedOrder(order, verificationResult, extra);
   } else {
     const msg = isRejected
       ? 'Your payment of ₹' + order.amount + ' was rejected. Reasons: ' + (verificationResult.reasons || []).join(', ')
@@ -204,13 +195,14 @@ async function submitPaymentProof(orderId, screenshotUrl) {
   let syncedPaymentId = null;
   try {
     let existingPayments = [];
-    if (order.type === 'registration' && order.pending_reg_id) {
+    const searchRegId = extra?.pendingRegId || order.pending_reg_id;
+    if (order.type === 'registration' && searchRegId) {
       existingPayments = await runQuery(COL_UPI_PAYMENTS, [
-        { field: 'pending_reg_id', op: 'EQUAL', value: order.pending_reg_id },
+        { field: 'pending_reg_id', op: 'EQUAL', value: searchRegId },
       ], { limit: 10 });
-    } else if (order.type === 'topup' && order.user_id) {
+    } else if (order.type === 'topup' && (extra?.userId || order.user_id)) {
       existingPayments = await runQuery(COL_UPI_PAYMENTS, [
-        { field: 'user_id', op: 'EQUAL', value: order.user_id },
+        { field: 'user_id', op: 'EQUAL', value: extra?.userId || order.user_id },
       ], { limit: 10 });
     }
     if (existingPayments.length > 0) {
@@ -241,19 +233,21 @@ async function submitPaymentProof(orderId, screenshotUrl) {
     matchedReceiver: verificationResult.matchedReceiver,
     matchedUtr: verificationResult.matchedUtr,
     matchedDate: verificationResult.matchedDate,
+    userUtrMatched: verificationResult.userUtrMatched,
+    userEnteredUtr: verificationResult.userEnteredUtr,
     fraudScore: verificationResult.fraudScore,
     checks: verificationResult.checks,
   };
 }
 
-async function executeVerifiedOrder(order, verificationResult) {
+async function executeVerifiedOrder(order, verificationResult, extra) {
   const type = order.type;
   const amount = Number(order.amount);
   const orderId = order.id;
   const completedAt = now();
 
   if (type === 'registration') {
-    const pendingRegId = order.pending_reg_id;
+    const pendingRegId = extra?.pendingRegId || order.pending_reg_id;
     if (!pendingRegId) {
       await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['No registration session linked'], updated_at: now() });
       return;
@@ -281,11 +275,14 @@ async function executeVerifiedOrder(order, verificationResult) {
       return;
     }
 
+    const userPkg = getReferrerPackage(pendingReg) || getPackageByReferral(pendingReg.referral_code) || String(amount);
+
     await writeDoc(COL_USERS, newUserId, {
       id: newUserId, email: userEmail, name: userName, phone: userPhone,
       password_hash: pendingReg.password_hash, referral_code: randomString(8),
       referred_by: referredByCode, account_status: 'active', payment_status: 'success',
       approved: true, active: true, membership_paid: true,
+      membership_type: userPkg,
       joined_date: completedAt, approved_date: completedAt,
     });
 
@@ -299,8 +296,9 @@ async function executeVerifiedOrder(order, verificationResult) {
       await atomicCreditWallet(referredByUserId, amount * 0.1, orderId, 'Referral bonus for ' + newUserId, 'referral_bonus');
       const referrerDoc = await getDoc(COL_USERS, referredByUserId);
       if (referrerDoc) {
+        const isSystemRef = isSystemReferralCode(referrerDoc.referral_code);
         const currentCount = (referrerDoc.referrals_count || 0) + 1;
-        const limitReached = currentCount >= MAX_REFERRALS;
+        const limitReached = !isSystemRef && currentCount >= MAX_REFERRALS;
         const updates = {
           referrals_count: currentCount,
           total_referral_count: (referrerDoc.total_referral_count || 0) + 1,
@@ -308,13 +306,13 @@ async function executeVerifiedOrder(order, verificationResult) {
           referral_active: !limitReached,
           is_qualified: limitReached,
         };
-        if (limitReached) {
+        if (limitReached && !isSystemRef) {
           updates.account_status = 'inactive';
           updates.inactive_reason = 'Referral Limit Reached';
           updates.referral_expires_at = completedAt;
         }
         await updateDoc(COL_USERS, referredByUserId, updates);
-        if (limitReached) {
+        if (limitReached && !isSystemRef) {
           try {
             await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Referral limit reached.', type: 'referral_limit_reached', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' });
           } catch {}

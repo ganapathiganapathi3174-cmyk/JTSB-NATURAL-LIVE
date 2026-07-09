@@ -1,5 +1,11 @@
 const { requireAdmin } = require('./_auth.js');
 const metrics = require('./_metrics.js');
+const { initSystemUsers } = require('./_systemInit.js');
+
+// Initialize system users on first cold start (idempotent — skips if already exist)
+initSystemUsers().catch(err => {
+  console.error('[SYSTEM-INIT] Startup initialization error: ' + err.message);
+});
 
 // Simple in-memory rate limiter for API
 const rateLimitStore = new Map();
@@ -130,7 +136,7 @@ module.exports = async (req, res) => {
     metrics.trackAPICall(path, req.method, 500);
     if (!res.headersSent) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message || 'Internal error' }));
+      res.end(JSON.stringify({ error: 'Internal server error' }));
     }
   });
 };

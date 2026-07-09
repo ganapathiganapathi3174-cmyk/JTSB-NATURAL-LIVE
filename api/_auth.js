@@ -13,8 +13,12 @@ function isTokenBlacklisted(jti) {
 
 function getSecret() {
   if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET;
-  console.error('[AUTH] CRITICAL: ADMIN_JWT_SECRET not configured — authentication disabled');
-  return 'dev-jwt-secret-not-for-production';
+  const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+  if (isDev) {
+    console.error('[AUTH] WARNING: Using dev JWT secret. Set ADMIN_JWT_SECRET in production.');
+    return 'dev-jwt-secret-not-for-production';
+  }
+  throw new Error('ADMIN_JWT_SECRET not configured');
 }
 
 function signAdminToken(payload) {

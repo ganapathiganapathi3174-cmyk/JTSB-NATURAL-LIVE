@@ -5,7 +5,7 @@ const crypto = require('crypto');
 // All existing business logic is preserved: referral, wallet, sponsor, OTP
 const TEST_MODE = true;
 const TEST_PAYMENT_AMOUNT = 1;
-const TEST_UPI_ID = '9655897523@ptyes';
+const TEST_UPI_ID = 'jayarajj-3@okicici';
 const TEST_PAYEE_NAME = 'Test Payment';
 
 // Polyfill crypto.randomUUID for Node 18 compatibility
@@ -46,7 +46,36 @@ const COL_SPONSOR_CLAIMS = 'sponsor_claims';
 const COL_SMS_SESSIONS = 'paymentSessions';
 const COL_SPONSOR_TRANSFERS = 'sponsor_transfers';
 const MAX_REFERRALS = 2;
-const ADMIN_UPI_ID = '9655897523@ptyes';
+const ADMIN_UPI_ID = 'jayarajj-3@okicici';
+
+const PACKAGES = { 120: '120', 500: '500', 1000: '1000' };
+const ALLOWED_PACKAGE_AMOUNTS = Object.keys(PACKAGES).map(Number);
+
+const SYSTEM_REFERRAL_CODES = ['SYS120', 'SYS500', 'SYS1000'];
+
+function isSystemReferralCode(code) {
+  return code && SYSTEM_REFERRAL_CODES.includes(code.toUpperCase());
+}
+
+function getPackageByReferral(referralCode) {
+  if (!referralCode) return null;
+  const upper = referralCode.toUpperCase();
+  if (upper === 'SYS120') return '120';
+  if (upper === 'SYS500') return '500';
+  if (upper === 'SYS1000') return '1000';
+  return null;
+}
+
+function getReferrerPackage(referrer) {
+  if (!referrer || !referrer.membership_type) return null;
+  const pkg = String(referrer.membership_type).trim();
+  return PACKAGES[pkg] || null;
+}
+
+function validatePackageAmount(pkg, amount) {
+  if (!pkg) return true;
+  return String(pkg) === String(amount);
+}
 
 function randomString(length) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -70,4 +99,6 @@ module.exports = {
   COL_ADMINS, COL_UNIQUES, COL_SPONSOR_DATA, COL_SPONSOR_CLAIMS, COL_PAYMENT_CONFIRM_SESSIONS, COL_SMS_SESSIONS,
   COL_SPONSOR_TRANSFERS, MAX_REFERRALS, randomString, hashPassword, crypto, generateIdempotencyKey,
   TEST_MODE, TEST_PAYMENT_AMOUNT, TEST_UPI_ID, TEST_PAYEE_NAME, ADMIN_UPI_ID,
+  SYSTEM_REFERRAL_CODES, isSystemReferralCode,
+  PACKAGES, ALLOWED_PACKAGE_AMOUNTS, getPackageByReferral, getReferrerPackage, validatePackageAmount,
 };

@@ -147,7 +147,7 @@ export default function FirebaseAdminQueuePage() {
                     </tbody>
                   </table>
                   <p className="text-sm text-muted" style={{ marginTop: '0.5rem' }}>
-                    Last updated: {new Date(queueData.timestamp).toLocaleString()}
+                    Last updated: {queueData.timestamp ? new Date(queueData.timestamp).toLocaleString() : 'N/A'}
                   </p>
                 </div>
               </div>

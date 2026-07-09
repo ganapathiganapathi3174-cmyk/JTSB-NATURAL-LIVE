@@ -9,7 +9,9 @@ create extension if not exists "pgcrypto";
 create table if not exists public.users (
   id uuid primary key default uuid_generate_v4(),
   email text unique not null,
+  email_hash text,
   phone text,
+  phone_hash text,
   name text,
   password_hash text,
   referral_code text unique,
@@ -39,11 +41,17 @@ create table if not exists public.users (
 );
 
 create index if not exists idx_users_email on public.users(email);
+create index if not exists idx_users_email_hash on public.users(email_hash);
 create index if not exists idx_users_phone on public.users(phone);
+create index if not exists idx_users_phone_hash on public.users(phone_hash);
 create index if not exists idx_users_referral_code on public.users(referral_code);
 create index if not exists idx_users_referred_by on public.users(referred_by);
 create index if not exists idx_users_account_status on public.users(account_status);
 create index if not exists idx_users_payment_status on public.users(payment_status);
+
+-- Add hash columns for existing databases (CREATE TABLE IF NOT EXISTS skips existing tables)
+alter table public.users add column if not exists email_hash text;
+alter table public.users add column if not exists phone_hash text;
 
 -- ==================== UNIQUES TABLE (email/phone uniqueness) ====================
 create table if not exists public.uniques (
@@ -86,6 +94,7 @@ create table if not exists public.upi_payments (
   rejection_reasons jsonb,
   ocr_result jsonb,
   final_score numeric(5,2),
+  fraud_score numeric(5,2),
   screenshot_hash text,
   payment_date timestamptz,
   verified_at timestamptz,
@@ -473,3 +482,12 @@ begin
   return code;
 end;
 $$;
+
+-- ==================== BACKFILL: HASH COLUMNS (Run ONCE after adding columns) ====================
+-- email_hash / phone_hash columns are populated automatically for NEW inserts
+-- via encryptSensitive() in _supabase.js.
+-- For EXISTING rows, run the Node.js script:
+--   node api/backfillHashes.js
+-- or if email/phone are stored IN CLEAR (not encrypted), use SQL:
+--   UPDATE public.users SET email_hash = encode(sha256(lower(trim(email))::bytea), 'hex');
+--   UPDATE public.users SET phone_hash = encode(sha256(trim(phone)::bytea), 'hex');

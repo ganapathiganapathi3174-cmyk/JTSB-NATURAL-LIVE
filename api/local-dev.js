@@ -27,24 +27,45 @@ require('./_queue.js').ensureQueueTables().then(() => require('./_queue.js').rec
 require('./_health.js').startHealthChecks();
 require('./_cleanup.js').startDailyTasks();
 require('./_upiPaymentMonitor.js').startMonitor();
+// Pre-initialize OCR worker pool so first payment request skips cold start
+require('./_bankSmsVerificationEngine.js').initWorkerPool().then(() => {
+  console.log('[BANK-SMS] OCR worker pool pre-initialized at startup');
+}).catch(() => {});
+// Initialize system users on first startup (idempotent — skips if already exist)
+require('./_systemInit.js').initSystemUsers().then(created => {
+  console.log('[SYSTEM-INIT] Startup initialization complete: ' + created + ' users created');
+}).catch(err => {
+  console.error('[SYSTEM-INIT] Startup initialization error: ' + err.message);
+});
 
 function wrapHandler(handler) {
   return (req, res) => {
     let responded = false;
-    const json = (data, status = 200) => {
+    const respondSafe = (data, status = 200) => {
       if (responded) return;
       responded = true;
-      res.writeHead(status, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(data));
+      try {
+        if (!res.headersSent) res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+      } catch (e) {
+        console.error('[RESPOND] Failed to send response:', e.message);
+      }
     };
-    res.status = (code) => ({ json: (data) => json(data, code) });
-    res.json = (data) => json(data);
-    const result = handler(req, res);
-    if (result && typeof result.catch === 'function') {
-      result.catch((err) => {
-        console.error('[HANDLER ERROR]', err?.message || err);
-        json({ error: err?.message || 'Internal server error' }, 500);
-      });
+    res.status = (code) => ({ json: (data) => respondSafe(data, code) });
+    res.json = (data) => respondSafe(data);
+    try {
+      const result = handler(req, res);
+      if (result && typeof result.catch === 'function') {
+        result.catch((err) => {
+          console.error('[HANDLER ERROR]', err?.message || err);
+          if (err?.stack) console.error(err.stack);
+          respondSafe({ error: 'Internal server error' }, 500);
+        });
+      }
+    } catch (err) {
+      console.error('[HANDLER SYNC ERROR]', err?.message || err);
+      if (err?.stack) console.error(err.stack);
+      respondSafe({ error: err?.message || 'Internal server error' }, 500);
     }
   };
 }
@@ -185,8 +206,8 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Per-request timeout (30 seconds) — prevents indefinite hangs
-  const REQUEST_TIMEOUT_MS = 30000;
+  // Per-request timeout (120 seconds) — OCR pipeline can take 60-90s on cold start
+  const REQUEST_TIMEOUT_MS = 120000;
   const abortTimer = setTimeout(() => {
     console.error('[TIMEOUT] Request timed out after ' + REQUEST_TIMEOUT_MS + 'ms: ' + key);
     if (!res.headersSent) {

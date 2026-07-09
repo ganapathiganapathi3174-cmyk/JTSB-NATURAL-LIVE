@@ -43,8 +43,8 @@ module.exports = async (req, res) => {
     for (const payment of pendingPayments) {
       results.processed++;
       try {
-        const { runAiVerification } = require('../api/_aiVerificationEngine.js');
-        const verification = await runAiVerification(payment, payment.screenshot_url || '');
+        const { runBankSmsVerification } = require('../api/_bankSmsVerificationEngine.js');
+        const verification = await runBankSmsVerification(payment, payment.screenshot_url || '', payment.user_id);
         const finalStatus = verification.status === 'verified' ? 'verified' : (verification.status === 'rejected' ? 'rejected' : 'manual_review');
         await require('../api/_supabase.js').updateDoc(COL_UPI_PAYMENTS, payment.id, {
           status: finalStatus,

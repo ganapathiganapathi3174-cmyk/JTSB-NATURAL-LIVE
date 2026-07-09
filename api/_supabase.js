@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 const turso = require('./_turso.js');
 const neon = require('./_neon.js');
 const queue = require('./_queue.js');
@@ -35,7 +36,7 @@ function getSupabaseClient() {
     global: {
       fetch: (url, opts) => {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 10000);
+        const timer = setTimeout(() => controller.abort(), 30000);
         const origSignal = opts?.signal;
         if (origSignal) {
           origSignal.addEventListener('abort', () => controller.abort(), { once: true });
@@ -50,8 +51,16 @@ function encryptSensitive(data, table) {
   if (!isSensitiveTable(table) || !data) return data;
   const result = { ...data };
   if (result.utr) result.utr = crypto_helper.encrypt(String(result.utr));
-  if (result.phone) result.phone = crypto_helper.encrypt(String(result.phone));
-  if (result.email) result.email = crypto_helper.encrypt(String(result.email));
+  if (result.phone) {
+    const rawPhone = String(result.phone);
+    result.phone = crypto_helper.encrypt(rawPhone);
+    result.phone_hash = crypto.createHash('sha256').update(rawPhone.trim()).digest('hex');
+  }
+  if (result.email) {
+    const rawEmail = String(result.email);
+    result.email = crypto_helper.encrypt(rawEmail);
+    result.email_hash = crypto.createHash('sha256').update(rawEmail.toLowerCase().trim()).digest('hex');
+  }
   if (result.password) result.password = crypto_helper.encrypt(String(result.password));
   return result;
 }
@@ -302,10 +311,21 @@ async function conditionalUpdateDoc(table, id, conditions, data) {
 }
 
 async function runQueryDecrypted(table, filters, options = {}) {
+  const reqStart = Date.now();
+  const fnName = 'runQueryDecrypted';
+  const logSlow = (msg, elapsed) => {
+    if (elapsed > 2000) {
+      console.log(`[SLOW QUERY] ⚠️ ${msg} took ${elapsed}ms (exceeds 2s)`);
+      console.log(`  File: api/_supabase.js, Function: ${fnName}, Line: 304 (start), Execution Time: ${elapsed}ms`);
+    }
+  };
+
   const sensitiveFields = { users: ['email', 'phone'], upi_payments: ['utr'] };
   const fieldsToFilterOn = sensitiveFields[table];
   const hasSensitiveFilter = filters && filters.some(f => fieldsToFilterOn?.includes(f.field));
   if (!hasSensitiveFilter) return runQuery(table, filters, options);
+
+  console.log(`[runQueryDecrypted] START table=${table}, filters=${JSON.stringify(filters)}`);
 
   // For sensitive-field filters, paginate through all records, decrypt in-memory, then filter
   const supabase = getSupabaseClient();
@@ -315,25 +335,48 @@ async function runQueryDecrypted(table, filters, options = {}) {
   let hasMore = true;
 
   while (hasMore) {
+    const tPage = Date.now();
+    console.log(`[runQueryDecrypted] Page ${page}: fetching range ${page * PAGE_SIZE}-${(page + 1) * PAGE_SIZE - 1}`);
     let query = supabase.from(table).select(options.select || '*');
     if (options.orderBy) query = query.order(options.orderBy, { ascending: options.ascending !== false });
     query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     const { data, error } = await withRetry(() => query, `runQueryDecrypted ${table} page ${page}`);
+    const fetchTime = Date.now() - tPage;
+    if (fetchTime > 2000) {
+      console.log(`[SLOW QUERY] ⚠️ Page ${page} fetch took ${fetchTime}ms (exceeds 2s)`);
+      console.log(`  File: api/_supabase.js, Function: ${fnName}, Line: 334, Execution Time: ${fetchTime}ms`);
+    }
     if (error) throw new Error(`QUERY error ${JSON.stringify(error)}`);
+    const tDecrypt = Date.now();
     const batch = (data || []).map(d => decryptSensitive(d, table));
+    const decryptTime = Date.now() - tDecrypt;
+    if (decryptTime > 2000) {
+      console.log(`[SLOW QUERY] ⚠️ Page ${page} decryption of ${batch.length} rows took ${decryptTime}ms`);
+      console.log(`  File: api/_supabase.js, Function: ${fnName}, Line: 342, Execution Time: ${decryptTime}ms`);
+    }
     allResults = allResults.concat(batch);
     hasMore = batch.length === PAGE_SIZE;
+    console.log(`[runQueryDecrypted] Page ${page}: fetched ${batch.length} rows, fetch=${fetchTime}ms, decrypt=${decryptTime}ms, total=${Date.now() - tPage}ms`);
     page++;
     if (page > 100) break;
   }
 
+  console.log(`[runQueryDecrypted] Fetched ${allResults.length} total rows, now filtering in-memory`);
+
   let results = allResults;
   for (const f of filters) {
+    const tFilter = Date.now();
     if (f.op === 'EQUAL') results = results.filter(r => r[f.field] === f.value);
     else if (f.op === 'NOT_EQUAL') results = results.filter(r => r[f.field] !== f.value);
     else if (f.op === 'IN') results = results.filter(r => f.value.includes(r[f.field]));
     else if (f.op === 'LIKE') results = results.filter(r => r[f.field]?.includes(f.value.replace(/%/g, '')));
+    const filterTime = Date.now() - tFilter;
+    logSlow(`Filter ${f.field} ${f.op}`, filterTime);
   }
+
+  const totalTime = Date.now() - reqStart;
+  logSlow(`Total ${fnName}`, totalTime);
+  console.log(`[runQueryDecrypted] END: ${results.length} results in ${totalTime}ms`);
   return results;
 }
 
@@ -347,6 +390,8 @@ async function atomicCreditWallet(userId, amount, paymentId, description, txType
       const wallets = await runQuery(COL_WALLET_BALANCES, [{ field: 'id', op: 'EQUAL', value: userId }]);
       if (!wallets || wallets.length === 0) {
         await writeDoc(COL_WALLET_BALANCES, userId, { balance: 0, total_earned: 0 });
+        retries--;
+        await new Promise(r => setTimeout(r, 100 + Math.random() * 100));
         continue;
       }
 
@@ -379,4 +424,55 @@ async function atomicCreditWallet(userId, amount, paymentId, description, txType
   throw new Error(lastError || 'Failed to credit wallet after retries');
 }
 
-module.exports = { getDoc, deleteDoc, runQuery, runQueryDecrypted, writeDoc, updateDoc, addDoc, countQuery, resilientQuery, isCriticalTable, conditionalUpdateDoc, getSupabaseClient, atomicCreditWallet };
+// ── Targeted lookup helpers (indexed queries, decrypt only matching row) ──
+
+async function findUserByEmail(email) {
+  if (!email) return null;
+  const emailHash = crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('users').select('*').eq('email_hash', emailHash).limit(1);
+  if (error) {
+    console.warn(`[findUserByEmail] Hash query failed: ${error.message}`);
+    // Column may not exist (pre-migration) — scan one page
+    const { data: fallback } = await supabase.from('users').select('*').limit(1000);
+    if (!fallback) return null;
+    const target = email.toLowerCase().trim();
+    for (const row of fallback) {
+      const decrypted = decryptSensitive(row, 'users');
+      if (decrypted.email && decrypted.email.toLowerCase().trim() === target) return decrypted;
+    }
+    return null;
+  }
+  if (!data || data.length === 0) return null;
+  return decryptSensitive(data[0], 'users');
+}
+
+async function findUserByPhone(phone) {
+  if (!phone) return null;
+  const phoneHash = crypto.createHash('sha256').update(phone.trim()).digest('hex');
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('users').select('*').eq('phone_hash', phoneHash).limit(1);
+  if (error) {
+    console.warn(`[findUserByPhone] Hash query failed: ${error.message}`);
+    // Column may not exist (pre-migration) — scan one page
+    const { data: fallback } = await supabase.from('users').select('*').limit(1000);
+    if (!fallback) return null;
+    const target = phone.trim();
+    for (const row of fallback) {
+      const decrypted = decryptSensitive(row, 'users');
+      if (decrypted.phone && decrypted.phone.trim() === target) return decrypted;
+    }
+    return null;
+  }
+  if (!data || data.length === 0) return null;
+  return decryptSensitive(data[0], 'users');
+}
+
+async function findUserBySponsorCode(code) {
+  if (!code) return null;
+  // referral_code is NOT encrypted — use runQuery directly
+  const results = await runQuery('users', [{ field: 'referral_code', op: 'EQUAL', value: code.toUpperCase() }], { limit: 1 });
+  return results.length > 0 ? results[0] : null;
+}
+
+module.exports = { getDoc, deleteDoc, runQuery, runQueryDecrypted, writeDoc, updateDoc, addDoc, countQuery, resilientQuery, isCriticalTable, conditionalUpdateDoc, getSupabaseClient, atomicCreditWallet, findUserByEmail, findUserByPhone, findUserBySponsorCode };
