@@ -34,98 +34,85 @@ function rateLimit(key, maxRequests = 30, windowMs = 60000) {
   return { limited: false };
 }
 
-// Wrap handler require with error intercept — log+store error, return error-handler function
-function safeRequire(path) {
+// Helper: try to require a module, return error-handler on failure (with logging)
+function tryRequire(name, modulePath) {
   try {
-    const mod = require(path);
+    const mod = require(modulePath);
     if (typeof mod === 'function') return mod;
-    // Handler might export { handler } or default
     if (mod && typeof mod.handler === 'function') return mod.handler;
     if (mod && typeof mod.default === 'function') return mod.default;
-    console.error('[SAFE-REQUIRE] ' + path + ' exports unexpected type: ' + typeof mod);
-    return (req, res) => { res.writeHead(500); res.end(JSON.stringify({ error: 'Handler invalid' })); };
+    console.error('[INDEX] ' + name + ' exports unexpected type: ' + typeof mod);
   } catch (e) {
-    console.error('[SAFE-REQUIRE] FAILED to load ' + path + ': ' + e.message);
-    console.error('[SAFE-REQUIRE] Stack: ' + e.stack.split('\n').slice(0, 3).join('\n'));
-    return (req, res) => {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Handler load failed: ' + path, detail: e.message }));
-    };
+    console.error('[INDEX] FAILED: ' + name + ' (' + modulePath + '): ' + e.message);
   }
+  // Return error-handler on failure
+  return (req, res) => { res.writeHead(500); res.end(JSON.stringify({ error: name + ' failed to load' })); };
 }
 
-const handlerPaths = {
-  adminLogin: '../handlers/adminLogin.js',
-  preRegister: '../handlers/preRegister.js',
-  createTopupSessionHttp: '../handlers/createTopupSessionHttp.js',
-  createPaymentOrder: '../handlers/createPaymentOrder.js',
-  submitPaymentProof: '../handlers/submitPaymentProof.js',
-  getPaymentOrderStatus: '../handlers/getPaymentOrderStatus.js',
-  retryPaymentOrder: '../handlers/retryPaymentOrder.js',
-  verifyUPIPayment: '../handlers/verifyUPIPayment.js',
-  uploadScreenshot: '../handlers/uploadScreenshot.js',
-  getUPIPayments: '../handlers/getUPIPayments.js',
-  getUPIDashboardStats: '../handlers/getUPIDashboardStats.js',
-  processPendingPayments: '../handlers/processPendingPayments.js',
-  deleteUPIPayment: '../handlers/deleteUPIPayment.js',
-  approveUPIPayment: '../handlers/approveUPIPayment.js',
-  rejectUPIPayment: '../handlers/rejectUPIPayment.js',
-  restoreUPIPayment: '../handlers/restoreUPIPayment.js',
-  getVerificationLogs: '../handlers/getVerificationLogs.js',
-  adminDeleteRecord: '../handlers/adminDeleteRecord.js',
-  getHealthStatus: '../handlers/getHealthStatus.js',
-  supabaseProxy: '../handlers/supabaseProxy.js',
-  getAdminDashboardData: '../handlers/getAdminDashboardData.js',
-  cleanupDemoData: '../handlers/cleanupDemoData.js',
-  approvePendingRegistration: '../handlers/approvePendingRegistration.js',
-  bulkDeleteUsers: '../handlers/bulkDeleteUsers.js',
-  getRecentActivity: '../handlers/getRecentActivity.js',
-  updateUserStatus: '../handlers/updateUserStatus.js',
-  createPaymentSession: '../handlers/createPaymentSession.js',
-  paymentConfirm: '../handlers/paymentConfirm.js',
-  createSmsSession: '../handlers/createSmsSession.js',
-  smsPaymentConfirm: '../handlers/smsPaymentConfirm.js',
-  getQueueStatus: '../handlers/getQueueStatus.js',
-  rerunOcr: '../handlers/rerunOcr.js',
-  rerunVerification: '../handlers/rerunVerification.js',
-  getReports: '../handlers/getReports.js',
-  getAuditLogs: '../handlers/getAuditLogs.js',
-  adminLogout: '../handlers/adminLogout.js',
-  enterprisePayment: '../handlers/enterprisePaymentSubmit.js',
-  enterpriseVerifyOtp: '../handlers/enterpriseVerifyOtp.js',
-  enterpriseResendOtp: '../handlers/enterpriseResendOtp.js',
-  pipelinePayment: '../handlers/pipelinePaymentSubmit.js',
-  pipelineVerifyOtp: '../handlers/pipelineVerifyOtp.js',
-  pipelineResendOtp: '../handlers/pipelineResendOtp.js',
-  createUPIOrder: '../handlers/createUPIOrder.js',
-  getUPIOrderStatus: '../handlers/getUPIOrderStatus.js',
-  webhookUPIConfirm: '../handlers/webhookUPIConfirm.js',
-  retryUPIOrder: '../handlers/retryUPIOrder.js',
-  companionPayment: '../handlers/companionPayment.js',
-  getCompanionStatus: '../handlers/getCompanionStatus.js',
-  getSponsorMarketplace: '../handlers/getSponsorMarketplace.js',
-  createSponsorTransfer: '../handlers/createSponsorTransfer.js',
-  getSponsorRequests: '../handlers/getSponsorRequests.js',
-  handleSponsorTransfer: '../handlers/handleSponsorTransfer.js',
-  getUserSponsorInfo: '../handlers/getUserSponsorInfo.js',
-  getAdminSponsorTransfers: '../handlers/getAdminSponsorTransfers.js',
-  getPendingPaymentsQueue: '../handlers/getPendingPaymentsQueue.js',
+// IMPORTANT: Each require() uses a hardcoded string literal so Vercel's static
+// analyzer can include all handler files in the Lambda deployment bundle
+const handlers = {
+  adminLogin: tryRequire('adminLogin', '../handlers/adminLogin.js'),
+  preRegister: tryRequire('preRegister', '../handlers/preRegister.js'),
+  createTopupSessionHttp: tryRequire('createTopupSessionHttp', '../handlers/createTopupSessionHttp.js'),
+  createPaymentOrder: tryRequire('createPaymentOrder', '../handlers/createPaymentOrder.js'),
+  submitPaymentProof: tryRequire('submitPaymentProof', '../handlers/submitPaymentProof.js'),
+  getPaymentOrderStatus: tryRequire('getPaymentOrderStatus', '../handlers/getPaymentOrderStatus.js'),
+  retryPaymentOrder: tryRequire('retryPaymentOrder', '../handlers/retryPaymentOrder.js'),
+  verifyUPIPayment: tryRequire('verifyUPIPayment', '../handlers/verifyUPIPayment.js'),
+  uploadScreenshot: tryRequire('uploadScreenshot', '../handlers/uploadScreenshot.js'),
+  getHealthStatus: tryRequire('getHealthStatus', '../handlers/getHealthStatus.js'),
+  createPaymentSession: tryRequire('createPaymentSession', '../handlers/createPaymentSession.js'),
+  paymentConfirm: tryRequire('paymentConfirm', '../handlers/paymentConfirm.js'),
+  createSmsSession: tryRequire('createSmsSession', '../handlers/createSmsSession.js'),
+  smsPaymentConfirm: tryRequire('smsPaymentConfirm', '../handlers/smsPaymentConfirm.js'),
+  enterprisePayment: tryRequire('enterprisePayment', '../handlers/enterprisePaymentSubmit.js'),
+  enterpriseVerifyOtp: tryRequire('enterpriseVerifyOtp', '../handlers/enterpriseVerifyOtp.js'),
+  enterpriseResendOtp: tryRequire('enterpriseResendOtp', '../handlers/enterpriseResendOtp.js'),
+  pipelinePayment: tryRequire('pipelinePayment', '../handlers/pipelinePaymentSubmit.js'),
+  pipelineVerifyOtp: tryRequire('pipelineVerifyOtp', '../handlers/pipelineVerifyOtp.js'),
+  pipelineResendOtp: tryRequire('pipelineResendOtp', '../handlers/pipelineResendOtp.js'),
+  createUPIOrder: tryRequire('createUPIOrder', '../handlers/createUPIOrder.js'),
+  getUPIOrderStatus: tryRequire('getUPIOrderStatus', '../handlers/getUPIOrderStatus.js'),
+  webhookUPIConfirm: tryRequire('webhookUPIConfirm', '../handlers/webhookUPIConfirm.js'),
+  retryUPIOrder: tryRequire('retryUPIOrder', '../handlers/retryUPIOrder.js'),
+  companionPayment: tryRequire('companionPayment', '../handlers/companionPayment.js'),
+  getSponsorMarketplace: tryRequire('getSponsorMarketplace', '../handlers/getSponsorMarketplace.js'),
+  createSponsorTransfer: tryRequire('createSponsorTransfer', '../handlers/createSponsorTransfer.js'),
+  getSponsorRequests: tryRequire('getSponsorRequests', '../handlers/getSponsorRequests.js'),
+  handleSponsorTransfer: tryRequire('handleSponsorTransfer', '../handlers/handleSponsorTransfer.js'),
+  getUserSponsorInfo: tryRequire('getUserSponsorInfo', '../handlers/getUserSponsorInfo.js'),
+  adminLogout: tryRequire('adminLogout', '../handlers/adminLogout.js'),
 };
-const handlers = {};
-// Admin-required endpoints
-const adminPaths = new Set([
-  'getUPIPayments','getUPIDashboardStats','processPendingPayments','deleteUPIPayment',
-  'approveUPIPayment','rejectUPIPayment','restoreUPIPayment','getVerificationLogs',
-  'adminDeleteRecord','supabaseProxy','getAdminDashboardData','cleanupDemoData',
-  'approvePendingRegistration','bulkDeleteUsers','getRecentActivity','updateUserStatus',
-  'getQueueStatus','rerunOcr','rerunVerification','getReports','getAuditLogs',
-  'getCompanionStatus','getAdminSponsorTransfers','getPendingPaymentsQueue',
-]);
-for (const [name, path] of Object.entries(handlerPaths)) {
-  const mod = safeRequire(path);
-  handlers[name] = adminPaths.has(name) ? requireAdmin(mod) : mod;
-}
-console.error('[API-INDEX] All ' + Object.keys(handlers).length + ' handlers loaded (' + Object.keys(handlerPaths).length + ' paths)');
+// Admin-wrapped handlers (need auth)
+const adminHandlers = {
+  getUPIPayments: requireAdmin(tryRequire('getUPIPayments', '../handlers/getUPIPayments.js')),
+  getUPIDashboardStats: requireAdmin(tryRequire('getUPIDashboardStats', '../handlers/getUPIDashboardStats.js')),
+  processPendingPayments: requireAdmin(tryRequire('processPendingPayments', '../handlers/processPendingPayments.js')),
+  deleteUPIPayment: requireAdmin(tryRequire('deleteUPIPayment', '../handlers/deleteUPIPayment.js')),
+  approveUPIPayment: requireAdmin(tryRequire('approveUPIPayment', '../handlers/approveUPIPayment.js')),
+  rejectUPIPayment: requireAdmin(tryRequire('rejectUPIPayment', '../handlers/rejectUPIPayment.js')),
+  restoreUPIPayment: requireAdmin(tryRequire('restoreUPIPayment', '../handlers/restoreUPIPayment.js')),
+  getVerificationLogs: requireAdmin(tryRequire('getVerificationLogs', '../handlers/getVerificationLogs.js')),
+  adminDeleteRecord: requireAdmin(tryRequire('adminDeleteRecord', '../handlers/adminDeleteRecord.js')),
+  supabaseProxy: requireAdmin(tryRequire('supabaseProxy', '../handlers/supabaseProxy.js')),
+  getAdminDashboardData: requireAdmin(tryRequire('getAdminDashboardData', '../handlers/getAdminDashboardData.js')),
+  cleanupDemoData: requireAdmin(tryRequire('cleanupDemoData', '../handlers/cleanupDemoData.js')),
+  approvePendingRegistration: requireAdmin(tryRequire('approvePendingRegistration', '../handlers/approvePendingRegistration.js')),
+  bulkDeleteUsers: requireAdmin(tryRequire('bulkDeleteUsers', '../handlers/bulkDeleteUsers.js')),
+  getRecentActivity: requireAdmin(tryRequire('getRecentActivity', '../handlers/getRecentActivity.js')),
+  updateUserStatus: requireAdmin(tryRequire('updateUserStatus', '../handlers/updateUserStatus.js')),
+  getQueueStatus: requireAdmin(tryRequire('getQueueStatus', '../handlers/getQueueStatus.js')),
+  rerunOcr: requireAdmin(tryRequire('rerunOcr', '../handlers/rerunOcr.js')),
+  rerunVerification: requireAdmin(tryRequire('rerunVerification', '../handlers/rerunVerification.js')),
+  getReports: requireAdmin(tryRequire('getReports', '../handlers/getReports.js')),
+  getAuditLogs: requireAdmin(tryRequire('getAuditLogs', '../handlers/getAuditLogs.js')),
+  getCompanionStatus: requireAdmin(tryRequire('getCompanionStatus', '../handlers/getCompanionStatus.js')),
+  getAdminSponsorTransfers: requireAdmin(tryRequire('getAdminSponsorTransfers', '../handlers/getAdminSponsorTransfers.js')),
+  getPendingPaymentsQueue: requireAdmin(tryRequire('getPendingPaymentsQueue', '../handlers/getPendingPaymentsQueue.js')),
+};
+Object.assign(handlers, adminHandlers);
+console.error('[INDEX] All ' + Object.keys(handlers).length + ' handlers loaded');
 
 module.exports = async (req, res) => {
   const url = req.url.split('?')[0];
