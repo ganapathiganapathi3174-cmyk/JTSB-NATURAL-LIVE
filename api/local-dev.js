@@ -90,7 +90,7 @@ const handlerCfg = [
   ['getVerificationLogs', true, '../handlers/getVerificationLogs.js'],
   ['adminDeleteRecord', true, '../handlers/adminDeleteRecord.js'],
   ['getHealthStatus', false, '../handlers/getHealthStatus.js'],
-  ['supabaseProxy', true, '../handlers/supabaseProxy.js'],
+  ['supabaseProxy', false, '../handlers/supabaseProxy.js'],
   ['getAdminDashboardData', true, '../handlers/getAdminDashboardData.js'],
   ['cleanupDemoData', true, '../handlers/cleanupDemoData.js'],
   ['approvePendingRegistration', true, '../handlers/approvePendingRegistration.js'],
