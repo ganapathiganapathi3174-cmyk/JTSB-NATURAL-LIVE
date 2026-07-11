@@ -9,24 +9,23 @@ const MOBILE_NUMBER = '9655897523';
 const UPI_ID = 'jayarajj-3@okicici';
 const MERCHANT_NAME = 'JTSB Natural';
 
+function upiParam(val, keepAt) {
+  const s = encodeURIComponent(String(val));
+  return keepAt ? s.replace(/%40/g, '@') : s;
+}
+
 function buildMobileUpiIntent(amount) {
-  const params = new URLSearchParams({
-    pa: MOBILE_NUMBER + '@upi',
-    pn: MERCHANT_NAME,
-    am: String(Math.floor(Number(amount))),
-    cu: 'INR',
-  });
-  return 'upi://pay?' + params.toString();
+  return 'upi://pay?pa=' + upiParam(MOBILE_NUMBER + '@upi', true) +
+    '&pn=' + upiParam(MERCHANT_NAME) +
+    '&am=' + Number(amount).toFixed(2) +
+    '&cu=INR';
 }
 
 function buildFallbackUpiIntent(amount) {
-  const params = new URLSearchParams({
-    pa: UPI_ID,
-    pn: MERCHANT_NAME,
-    am: String(Math.floor(Number(amount))),
-    cu: 'INR',
-  });
-  return 'upi://pay?' + params.toString();
+  return 'upi://pay?pa=' + upiParam(UPI_ID, true) +
+    '&pn=' + upiParam(MERCHANT_NAME) +
+    '&am=' + Number(amount).toFixed(2) +
+    '&cu=INR';
 }
 
 function buildAppDeeplink(baseUri, scheme) {

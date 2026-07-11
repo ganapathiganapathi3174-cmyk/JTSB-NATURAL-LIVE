@@ -18,14 +18,16 @@ const PROGRESS_STEPS = [
   'Verification Completed.',
 ];
 
+function upiParam(val, keepAt) {
+  const s = encodeURIComponent(String(val));
+  return keepAt ? s.replace(/%40/g, '@') : s;
+}
+
 function buildUpiIntent(upiId, amount) {
-  const params = new URLSearchParams({
-    pa: upiId,
-    pn: MERCHANT_NAME,
-    am: String(Math.floor(Number(amount))),
-    cu: 'INR',
-  });
-  return 'upi://pay?' + params.toString();
+  return 'upi://pay?pa=' + upiParam(upiId, true) +
+    '&pn=' + upiParam(MERCHANT_NAME) +
+    '&am=' + Number(amount).toFixed(2) +
+    '&cu=INR';
 }
 
 function buildAppDeeplink(intentUri, scheme) {

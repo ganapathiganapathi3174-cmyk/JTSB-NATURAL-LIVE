@@ -31,7 +31,7 @@ function generateUPIIntentUrl(amount) {
   const params = [
     'pa=' + upiEncode(UPI_ID, true),
     'pn=' + upiEncode(MERCHANT_NAME),
-    'am=' + upiEncode(String(Math.floor(Number(amount)))),
+    'am=' + upiEncode(amount.toFixed(2)),
     'cu=' + upiEncode('INR'),
   ];
   return 'upi://pay?' + params.join('&');
@@ -61,7 +61,7 @@ function generateMobileUPIIntentUrl(amount) {
   const params = [
     'pa=' + upiEncode(MOBILE_NUMBER + '@upi', true),
     'pn=' + upiEncode(MERCHANT_NAME),
-    'am=' + upiEncode(String(Math.floor(Number(amount)))),
+    'am=' + upiEncode(amount.toFixed(2)),
     'cu=' + upiEncode('INR'),
   ];
   return 'upi://pay?' + params.join('&');
