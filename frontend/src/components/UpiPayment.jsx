@@ -18,16 +18,12 @@ const PROGRESS_STEPS = [
   'Verification Completed.',
 ];
 
-function buildUpiIntent(upiId, amount, orderId, description) {
+function buildUpiIntent(upiId, amount) {
   const params = new URLSearchParams({
     pa: upiId,
     pn: MERCHANT_NAME,
-    am: Number(amount).toFixed(2),
-    tr: orderId,
-    tn: (description || 'Payment').substring(0, 30),
+    am: String(Math.floor(Number(amount))),
     cu: 'INR',
-    mc: '0000',
-    mode: '04',
   });
   return 'upi://pay?' + params.toString();
 }
@@ -400,7 +396,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
   }
 
   if (step === 'pay') {
-    const intentUri = buildUpiIntent(ADMIN_UPI, selectedAmount, orderId, type === 'registration' ? 'Registration' : 'Topup');
+    const intentUri = buildUpiIntent(ADMIN_UPI, selectedAmount);
     return (
       <div style={{ animation: 'fadeIn 0.3s ease' }}>
         {error && (

@@ -27,22 +27,18 @@ function upiEncode(val, keepAt) {
   return s;
 }
 
-function generateUPIIntentUrl(orderId, amount, description) {
+function generateUPIIntentUrl(amount) {
   const params = [
     'pa=' + upiEncode(UPI_ID, true),
     'pn=' + upiEncode(MERCHANT_NAME),
-    'am=' + upiEncode(amount.toFixed(2)),
-    'tr=' + upiEncode(orderId),
-    'tn=' + upiEncode((description || 'Payment').substring(0, 30)),
+    'am=' + upiEncode(String(Math.floor(Number(amount)))),
     'cu=' + upiEncode('INR'),
-    'mc=' + upiEncode('0000'),
-    'mode=' + upiEncode('04'),
   ];
   return 'upi://pay?' + params.join('&');
 }
 
-function generateUPIIntentForApp(orderId, amount, description, appScheme) {
-  const upiUri = generateUPIIntentUrl(orderId, amount, description);
+function generateUPIIntentForApp(amount, appScheme) {
+  const upiUri = generateUPIIntentUrl(amount);
   if (appScheme === 'tez') {
     return 'tez://upi/pay?' + upiUri.split('?')[1];
   }
@@ -61,22 +57,18 @@ function generateUPIIntentForApp(orderId, amount, description, appScheme) {
   return upiUri;
 }
 
-function generateMobileUPIIntentUrl(orderId, amount, description) {
+function generateMobileUPIIntentUrl(amount) {
   const params = [
     'pa=' + upiEncode(MOBILE_NUMBER + '@upi', true),
     'pn=' + upiEncode(MERCHANT_NAME),
-    'am=' + upiEncode(amount.toFixed(2)),
-    'tr=' + upiEncode(orderId),
-    'tn=' + upiEncode((description || 'Payment').substring(0, 30)),
+    'am=' + upiEncode(String(Math.floor(Number(amount)))),
     'cu=' + upiEncode('INR'),
-    'mc=' + upiEncode('0000'),
-    'mode=' + upiEncode('04'),
   ];
   return 'upi://pay?' + params.join('&');
 }
 
-function generateMobileUPIIntentForApp(orderId, amount, description, appScheme) {
-  const upiUri = generateMobileUPIIntentUrl(orderId, amount, description);
+function generateMobileUPIIntentForApp(amount, appScheme) {
+  const upiUri = generateMobileUPIIntentUrl(amount);
   if (appScheme === 'tez') {
     return 'tez://upi/pay?' + upiUri.split('?')[1];
   }
@@ -95,12 +87,12 @@ function generateMobileUPIIntentForApp(orderId, amount, description, appScheme) 
   return upiUri;
 }
 
-function getMobileUPIDeeplinks(orderId, amount, description) {
-  const baseUri = generateMobileUPIIntentUrl(orderId, amount, description);
+function getMobileUPIDeeplinks(amount) {
+  const baseUri = generateMobileUPIIntentUrl(amount);
   const apps = {};
   for (const [name, config] of Object.entries(UPI_APPS)) {
     apps[name] = {
-      intent: generateMobileUPIIntentForApp(orderId, amount, description, config.scheme),
+      intent: generateMobileUPIIntentForApp(amount, config.scheme),
       packageName: config.pkg,
       name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
     };
@@ -108,12 +100,12 @@ function getMobileUPIDeeplinks(orderId, amount, description) {
   return { baseUri, apps, mobileNumber: MOBILE_NUMBER, upiId: UPI_ID, merchantName: MERCHANT_NAME };
 }
 
-function getUPIDeeplinks(orderId, amount, description) {
-  const baseUri = generateUPIIntentUrl(orderId, amount, description);
+function getUPIDeeplinks(amount) {
+  const baseUri = generateUPIIntentUrl(amount);
   const apps = {};
   for (const [name, config] of Object.entries(UPI_APPS)) {
     apps[name] = {
-      intent: generateUPIIntentForApp(orderId, amount, description, config.scheme),
+      intent: generateUPIIntentForApp(amount, config.scheme),
       packageName: config.pkg,
       name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
     };
@@ -152,7 +144,7 @@ async function createRazorpayOrder(amount, orderId, description, customerInfo) {
 }
 
 async function createMockOrder(amount, orderId, description) {
-  const deeplinks = getUPIDeeplinks(orderId, amount, description);
+  const deeplinks = getUPIDeeplinks(amount);
   log('MOCK', `Order created: id=${orderId}, amount=${amount}`);
   return {
     gatewayOrderId: orderId,

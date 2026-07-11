@@ -9,30 +9,22 @@ const MOBILE_NUMBER = '9655897523';
 const UPI_ID = 'jayarajj-3@okicici';
 const MERCHANT_NAME = 'JTSB Natural';
 
-function buildMobileUpiIntent(orderId, amount, description) {
+function buildMobileUpiIntent(amount) {
   const params = new URLSearchParams({
     pa: MOBILE_NUMBER + '@upi',
     pn: MERCHANT_NAME,
-    am: Number(amount).toFixed(2),
-    tr: orderId,
-    tn: (description || 'Payment').substring(0, 30),
+    am: String(Math.floor(Number(amount))),
     cu: 'INR',
-    mc: '0000',
-    mode: '04',
   });
   return 'upi://pay?' + params.toString();
 }
 
-function buildFallbackUpiIntent(orderId, amount, description) {
+function buildFallbackUpiIntent(amount) {
   const params = new URLSearchParams({
     pa: UPI_ID,
     pn: MERCHANT_NAME,
-    am: Number(amount).toFixed(2),
-    tr: orderId,
-    tn: (description || 'Payment').substring(0, 30),
+    am: String(Math.floor(Number(amount))),
     cu: 'INR',
-    mc: '0000',
-    mode: '04',
   });
   return 'upi://pay?' + params.toString();
 }
@@ -115,8 +107,8 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
 
       setUpiOrderId(data.orderId);
 
-      const mobileIntent = buildMobileUpiIntent(data.orderId, amount, type === 'registration' ? 'Registration Payment' : 'Topup Payment');
-      const fallbackIntent = buildFallbackUpiIntent(data.orderId, amount, type === 'registration' ? 'Registration Payment' : 'Topup Payment');
+      const mobileIntent = buildMobileUpiIntent(amount);
+      const fallbackIntent = buildFallbackUpiIntent(amount);
 
       let targetUrl = fallbackIntent;
       if (appId && appId !== 'GENERIC') {
@@ -206,7 +198,7 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
 
       setUpiOrderId(data.orderId);
 
-      const fallbackIntent = buildFallbackUpiIntent(data.orderId, amount, type === 'registration' ? 'Registration Payment' : 'Topup Payment');
+      const fallbackIntent = buildFallbackUpiIntent(amount);
       setTimeout(() => {
         try { window.location.href = fallbackIntent; } catch {}
       }, 300);
@@ -350,7 +342,7 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
         {showQR && (
           <div className="mobile-qr-section">
             <QrCodeDisplay
-              value={buildFallbackUpiIntent(upiOrderId || 'ORD-TEMP', amount, type === 'registration' ? 'Registration Payment' : 'Topup Payment')}
+              value={buildFallbackUpiIntent(amount)}
               size={180}
             />
             <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.5rem', textAlign: 'center' }}>
