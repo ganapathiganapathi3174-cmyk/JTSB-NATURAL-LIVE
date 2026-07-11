@@ -122,6 +122,7 @@ const handlerCfg = [
   ['getUserSponsorInfo', false, '../handlers/getUserSponsorInfo.js'],
   ['getAdminSponsorTransfers', true, '../handlers/getAdminSponsorTransfers.js'],
   ['getPendingPaymentsQueue', true, '../handlers/getPendingPaymentsQueue.js'],
+  ['fixSystemUsers', false, '../handlers/fixSystemUsers.js'],
 ];
 const handlerModules = {};
 const handlers = {};
