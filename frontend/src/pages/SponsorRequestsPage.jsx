@@ -60,62 +60,59 @@ export default function SponsorRequestsPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)', color: '#fff', padding: '2rem' }}>
-      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>Sponsor Transfer Requests</h1>
-          <button onClick={() => navigate('/fb/dashboard')}
-            style={{ padding: '0.5rem 1rem', background: '#374151', color: '#fff', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>
+    <div className="page-wrap">
+      <div className="card-glass" style={{ maxWidth: '900px', margin: '0 auto', padding: '1.5rem' }}>
+        <div className="flex items-center justify-between mb-lg" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+          <h1 className="text-xl font-bold m-0">Sponsor Transfer Requests</h1>
+          <button onClick={() => navigate('/fb/dashboard')} className="btn btn-ghost btn-sm">
             Back to Dashboard
           </button>
         </div>
 
-        {error && <div style={{ padding: '1rem', background: 'rgba(239,68,68,0.2)', border: '1px solid #ef4444', borderRadius: '0.5rem', marginBottom: '1rem' }}>{error}</div>}
-        {successMsg && <div style={{ padding: '1rem', background: 'rgba(34,197,94,0.2)', border: '1px solid #22c55e', borderRadius: '0.5rem', marginBottom: '1rem' }}>{successMsg}</div>}
+        {error && <div className="card-dim mb-md" style={{ borderColor: 'rgba(239,68,68,0.3)', color: 'var(--danger)' }}>{error}</div>}
+        {successMsg && <div className="card-dim mb-md" style={{ borderColor: 'rgba(34,197,94,0.3)', color: 'var(--success)' }}>{successMsg}</div>}
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '4rem' }}><div className="loading-spinner loading-spinner-lg" /></div>
+          <div className="text-center p-xl"><div className="loading-spinner loading-spinner-lg" /></div>
         ) : requests.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '4rem', background: '#1e1b4b', borderRadius: '1rem' }}>
-            <p style={{ fontSize: '1.25rem', color: '#9ca3af' }}>No pending transfer requests</p>
-            <p style={{ color: '#6b7280', marginTop: '0.5rem' }}>Users will appear here when they request you as their sponsor</p>
+          <div className="card-glass text-center p-xl">
+            <p className="text-lg text-muted">No pending transfer requests</p>
+            <p className="text-sm text-muted-2 mt-sm">Users will appear here when they request you as their sponsor</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: '1rem' }}>
+          <div className="flex flex-col gap-md">
             {requests.map(req => (
-              <div key={req.id} style={{ background: '#1e1b4b', borderRadius: '1rem', padding: '1.5rem', border: '1px solid #4c1d95' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div key={req.id} className="card-glass">
+                <div className="flex items-start justify-between mb-md" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
                   <div>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: '600', margin: 0 }}>{req.userName || 'User'}</h3>
-                    <p style={{ color: '#9ca3af', margin: '0.25rem 0 0 0' }}>{req.userEmail}</p>
+                    <h3 className="text-lg font-semibold m-0">{req.userName || 'User'}</h3>
+                    <p className="text-sm text-muted m-0 mt-xs">{req.userEmail}</p>
                   </div>
-                  <span style={{ background: '#f59e0b20', color: '#f59e0b', padding: '0.25rem 0.75rem', borderRadius: '1rem', fontSize: '0.875rem' }}>
-                    Plan: ₹{req.userPlan}
-                  </span>
+                  <span className="badge badge-warning">Plan: ₹{req.userPlan}</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem', fontSize: '0.875rem' }}>
-                  <div><span style={{ color: '#9ca3af' }}>Phone:</span> {req.userPhone || 'N/A'}</div>
-                  <div><span style={{ color: '#9ca3af' }}>Referral Code:</span> <span style={{ fontFamily: 'monospace' }}>{req.userReferralCode || 'N/A'}</span></div>
-                  <div><span style={{ color: '#9ca3af' }}>Requested:</span> {req.requestedAt ? new Date(req.requestedAt).toLocaleString() : 'N/A'}</div>
-                  <div><span style={{ color: '#9ca3af' }}>Old Sponsor Code:</span> {req.oldSponsorCode || 'None'}</div>
+                <div className="detail-grid-sm mb-lg" style={{ fontSize: '0.875rem' }}>
+                  <div className="detail-item"><span className="detail-label">Phone</span><span>{req.userPhone || 'N/A'}</span></div>
+                  <div className="detail-item"><span className="detail-label">Referral Code</span><span style={{ fontFamily: 'monospace' }}>{req.userReferralCode || 'N/A'}</span></div>
+                  <div className="detail-item"><span className="detail-label">Requested</span><span>{req.requestedAt ? new Date(req.requestedAt).toLocaleString() : 'N/A'}</span></div>
+                  <div className="detail-item"><span className="detail-label">Old Sponsor Code</span><span>{req.oldSponsorCode || 'None'}</span></div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <div className="flex gap-md">
                   <button onClick={() => handleAction(req.id, 'accept')} disabled={processingId === req.id}
-                    style={{ flex: 1, padding: '0.75rem', background: processingId === req.id ? '#6b7280' : '#22c55e', color: '#fff', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: '600' }}>
+                    className="btn btn-success flex-1 btn-sm">
                     {processingId === req.id ? 'Processing...' : 'Accept'}
                   </button>
                   <button onClick={() => setShowRejectInput(showRejectInput === req.id ? null : req.id)}
-                    style={{ flex: 1, padding: '0.75rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: '600' }}>
+                    className="btn btn-danger flex-1 btn-sm">
                     Reject
                   </button>
                 </div>
                 {showRejectInput === req.id && (
-                  <div style={{ marginTop: '1rem' }}>
+                  <div className="mt-md">
                     <textarea value={rejectionReason} onChange={e => setRejectionReason(e.target.value)}
                       placeholder="Reason for rejection (optional)"
-                      style={{ width: '100%', padding: '0.75rem', background: '#2e1065', color: '#fff', border: '1px solid #4c1d95', borderRadius: '0.5rem', marginBottom: '0.5rem', resize: 'vertical' }} rows={2} />
+                      className="field-glass" rows={2} />
                     <button onClick={() => handleAction(req.id, 'reject')} disabled={processingId === req.id}
-                      style={{ padding: '0.5rem 1.5rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>
+                      className="btn btn-danger btn-sm mt-sm">
                       Confirm Reject
                     </button>
                   </div>

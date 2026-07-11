@@ -170,7 +170,7 @@ function PaymentDetailModal({ payment, onClose }) {
           {ocr.rawText && (
             <details style={{ marginTop: '1rem' }}>
               <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: '#6b7280', fontWeight: 600 }}>Raw OCR Text</summary>
-              <pre style={{ fontSize: '0.75rem', background: '#f9fafb', padding: '0.5rem', borderRadius: '6px', maxHeight: '150px', overflow: 'auto', width: '100%', marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>
+              <pre style={{ fontSize: '0.75rem', background: 'var(--surface-2)', padding: '0.5rem', borderRadius: '6px', maxHeight: '150px', overflow: 'auto', width: '100%', marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>
                 {ocr.rawText}
               </pre>
             </details>
@@ -428,7 +428,7 @@ export default function FirebaseAdminPaymentsPage() {
           </div>
 
           {fetchError && (
-            <div className="alert alert-error" style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '0.9rem' }}>
+            <div className="card-dim" style={{ marginBottom: '1rem', borderColor: 'rgba(239,68,68,0.2)', color: 'var(--danger)' }}>
               <strong>Error:</strong> {fetchError}
               {diagnostics && (
                 <pre style={{ fontSize: '0.75rem', marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>
@@ -636,7 +636,7 @@ export default function FirebaseAdminPaymentsPage() {
           )}
 
           {successMsg && (
-            <div style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999, padding: '1rem 1.5rem', borderRadius: '8px', background: 'var(--success)', color: '#fff', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <div className="toast toast-success" style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999 }}>
               {'\u2713'} {successMsg}
             </div>
           )}

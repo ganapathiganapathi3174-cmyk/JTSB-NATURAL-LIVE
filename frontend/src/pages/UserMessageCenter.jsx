@@ -120,8 +120,8 @@ export default function UserMessageCenter() {
         <div className="msg-chat" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           {Object.entries(grouped).reverse().map(([dateLabel, items]) => (
             <div key={dateLabel}>
-              <div style={{ textAlign: 'center', margin: '0.75rem 0', fontSize: '0.75rem', color: '#888' }}>
-                <span style={{ background: '#f0f0f0', padding: '0.2rem 0.75rem', borderRadius: '999px' }}>{dateLabel}</span>
+              <div className="chat-date-divider">
+                <span>{dateLabel}</span>
               </div>
               {items.map(n => (
                 <div
@@ -129,10 +129,10 @@ export default function UserMessageCenter() {
                   className={`msg-bubble ${n.status === 'unread' ? 'msg-bubble-unread' : ''}`}
                   onClick={() => handleMarkAsRead(n)}
                   style={{
-                    background: n.status === 'unread' ? '#e8f4fd' : '#fff',
+                    background: n.status === 'unread' ? 'rgba(91,95,255,0.08)' : 'var(--surface)',
                     border: '1px solid',
-                    borderColor: n.status === 'unread' ? '#b3d8f0' : '#e5e7eb',
-                    borderRadius: '12px',
+                    borderColor: n.status === 'unread' ? 'rgba(91,95,255,0.2)' : 'var(--border)',
+                    borderRadius: 'var(--radius)',
                     padding: '0.75rem 1rem',
                     cursor: 'pointer',
                     transition: 'background 0.15s',
@@ -143,11 +143,11 @@ export default function UserMessageCenter() {
                       <strong style={{ fontSize: '0.85rem' }}>{n.title || getTypeLabel(n.type)}</strong>
                       {n.status === 'unread' && <span className="msg-unread-dot" />}
                     </div>
-                    <span style={{ fontSize: '0.7rem', color: '#999', whiteSpace: 'nowrap' }}>{formatTime(n.createdAt)}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--muted-2)', whiteSpace: 'nowrap' }}>{formatTime(n.createdAt)}</span>
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: '#333', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{n.message}</div>
-                  <div style={{ fontSize: '0.7rem', color: '#aaa', marginTop: '0.35rem' }}>
-                    From: {n.senderName || 'Admin'} {'\u00B7'} <span style={{ color: n.status === 'read' ? '#4caf50' : '#999' }}>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-2)', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{n.message}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--muted-2)', marginTop: '0.35rem' }}>
+                    From: {n.senderName || 'Admin'} {'\u00B7'} <span style={{ color: n.status === 'read' ? 'var(--success)' : 'var(--muted-2)' }}>
                       {n.status === 'read' ? 'Read' : 'Sent'}
                     </span>
                     {n.readAt && n.status === 'read' && (

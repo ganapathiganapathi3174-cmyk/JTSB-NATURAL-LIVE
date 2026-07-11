@@ -299,10 +299,9 @@ export default function FirebaseAdminUPIPaymentsPage() {
               { label: 'Topup', value: stats.topupPayments, color: '#7c3aed' },
             ].map(s => (
               <div key={s.label} style={{
-                background: '#fff', borderRadius: '10px', padding: '1rem', border: '1px solid var(--border, #e5e7eb)',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                background: 'var(--surface)', borderRadius: 'var(--radius)', padding: '1rem', border: '1px solid var(--border)',
               }}>
-                <div style={{ fontSize: '0.75rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 700, color: s.color }}>{s.value}</div>
               </div>
             ))}
@@ -311,7 +310,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
 
         {logs.length > 0 && (
           <details style={{ marginBottom: '1rem' }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', color: '#374151' }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', color: 'var(--text)' }}>
               Verification Logs ({logs.length})
             </summary>
             <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: '0.5rem', fontSize: '0.8rem' }}>
@@ -377,7 +376,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
               </thead>
               <tbody>
                 {payments.length === 0 && (
-                  <tr><td colSpan={10} style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>No payments found</td></tr>
+                  <tr><td colSpan={10} style={{ textAlign: 'center', padding: '2rem', color: 'var(--muted)' }}>No payments found</td></tr>
                 )}
                 {payments.map(p => {
                   const reasons = p.rejectionReasons || [];
@@ -394,7 +393,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
                       </td>
                       <td style={{ fontSize: '0.75rem' }}>
                         <div>{p.userEmail || p.userEmail || ''}</div>
-                        <div style={{ color: '#6b7280' }}>{p.userPhone || p.userMobile || ''}</div>
+                        <div style={{ color: 'var(--muted)' }}>{p.userPhone || p.userMobile || ''}</div>
                       </td>
                       <td style={{ fontWeight: 600 }}>₹{p.amount}</td>
                       <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.utr}</td>
@@ -415,32 +414,32 @@ export default function FirebaseAdminUPIPaymentsPage() {
                             }}
                           />
                         ) : (
-                          <span style={{ color: '#999', fontSize: '0.85rem' }}>—</span>
+                          <span style={{ color: 'var(--muted-2)', fontSize: '0.85rem' }}>—</span>
                         )}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: '0.25rem', flexDirection: 'column', alignItems: 'stretch' }}>
                           <button
                             onClick={() => setDetailPayment(p)}
-                            className="btn btn-sm"
-                            style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                            className="btn btn-primary"
+                            style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', borderRadius: '4px' }}
                           >Details</button>
                           {canModify && (
                             <>
                               <button onClick={() => handleApprove(p.id)} disabled={actionLoading === p.id}
-                                className="btn btn-sm"
-                                style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', cursor: actionLoading === p.id ? 'not-allowed' : 'pointer' }}
+                              className="btn btn-success"
+                                style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', borderRadius: '4px' }}
                               >{actionLoading === p.id ? '...' : 'Approve'}</button>
                               <button onClick={() => handleReject(p.id)} disabled={actionLoading === p.id}
-                                className="btn btn-sm"
-                                style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: actionLoading === p.id ? 'not-allowed' : 'pointer' }}
+                                className="btn btn-danger"
+                                style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', borderRadius: '4px' }}
                               >{actionLoading === p.id ? '...' : 'Reject'}</button>
                             </>
                           )}
                           {(isRejected || p.status === 'failed') && (
                             <button onClick={() => handleRestore(p.id)} disabled={actionLoading === p.id}
-                              className="btn btn-sm"
-                              style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: actionLoading === p.id ? 'not-allowed' : 'pointer' }}
+                              className="btn"
+                              style={{ padding: '0.25rem 0.4rem', fontSize: '0.7rem', borderRadius: '4px', background: 'var(--warning)' }}
                             >{actionLoading === p.id ? '...' : 'Restore'}</button>
                           )}
                           <button onClick={() => handleDelete(p.utr)} disabled={deleteLoading === p.utr}
@@ -469,33 +468,28 @@ export default function FirebaseAdminUPIPaymentsPage() {
           >
             <div
               onClick={e => e.stopPropagation()}
-              style={{
-                background: '#fff', borderRadius: '12px', padding: '1.5rem',
-                maxWidth: '480px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-              }}
+              className="card-glass"
+              style={{ maxWidth: '480px', width: '100%', padding: '1.5rem' }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <div className="modal-header" style={{ padding: '0 0 0.75rem 0', border: 'none' }}>
                 <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Confirm Delete</h2>
                 <button
                   onClick={() => { setDeleteTarget(null); setDeleteError(''); }}
                   disabled={deleteLoading}
-                  style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#888' }}
+                  className="modal-close"
                 >
                   {'\u2715'}
                 </button>
               </div>
-              <p style={{ fontSize: '0.95rem', color: '#374151', marginBottom: '0.5rem' }}>
+              <p style={{ fontSize: '0.95rem', color: 'var(--text-2)', marginBottom: '0.5rem' }}>
                 Are you sure you want to delete this record?
               </p>
-              <div style={{
-                background: '#fef2f2', borderRadius: '8px', padding: '0.75rem',
-                marginBottom: '1rem', fontSize: '0.85rem', color: '#991b1b',
-              }}>
+              <div className="card-dim mb-md" style={{ borderColor: 'rgba(239,68,68,0.2)', color: 'var(--danger)' }}>
                 <strong>{'\u26A0\uFE0F'} Warning:</strong> This will permanently delete the record
                 <strong> {deleteTarget}</strong> from the database.
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '0.3rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)', marginBottom: '0.3rem' }}>
                   Reason for deletion *
                 </label>
                 <textarea
@@ -504,18 +498,12 @@ export default function FirebaseAdminUPIPaymentsPage() {
                   placeholder="Why is this record being deleted?"
                   rows={3}
                   disabled={deleteLoading}
-                  style={{
-                    width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px',
-                    border: '1px solid var(--border, #d1d5db)', fontSize: '0.9rem',
-                    resize: 'vertical', boxSizing: 'border-box',
-                  }}
+                  className="field"
+                  style={{ width: '100%' }}
                 />
               </div>
               {deleteError && (
-                <div style={{
-                  background: '#fef2f2', color: '#dc2626', borderRadius: '8px',
-                  padding: '0.5rem 0.75rem', marginBottom: '0.75rem', fontSize: '0.85rem',
-                }}>
+                <div className="card-dim mb-md" style={{ borderColor: 'rgba(239,68,68,0.2)', color: 'var(--danger)' }}>
                   {deleteError}
                 </div>
               )}
@@ -566,10 +554,10 @@ export default function FirebaseAdminUPIPaymentsPage() {
         {detailPayment && (
           <div className="modal-modern-overlay" onClick={() => setDetailPayment(null)}
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9998, padding: '1rem' }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', maxWidth: '560px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div onClick={e => e.stopPropagation()} className="card-glass" style={{ maxWidth: '560px', width: '100%', padding: '1.5rem' }}>
+              <div className="flex items-center justify-between mb-md">
                 <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Payment Details</h2>
-                <button onClick={() => setDetailPayment(null)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#888' }}>{'\u2715'}</button>
+                <button onClick={() => setDetailPayment(null)} className="modal-close">{'\u2715'}</button>
               </div>
               <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.9rem' }}>
                 {[
@@ -584,14 +572,14 @@ export default function FirebaseAdminUPIPaymentsPage() {
                   ['Verified At', detailPayment.verifiedAt || detailPayment.verified_at || '—'],
                   ['Reason', (detailPayment.rejectionReasons || []).join('; ') || detailPayment.verificationReason || '—'],
                 ].map(([label, value]) => (
-                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f3f4f6', padding: '0.3rem 0' }}>
-                    <span style={{ color: '#6b7280', fontWeight: 500 }}>{label}</span>
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', padding: '0.3rem 0' }}>
+                    <span style={{ color: 'var(--muted)', fontWeight: 500 }}>{label}</span>
                     <span style={{ fontWeight: 600, textAlign: 'right', maxWidth: '60%', wordBreak: 'break-word' }}>{value}</span>
                   </div>
                 ))}
                 {detailPayment.screenshotUrl || detailPayment.screenshot_url ? (
                   <div style={{ marginTop: '0.5rem' }}>
-                    <span style={{ color: '#6b7280', fontWeight: 500, display: 'block', marginBottom: '0.3rem' }}>Screenshot</span>
+                    <span style={{ color: 'var(--muted)', fontWeight: 500, display: 'block', marginBottom: '0.3rem' }}>Screenshot</span>
                     <img src={detailPayment.screenshotUrl || detailPayment.screenshot_url} alt="Payment Screenshot"
                       onClick={() => setLightboxUrl(detailPayment.screenshotUrl || detailPayment.screenshot_url)}
                       style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', cursor: 'pointer' }} />
@@ -599,7 +587,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
                 ) : null}
               </div>
               <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-                <button onClick={() => setDetailPayment(null)} className="btn" style={{ padding: '0.5rem 1.25rem' }}>Close</button>
+                <button onClick={() => setDetailPayment(null)} className="btn btn-ghost" style={{ padding: '0.5rem 1.25rem' }}>Close</button>
               </div>
             </div>
           </div>
@@ -611,14 +599,17 @@ export default function FirebaseAdminUPIPaymentsPage() {
 
 const selectStyle = {
   padding: '0.5rem 0.75rem',
-  borderRadius: '8px',
-  border: '1px solid var(--border, #d1d5db)',
-  background: '#fff',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid var(--border)',
+  background: 'rgba(255,255,255,0.04)',
   fontSize: '0.9rem',
+  color: 'var(--text)',
 };
 const inputStyle = {
   padding: '0.5rem 0.75rem',
-  borderRadius: '8px',
-  border: '1px solid var(--border, #d1d5db)',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid var(--border)',
+  background: 'rgba(255,255,255,0.04)',
   fontSize: '0.9rem',
+  color: 'var(--text)',
 };

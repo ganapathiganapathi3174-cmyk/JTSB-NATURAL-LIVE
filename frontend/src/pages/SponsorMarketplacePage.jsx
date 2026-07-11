@@ -71,38 +71,36 @@ export default function SponsorMarketplacePage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)', color: '#fff', padding: '2rem' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+    <div className="page-wrap">
+      <div className="card-glass" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem' }}>
+        <div className="flex items-center justify-between mb-lg" style={{ flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h1 style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>Sponsor Marketplace</h1>
-            {plan > 0 && <p style={{ color: '#a78bfa', marginTop: '0.5rem' }}>Your Plan: ₹{plan}</p>}
+            <h1 className="text-xl font-bold m-0">Sponsor Marketplace</h1>
+            {plan > 0 && <p className="text-sm text-muted mt-sm" style={{ color: '#A5B4FC' }}>Your Plan: ₹{plan}</p>}
           </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button onClick={() => setShowMyRequests(!showMyRequests)}
-              style={{ padding: '0.5rem 1rem', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>
+          <div className="flex gap-sm">
+            <button onClick={() => setShowMyRequests(!showMyRequests)} className="btn btn-primary btn-sm">
               My Requests {myRequests.length > 0 && `(${myRequests.length})`}
             </button>
-            <button onClick={() => navigate('/fb/dashboard')}
-              style={{ padding: '0.5rem 1rem', background: '#374151', color: '#fff', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>
+            <button onClick={() => navigate('/fb/dashboard')} className="btn btn-ghost btn-sm">
               Back to Dashboard
             </button>
           </div>
         </div>
 
-        {error && <div style={{ padding: '1rem', background: 'rgba(239,68,68,0.2)', border: '1px solid #ef4444', borderRadius: '0.5rem', marginBottom: '1rem' }}>{error}</div>}
-        {successMsg && <div style={{ padding: '1rem', background: 'rgba(34,197,94,0.2)', border: '1px solid #22c55e', borderRadius: '0.5rem', marginBottom: '1rem' }}>{successMsg}</div>}
+        {error && <div className="card-dim mb-md" style={{ borderColor: 'rgba(239,68,68,0.3)', color: 'var(--danger)' }}>{error}</div>}
+        {successMsg && <div className="card-dim mb-md" style={{ borderColor: 'rgba(34,197,94,0.3)', color: 'var(--success)' }}>{successMsg}</div>}
 
         {showMyRequests && (
-          <div style={{ background: '#1e1b4b', borderRadius: '1rem', padding: '1.5rem', marginBottom: '2rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>My Pending Transfer Requests</h2>
+          <div className="card-glass mb-lg">
+            <h2 className="text-lg font-semibold mb-md">My Pending Transfer Requests</h2>
             {myRequests.length === 0 ? (
-              <p style={{ color: '#9ca3af' }}>No pending requests</p>
+              <p className="text-muted text-sm">No pending requests</p>
             ) : (
               myRequests.map(r => (
-                <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#2e1065', borderRadius: '0.5rem', marginBottom: '0.5rem' }}>
+                <div key={r.id} className="flex items-center justify-between card-dim mb-sm">
                   <span>Sponsor: {r.newSponsorName} — ₹{r.plan}</span>
-                  <span style={{ color: '#f59e0b' }}>Pending</span>
+                  <span className="badge badge-warning">Pending</span>
                 </div>
               ))
             )}
@@ -110,45 +108,44 @@ export default function SponsorMarketplacePage() {
         )}
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '4rem' }}><div className="loading-spinner loading-spinner-lg" /><p style={{ marginTop: '1rem', color: '#9ca3af' }}>Loading sponsors...</p></div>
+          <div className="text-center p-xl"><div className="loading-spinner loading-spinner-lg" /><p className="text-muted mt-md">Loading sponsors...</p></div>
         ) : sponsors.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '4rem', background: '#1e1b4b', borderRadius: '1rem' }}>
-            <p style={{ fontSize: '1.25rem', color: '#9ca3af' }}>No sponsors available for ₹{plan} plan</p>
-            <p style={{ color: '#6b7280', marginTop: '0.5rem' }}>Check back later or upgrade your plan</p>
-            <button onClick={() => navigate('/fb/dashboard')}
-              style={{ marginTop: '1rem', padding: '0.75rem 2rem', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>
+          <div className="card-glass text-center p-xl">
+            <p className="text-lg text-muted">No sponsors available for ₹{plan} plan</p>
+            <p className="text-sm text-muted-2 mt-sm">Check back later or upgrade your plan</p>
+            <button onClick={() => navigate('/fb/dashboard')} className="btn btn-primary mt-lg">
               Back to Dashboard
             </button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+          <div className="card-grid">
             {sponsors.map(sponsor => (
-              <div key={sponsor.id} style={{ background: '#1e1b4b', borderRadius: '1rem', padding: '1.5rem', border: '1px solid #4c1d95' }}>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>{sponsor.name || 'Sponsor'}</h3>
-                <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#9ca3af' }}>User ID</span>
-                    <span style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{sponsor.id?.slice(0, 8)}...</span>
+              <div key={sponsor.id} className="card-glass">
+                <h3 className="text-lg font-semibold mb-md">{sponsor.name || 'Sponsor'}</h3>
+                <div className="flex flex-col gap-sm mb-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted">User ID</span>
+                    <span className="text-xs" style={{ fontFamily: 'monospace' }}>{sponsor.id?.slice(0, 8)}...</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#9ca3af' }}>Plan</span>
-                    <span style={{ color: '#a78bfa', fontWeight: '600' }}>₹{sponsor.plan}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted">Plan</span>
+                    <span className="font-semibold" style={{ color: '#A5B4FC' }}>₹{sponsor.plan}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#9ca3af' }}>Referrals</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted">Referrals</span>
                     <span>{sponsor.referralsCount}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#9ca3af' }}>Status</span>
-                    <span style={{ color: '#22c55e' }}>{sponsor.status}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted">Status</span>
+                    <span className="badge badge-success">{sponsor.status}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#9ca3af' }}>Joined</span>
-                    <span style={{ fontSize: '0.875rem' }}>{sponsor.joinedDate ? new Date(sponsor.joinedDate).toLocaleDateString() : 'N/A'}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted">Joined</span>
+                    <span className="text-sm">{sponsor.joinedDate ? new Date(sponsor.joinedDate).toLocaleDateString() : 'N/A'}</span>
                   </div>
                 </div>
                 <button onClick={() => handleRequest(sponsor.id)} disabled={requestingId === sponsor.id}
-                  style={{ width: '100%', padding: '0.75rem', background: requestingId === sponsor.id ? '#6b7280' : '#7c3aed', color: '#fff', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: '600' }}>
+                  className="btn btn-primary btn-block btn-sm">
                   {requestingId === sponsor.id ? 'Sending...' : 'Request Sponsor Transfer'}
                 </button>
               </div>
