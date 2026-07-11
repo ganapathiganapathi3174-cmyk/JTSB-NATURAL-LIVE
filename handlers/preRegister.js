@@ -95,14 +95,14 @@ module.exports = async (req, res) => {
       STEP(5, 'After Supabase Query — referral code checked');
       referrer = refUser;
 
+      if (referrer && referrer.referral_active === false) {
+        res.writeHead(400); res.end(JSON.stringify({ error: 'This referral link is currently inactive. Please contact the owner or administrator.' }));
+        LOG(`Response: referral inactive — total ${Date.now() - reqStart}ms`);
+        return;
+      }
       if (referrer && referrer.referral_limit_reached && !isSystemReferralCode(referrer.referral_code)) {
         res.writeHead(400); res.end(JSON.stringify({ error: 'You have reached your maximum referral limit.' }));
         LOG(`Response: referral limit reached — total ${Date.now() - reqStart}ms`);
-        return;
-      }
-      if (referrer && referrer.referral_active === false && !isSystemReferralCode(referrer.referral_code)) {
-        res.writeHead(400); res.end(JSON.stringify({ error: 'You have reached your maximum referral limit.' }));
-        LOG(`Response: referral inactive — total ${Date.now() - reqStart}ms`);
         return;
       }
     }

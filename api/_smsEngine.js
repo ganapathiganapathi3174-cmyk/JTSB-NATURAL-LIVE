@@ -308,6 +308,25 @@ async function approveRegistration(session, transactionReference) {
 
   if (referredByUserId) await atomicCreditWallet(referredByUserId, session.amount * 0.1, transactionReference, 'Referral from ' + newUserId, 'referral_bonus');
 
+  // Increment referrer's referral count
+  if (referredByUserId) {
+    try {
+      const referrerDoc = await getDoc(COL_USERS, referredByUserId);
+      if (referrerDoc) {
+        const currentCount = (referrerDoc.referrals_count || 0) + 1;
+        const limitReached = currentCount >= MAX_REFERRALS;
+        await updateDoc(COL_USERS, referredByUserId, {
+          referrals_count: currentCount,
+          total_referral_count: (referrerDoc.total_referral_count || 0) + 1,
+          referral_limit_reached: limitReached,
+          referral_active: !limitReached,
+          is_qualified: limitReached,
+        });
+        await updateDoc(COL_USERS, newUserId, { referred_by_status: 'approved' });
+      }
+    } catch (e) { log(`Referral count increment error: ${e.message}`); }
+  }
+
   try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch (_) {}
   try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Payment of ₹' + session.amount + ' confirmed via SMS!', type: 'payment_approved', status: 'unread', createdAt: now(), senderId: 'system', senderName: 'System' }); } catch (_) {}
   try { await addDoc('audit_logs', { action: 'sms_auto_approve_registration', target_id: transactionReference, target_type: 'sms_payment', admin_id: 'system', details: { userId: newUserId, sessionId: session.id, amount: session.amount, plan: session.plan }, created_at: now() }); } catch (_) {}

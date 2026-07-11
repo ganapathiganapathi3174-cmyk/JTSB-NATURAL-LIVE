@@ -54,13 +54,13 @@ function AddUserModal({ onClose, onAdded }) {
   }
 
   return (
-    <div className="modal-modern-overlay" onClick={onClose}>
-      <div className="modal-modern" onClick={e => e.stopPropagation()}>
-        <div className="modal-modern-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-glass" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
           <h2>Add New User</h2>
-          <button onClick={onClose} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+          <button onClick={onClose} className="modal-close">{'\u2715'}</button>
         </div>
-        <div className="modal-modern-body">
+        <div className="modal-body">
           <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
             Only add users who have completed payment. Login will be enabled after approval.
           </div>

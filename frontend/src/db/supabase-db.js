@@ -525,7 +525,6 @@ export const SupabaseUser = {
       referrals_count: nc,
       total_referral_count: (user.total_referral_count || 0) + 1,
       referral_limit_reached: iq, referral_active: !iq, is_qualified: iq,
-      account_status: iq ? 'inactive' : (user.account_status || 'active'),
     }).eq('id', userId);
   },
 
@@ -717,6 +716,7 @@ export async function checkReferralLinkExpiry(referralCode) {
   const referrer = await SupabaseUser.findByReferralCode(referralCode);
   if (!referrer) return { valid: false, reason: 'not_found' };
   if (referrer.referral_expires_at && new Date(referrer.referral_expires_at) < new Date()) return { valid: false, reason: 'expired', referrer };
+  if (referrer.referral_active === false) return { valid: false, reason: 'inactive', referrer };
   if ((referrer.referrals_count || 0) >= MAX_REFERRALS) return { valid: false, reason: 'limit_reached', referrer };
   return { valid: true, reason: 'valid', referrer };
 }

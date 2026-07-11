@@ -3,12 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FirebaseUser, comparePassword } from '../db/firebase-db.js';
 import { checkRateLimit } from '../utils/rateLimiter.js';
 
-const LOGIN_TIMEOUT = 15000; // 15 seconds
+const LOGIN_TIMEOUT = 15000;
 
 function withTimeout(promise, timeoutMs = LOGIN_TIMEOUT) {
   return Promise.race([
     promise,
-    new Promise((_, reject) => 
+    new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Login is taking too long. Please check your connection and try again.')), timeoutMs)
     )
   ]);
@@ -43,7 +43,6 @@ export default function FirebaseLoginPage() {
     setLoading(true);
     try {
       await withTimeout(FirebaseUser.updatePassword(setPasswordFor.id, newPassword));
-      // Login after setting password
       localStorage.setItem('fb_user_id', setPasswordFor.id);
       localStorage.setItem('fb_login_at', String(Date.now()));
       navigate('/fb/dashboard');
@@ -70,12 +69,11 @@ export default function FirebaseLoginPage() {
 
     try {
       console.log('Login attempt:', inputVal);
-      // Find user by email
       const user = await withTimeout(
         FirebaseUser.findByEmail(inputVal.toLowerCase()),
         LOGIN_TIMEOUT
       ).catch(() => null);
-      
+
       if (!user) {
         setError('No account found with this email. Please register first.');
         setLoading(false);
@@ -110,7 +108,6 @@ export default function FirebaseLoginPage() {
         return;
       }
 
-      // If no password, allow to set one
       if (!user.password) {
         setSetPasswordFor(user);
         setShowSetPasswordField(true);
@@ -118,7 +115,6 @@ export default function FirebaseLoginPage() {
         return;
       }
 
-      // Check password
       const pwMatch = await comparePassword(passVal, user.password);
       if (!pwMatch) {
         setError('Invalid password. Please try again.');
@@ -126,11 +122,10 @@ export default function FirebaseLoginPage() {
         return;
       }
 
-      // Login success
       localStorage.setItem('fb_user_id', user.id);
       localStorage.setItem('fb_login_at', String(Date.now()));
       navigate('/fb/dashboard');
-      
+
     } catch (err) {
       console.error('Login error:', err);
       setError('Login failed. Please try again.');
@@ -140,31 +135,27 @@ export default function FirebaseLoginPage() {
   }
 
   return (
-    <div className="app-shell">
-      <div className="topbar">
-        <div className="brand">Starlight Ascent</div>
+    <div className="page-wrap" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="text-center mb-lg animate-fade-in-up">
+        <div className="brand" style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>
+          <span className="text-gradient">JTSB Natural</span>
+        </div>
+        <p className="text-muted text-sm" style={{ margin: 0 }}>Premium FinTech Platform</p>
       </div>
-      <div className="card auth-card">
-        <h1>Login</h1>
-        
+
+      <div className="card-glass animate-fade-in-up stagger-1" style={{ width: '100%', maxWidth: 420, padding: '2rem' }}>
+        <h1 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', letterSpacing: '-0.03em' }} className="text-gradient">Welcome Back</h1>
+        <p className="text-muted text-sm mb-lg" style={{ margin: '0 0 1.5rem' }}>Sign in to your account</p>
+
         {showSetPasswordField && setPasswordFor ? (
-          <div className="alert alert-success">
-            <strong>Your account is approved!</strong><br/>
-            Set a password to login.
-            <form onSubmit={handleSetPassword} className="mt-md">
-              <div className="field">
-                <label>New Password</label>
-                <div className="password-field-wrap">
-                  <input type={showPassword ? 'text' : 'password'} value={newPassword} minLength={6} 
-                    onChange={e => setNewPassword(e.target.value)} required className="w-full" style={{ paddingRight: '2.5rem' }} />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="password-toggle-btn"
-                  >
-                    {showPassword ? '👁' : '👁️'}
-                  </button>
-                </div>
+          <div className="card-dim mb-md" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)' }}>
+            <p style={{ fontSize: '0.85rem', margin: '0 0 0.75rem', color: '#16A34A', fontWeight: 600 }}>
+              Your account is approved! Set a password to login.
+            </p>
+            <form onSubmit={handleSetPassword}>
+              <div className="field-glass mb-md">
+                <input type={showPassword ? 'text' : 'password'} value={newPassword} minLength={6}
+                  onChange={e => setNewPassword(e.target.value)} required placeholder="New Password" />
               </div>
               <button type="submit" className={`btn btn-primary${loading ? ' btn-loading' : ''} w-full`} disabled={loading}>
                 {loading ? 'Setting...' : 'Set Password & Login'}
@@ -173,40 +164,40 @@ export default function FirebaseLoginPage() {
           </div>
         ) : (
           <>
-        <p className="muted">Login with email and password</p>
-        
-        {error && <div className="alert alert-error">{error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}</div>}
-        
-        <form onSubmit={handleSubmit}>
-          <div className="field">
-            <label>Email</label>
-            <input required value={loginInput} onChange={e => setLoginInput(e.target.value)} placeholder="Enter your email" />
-          </div>
-          <div className="field">
-            <label>Password</label>
-            <div className="password-field-wrap">
-              <input required type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} className="w-full" style={{ paddingRight: '2.5rem' }} />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="password-toggle-btn"
-              >
-                {showPassword ? '👁' : '👁️'}
+            {error && (
+              <div className="card-dim mb-md" style={{ background: 'var(--danger-light)', border: '1px solid rgba(239,68,68,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--danger)' }}>
+                {error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              <div className="field-glass mb-md">
+                <input required value={loginInput} onChange={e => setLoginInput(e.target.value)} placeholder="Enter your email" />
+              </div>
+              <div className="field-glass mb-lg" style={{ position: 'relative' }}>
+                <input required type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                  placeholder="Password" style={{ paddingRight: '2.5rem' }} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)', padding: '0.25rem', lineHeight: 1 }}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+              <button className={`btn btn-primary${loading ? ' btn-loading' : ''} w-full`} type="submit" disabled={loading}>
+                {loading ? 'Logging in...' : 'Sign In'}
               </button>
+            </form>
+
+            <div className="section-divider mt-lg">or</div>
+
+            <div className="flex flex-col items-center gap-sm mt-md">
+              <span className="text-muted text-sm">
+                New user? <Link to="/fb/register" style={{ fontWeight: 600 }}>Create Account</Link>
+              </span>
+              <span className="text-muted text-sm">
+                Admin? <Link to="/fb-admin" style={{ fontWeight: 600 }}>Admin Login</Link>
+              </span>
             </div>
-          </div>
-          <button className={`btn btn-primary${loading ? ' btn-loading' : ''} w-full`} type="submit" disabled={loading}>
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
-        
-        <p className="muted mt-md">
-          New user? <Link to="/fb/register">Register here</Link>
-        </p>
-        <p className="muted">
-          Admin? <Link to="/fb-admin">Admin login</Link>
-        </p>
-        </>
+          </>
         )}
       </div>
     </div>

@@ -512,6 +512,22 @@ export default function FirebaseAdminUsersPage() {
     }
   };
 
+  const handleReferralAction = async (userId, action) => {
+    try {
+      const res = await fetch(`${API_BASE}/updateReferralStatus`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ userId, action }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Action failed');
+      const data = await res.json();
+      toast(data.message);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...data } : u));
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
   const referralCounts = useMemo(() => {
     const codeToId = {};
     users.forEach(u => {
@@ -713,6 +729,7 @@ export default function FirebaseAdminUsersPage() {
                     <th>Phone</th>
                     <th>Payment</th>
                     <th>Account</th>
+                    <th>Referral</th>
                     <th>Topup</th>
                     <th>Referrals</th>
                     <th>Joined</th>
@@ -746,6 +763,11 @@ export default function FirebaseAdminUsersPage() {
                         <td data-label="Account">
                           <span className={`status-badge status-${u.account_status || 'inactive'}`}>
                             {(u.account_status || 'inactive').charAt(0).toUpperCase() + (u.account_status || 'inactive').slice(1)}
+                          </span>
+                        </td>
+                        <td data-label="Referral">
+                          <span className={`badge ${u.referral_active === false ? 'badge-rejected' : 'badge-paid'}`}>
+                            {u.referral_active === false ? 'INACTIVE' : 'ACTIVE'}
                           </span>
                         </td>
                         <td data-label="Topup">
@@ -815,12 +837,18 @@ export default function FirebaseAdminUsersPage() {
                             )}
                             <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => setSelectedUser(u)}>View</button>
                             <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => setDeleteConfirmUser(u)}>Del</button>
+                            {(u.referral_active === false) ? (
+                              <button className="btn-modern btn-modern-success btn-modern-xs" onClick={() => handleReferralAction(u.id, 'activate')}>Activate Ref</button>
+                            ) : (
+                              <button className="btn-modern btn-modern-warning btn-modern-xs" onClick={() => handleReferralAction(u.id, 'deactivate')}>Deact. Ref</button>
+                            )}
+                            <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={() => handleReferralAction(u.id, 'reset')}>Reset Ref</button>
                           </div>
                         </td>
                       </tr>
                       {expandedUserId === u.id && (
                         <tr>
-                          <td colSpan={12} className="expandable-row">
+                          <td colSpan={13} className="expandable-row">
                             {loadingReferrals ? (
                               <div className="muted">Loading referrals...</div>
                             ) : expandedReferrals.length > 0 ? (
@@ -858,7 +886,7 @@ export default function FirebaseAdminUsersPage() {
                     );
                   })}
                   {filteredUsers.length === 0 && (
-                    <tr><td colSpan={12}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
+                    <tr><td colSpan={13}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
                   )}
                 </tbody>
               </table>

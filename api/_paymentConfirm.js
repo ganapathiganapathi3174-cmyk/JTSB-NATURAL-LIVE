@@ -229,7 +229,26 @@ async function approveRegistration(session, transactionReference) {
       referredByUserId, session.amount * 0.1, transactionReference,
       'Referral bonus for ' + newUserId, 'referral_bonus'
     );
+    // Increment referrer's referral count
+    try {
+      const referrerDoc = await getDoc(COL_USERS, referredByUserId);
+      if (referrerDoc) {
+        const currentCount = (referrerDoc.referrals_count || 0) + 1;
+        const limitReached = currentCount >= MAX_REFERRALS;
+        await updateDoc(COL_USERS, referredByUserId, {
+          referrals_count: currentCount,
+          total_referral_count: (referrerDoc.total_referral_count || 0) + 1,
+          referral_limit_reached: limitReached,
+          referral_active: !limitReached,
+          is_qualified: limitReached,
+        });
+      }
+    } catch (e) { log(`Referral count increment error: ${e.message}`); }
   }
+
+  try {
+    await updateDoc(COL_USERS, newUserId, { referred_by_status: 'approved' });
+  } catch (_) {}
 
   try {
     const { deleteDoc } = require('./_supabase.js');

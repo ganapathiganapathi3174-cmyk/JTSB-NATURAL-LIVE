@@ -89,6 +89,7 @@ const handlerCfg = [
   ['restoreUPIPayment', true, '../handlers/restoreUPIPayment.js'],
   ['getVerificationLogs', true, '../handlers/getVerificationLogs.js'],
   ['adminDeleteRecord', true, '../handlers/adminDeleteRecord.js'],
+  ['updateReferralStatus', true, '../handlers/updateReferralStatus.js'],
   ['getHealthStatus', false, '../handlers/getHealthStatus.js'],
   ['supabaseProxy', false, '../handlers/supabaseProxy.js'],
   ['getAdminDashboardData', true, '../handlers/getAdminDashboardData.js'],
