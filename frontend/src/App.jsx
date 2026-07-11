@@ -1,7 +1,9 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ToastProvider } from './components/ToastProvider.jsx';
+import CosmicBackground from './components/CosmicBackground.jsx';
 
+const HomePage = lazy(() => import('./pages/HomePage.jsx'));
 const TestPage = lazy(() => import('./pages/TestPage.jsx'));
 const PaymentPage = lazy(() => import('./pages/PaymentPage.jsx'));
 const FirebaseRegisterPage = lazy(() => import('./pages/FirebaseRegisterPage.jsx'));
@@ -80,7 +82,6 @@ function ProtectedFirebaseAdmin({ children }) {
     clearSession();
     return <Navigate to="/fb-admin" replace />;
   }
-  // Verify JWT is not expired by decoding it
   try {
     const parts = adminToken.split('.');
     if (parts.length !== 3) { clearSession(); return <Navigate to="/fb-admin" replace />; }
@@ -100,38 +101,38 @@ function ProtectedFirebaseAdmin({ children }) {
 export default function App() {
   return (
     <ToastProvider>
-    <Suspense fallback={<LoadingFallback />}>
-      <Routes>
-        <Route path="/test" element={<TestPage />} />
-        <Route path="/" element={<Navigate to="/fb/register" replace />} />
-        <Route path="/payment" element={<PaymentPage />} />
-        <Route path="/fb/register" element={<FirebaseRegisterPage />} />
-        <Route path="/fb/login" element={<FirebaseLoginPage />} />
-        <Route path="/fb/dashboard" element={<ProtectedFirebase><FirebaseUserDashboard /></ProtectedFirebase>} />
-        <Route path="/fb/messages" element={<ProtectedFirebase><UserMessageCenter /></ProtectedFirebase>} />
-        <Route path="/fb/chat" element={<ProtectedFirebase><UserChat /></ProtectedFirebase>} />
-        <Route path="/fb/sponsor-marketplace" element={<ProtectedFirebase><SponsorMarketplacePage /></ProtectedFirebase>} />
-        <Route path="/fb/sponsor-requests" element={<ProtectedFirebase><SponsorRequestsPage /></ProtectedFirebase>} />
+      <CosmicBackground />
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/test" element={<TestPage />} />
+          <Route path="/payment" element={<PaymentPage />} />
+          <Route path="/fb/register" element={<FirebaseRegisterPage />} />
+          <Route path="/fb/login" element={<FirebaseLoginPage />} />
+          <Route path="/fb/dashboard" element={<ProtectedFirebase><FirebaseUserDashboard /></ProtectedFirebase>} />
+          <Route path="/fb/messages" element={<ProtectedFirebase><UserMessageCenter /></ProtectedFirebase>} />
+          <Route path="/fb/chat" element={<ProtectedFirebase><UserChat /></ProtectedFirebase>} />
+          <Route path="/fb/sponsor-marketplace" element={<ProtectedFirebase><SponsorMarketplacePage /></ProtectedFirebase>} />
+          <Route path="/fb/sponsor-requests" element={<ProtectedFirebase><SponsorRequestsPage /></ProtectedFirebase>} />
 
-        {/* Firebase Admin routes */}
-        <Route path="/fb-admin" element={<FirebaseAdminLoginPage />} />
-        <Route path="/fb-admin/dashboard" element={<ProtectedFirebaseAdmin><FirebaseAdminDashboardPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/payments" element={<ProtectedFirebaseAdmin><FirebaseAdminPaymentsPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/users" element={<ProtectedFirebaseAdmin><FirebaseAdminUsersPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/status" element={<ProtectedFirebaseAdmin><FirebaseAdminStatusPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/referral-graph" element={<ProtectedFirebaseAdmin><ReferralGraphPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/messages" element={<ProtectedFirebaseAdmin><AdminMessageHistory /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/chat" element={<ProtectedFirebaseAdmin><AdminChat /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/topups" element={<ProtectedFirebaseAdmin><FirebaseAdminTopupsPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/upi-payments" element={<ProtectedFirebaseAdmin><FirebaseAdminUPIPaymentsPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/tools" element={<ProtectedFirebaseAdmin><FirebaseAdminToolsPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/queue" element={<ProtectedFirebaseAdmin><FirebaseAdminQueuePage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/sponsor-transfers" element={<ProtectedFirebaseAdmin><AdminSponsorTransfersPage /></ProtectedFirebaseAdmin>} />
-        <Route path="/fb-admin/pending-queue" element={<ProtectedFirebaseAdmin><AdminPendingPaymentsPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin" element={<FirebaseAdminLoginPage />} />
+          <Route path="/fb-admin/dashboard" element={<ProtectedFirebaseAdmin><FirebaseAdminDashboardPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/payments" element={<ProtectedFirebaseAdmin><FirebaseAdminPaymentsPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/users" element={<ProtectedFirebaseAdmin><FirebaseAdminUsersPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/status" element={<ProtectedFirebaseAdmin><FirebaseAdminStatusPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/referral-graph" element={<ProtectedFirebaseAdmin><ReferralGraphPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/messages" element={<ProtectedFirebaseAdmin><AdminMessageHistory /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/chat" element={<ProtectedFirebaseAdmin><AdminChat /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/topups" element={<ProtectedFirebaseAdmin><FirebaseAdminTopupsPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/upi-payments" element={<ProtectedFirebaseAdmin><FirebaseAdminUPIPaymentsPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/tools" element={<ProtectedFirebaseAdmin><FirebaseAdminToolsPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/queue" element={<ProtectedFirebaseAdmin><FirebaseAdminQueuePage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/sponsor-transfers" element={<ProtectedFirebaseAdmin><AdminSponsorTransfersPage /></ProtectedFirebaseAdmin>} />
+          <Route path="/fb-admin/pending-queue" element={<ProtectedFirebaseAdmin><AdminPendingPaymentsPage /></ProtectedFirebaseAdmin>} />
 
-        <Route path="*" element={<Navigate to="/fb/register" replace />} />
-      </Routes>
-    </Suspense>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </ToastProvider>
   );
 }
