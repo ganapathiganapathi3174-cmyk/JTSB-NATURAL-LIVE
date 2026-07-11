@@ -385,7 +385,7 @@ export const SupabaseUser = {
       const { data } = await supabase.from(table).select('id').eq(field, val);
       return (data || []).map(r => r.id);
     };
-    const [refIds, topupIds, incIds1, incIds2, notifIds1, notifIds2, walTxIds, upiIds] = await Promise.all([
+    const [refIds, topupIds, incIds1, incIds2, notifIds1, notifIds2, walTxIds, upiIds, sponIds, procIds, verLogIds, sessIds, auditIds, delAuditIds, claimIds, transferIds] = await Promise.all([
       getRefs('referrals', 'user_id', id),
       getRefs('topups', 'userId', id),
       getRefs('topup_referral_income', 'userId', id),
@@ -394,6 +394,14 @@ export const SupabaseUser = {
       getRefs('notifications', 'senderId', id),
       getRefs('wallet_transactions', 'userId', id),
       getRefs('upi_payments', 'userId', id),
+      getRefs('sponsor_data', 'user_id', id),
+      getRefs('processed_payments', 'user_id', id),
+      getRefs('verification_logs', 'user_id', id),
+      getRefs('payment_sessions', 'user_id', id),
+      getRefs('audit_logs', 'target_id', id),
+      getRefs('deletion_audit_logs', 'deleted_record_id', id),
+      getRefs('sponsor_claims', 'sponsor_id', id),
+      getRefs('sponsor_transfers', 'user_id', id),
     ]);
     const batchDel = async (table, ids) => { if (ids.length > 0) await supabase.from(table).delete().in('id', ids); };
     await Promise.all([
@@ -403,7 +411,18 @@ export const SupabaseUser = {
       batchDel('notifications', [...notifIds1, ...notifIds2]),
       batchDel('wallet_transactions', walTxIds),
       batchDel('upi_payments', upiIds),
+      batchDel('sponsor_data', sponIds),
+      batchDel('processed_payments', procIds),
+      batchDel('verification_logs', verLogIds),
+      batchDel('payment_sessions', sessIds),
+      batchDel('audit_logs', auditIds),
+      batchDel('deletion_audit_logs', delAuditIds),
+      batchDel('sponsor_claims', claimIds),
+      batchDel('sponsor_transfers', transferIds),
     ]);
+    if (topupIds.length > 0) {
+      await supabase.from('topup_audit_log').delete().in('topupId', topupIds);
+    }
     await supabase.from('wallet_balances').delete().eq('id', id);
     const convoId = `admin_${id}`;
     await supabase.from('chat_messages').delete().eq('convoId', convoId);

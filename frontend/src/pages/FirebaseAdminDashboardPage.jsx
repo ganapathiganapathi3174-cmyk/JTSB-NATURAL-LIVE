@@ -99,8 +99,6 @@ export default function FirebaseAdminDashboardPage() {
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [topups, setTopups] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [healthData, setHealthData] = useState(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [showAddUser, setShowAddUser] = useState(false);
@@ -343,22 +341,6 @@ export default function FirebaseAdminDashboardPage() {
     }
   }, []);
 
-  const fetchActivities = useCallback(async () => {
-    setActivitiesLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/getRecentActivity`, {
-        method: 'POST', headers: authHeaders(), body: '{}',
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const result = await res.json();
-      if (result.success) setActivities(result.activities || []);
-    } catch (err) {
-      console.error('[ADMIN DASHBOARD] Failed to fetch activities:', err);
-    } finally {
-      setActivitiesLoading(false);
-    }
-  }, []);
-
   const fetchHealth = useCallback(async () => {
     setHealthLoading(true);
     try {
@@ -383,13 +365,12 @@ export default function FirebaseAdminDashboardPage() {
     }
 
     fetchData();
-    fetchActivities();
     fetchHealth();
 
     const interval = setInterval(fetchData, 30000);
 
     return () => clearInterval(interval);
-  }, [navigate, fetchData, fetchActivities, fetchHealth]);
+  }, [navigate, fetchData, fetchHealth]);
 
   useEffect(() => {
     const baseUrl = import.meta.env.VITE_FUNCTIONS_URL || '';
@@ -595,47 +576,6 @@ export default function FirebaseAdminDashboardPage() {
                 <div className="card-label">Approved Top-Ups</div>
                 <span className="priority-link">View {'\u2192'}</span>
               </Link>
-            </div>
-          </div>
-
-          <div className="card-modern card-section">
-            <div className="card-modern-header">
-              <h2 className="card-modern-title">{'\u{1F4CB}'} Recent Activity</h2>
-              <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={fetchActivities} disabled={activitiesLoading}>
-                {activitiesLoading ? '...' : '\u{1F504}'}
-              </button>
-            </div>
-            <div style={{ padding: '0.75rem 1rem' }}>
-              {activities.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '1.5rem', color: '#9ca3af', fontSize: '0.85rem' }}>
-                  {activitiesLoading ? 'Loading...' : 'No recent activity'}
-                </div>
-              ) : (
-                <div className="timeline">
-                  {activities.slice(0, 20).map(a => {
-                    const actionLabel = a.action
-                      .replace(/_/g, ' ')
-                      .replace(/\b\w/g, c => c.toUpperCase());
-                    const isApprove = a.action.includes('approve') || a.action.includes('credit');
-                    const isReject = a.action.includes('reject') || a.action.includes('delete') || a.action.includes('fail');
-                    const isRestore = a.action.includes('restore');
-                    const isReview = a.action.includes('manual') || a.action.includes('review');
-                    const cls = isApprove ? 'timeline-success' : isReject ? 'timeline-danger' : isRestore ? 'timeline-warning' : 'timeline-info';
-                    return (
-                      <div key={a.id} className={`timeline-item ${cls}`}>
-                        <div className="timeline-time">{a.createdAt ? new Date(a.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>
-                        <div className="timeline-action">{actionLabel}</div>
-                        <div className="timeline-detail">
-                          {a.adminId && <>by <strong>{a.adminId}</strong></>}
-                          {a.targetType && <> on {a.targetType}{a.targetId ? ' #' + (typeof a.targetId === 'string' ? a.targetId.substring(0, 12) : a.targetId) : ''}</>}
-                          {a.details?.reason && <> — {a.details.reason}</>}
-                          {a.details?.amount && <> — ₹{a.details.amount}</>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </div>
 

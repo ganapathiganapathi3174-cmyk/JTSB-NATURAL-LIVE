@@ -45,6 +45,8 @@ const COL_SPONSOR_DATA = 'sponsor_data';
 const COL_SPONSOR_CLAIMS = 'sponsor_claims';
 const COL_SMS_SESSIONS = 'paymentSessions';
 const COL_SPONSOR_TRANSFERS = 'sponsor_transfers';
+const COL_AUDIT_LOGS = 'audit_logs';
+const COL_TOPUP_AUDIT_LOG = 'topup_audit_log';
 const MAX_REFERRALS = 2;
 const ADMIN_UPI_ID = 'jayarajj126-3@okicici';
 const ADMIN_ACCOUNT_MASK = '4714';
@@ -98,7 +100,7 @@ module.exports = {
   COL_UPI_PAYMENTS, COL_TOPUP_INCOME, COL_VERIFICATION_LOGS, COL_DELETION_AUDIT_LOGS,
   COL_REFERRALS, COL_NOTIFICATIONS, COL_CHAT_MESSAGES, COL_CHAT_CONVOS,
   COL_ADMINS, COL_UNIQUES, COL_SPONSOR_DATA, COL_SPONSOR_CLAIMS, COL_PAYMENT_CONFIRM_SESSIONS, COL_SMS_SESSIONS,
-  COL_SPONSOR_TRANSFERS, MAX_REFERRALS, randomString, hashPassword, crypto, generateIdempotencyKey,
+  COL_SPONSOR_TRANSFERS, COL_AUDIT_LOGS, COL_TOPUP_AUDIT_LOG, MAX_REFERRALS, randomString, hashPassword, crypto, generateIdempotencyKey,
   TEST_MODE, TEST_PAYMENT_AMOUNT, TEST_UPI_ID, TEST_PAYEE_NAME, ADMIN_UPI_ID, ADMIN_ACCOUNT_MASK,
   SYSTEM_REFERRAL_CODES, isSystemReferralCode,
   PACKAGES, ALLOWED_PACKAGE_AMOUNTS, getPackageByReferral, getReferrerPackage, validatePackageAmount,
