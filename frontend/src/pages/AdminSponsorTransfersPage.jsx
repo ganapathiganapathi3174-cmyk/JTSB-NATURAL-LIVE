@@ -43,16 +43,16 @@ export default function AdminSponsorTransfersPage() {
       </div>
 
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div style={{ flex: 1, padding: '1rem', background: '#f59e0b20', borderRadius: '0.5rem' }}>
-          <strong style={{ color: '#f59e0b' }}>Pending</strong>
+        <div style={{ flex: 1, padding: '1rem', background: 'var(--warning-soft)', borderRadius: '0.5rem' }}>
+          <strong style={{ color: 'var(--warning)' }}>Pending</strong>
           <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.pending}</div>
         </div>
-        <div style={{ flex: 1, padding: '1rem', background: '#22c55e20', borderRadius: '0.5rem' }}>
-          <strong style={{ color: '#22c55e' }}>Approved</strong>
+        <div style={{ flex: 1, padding: '1rem', background: 'var(--success-soft)', borderRadius: '0.5rem' }}>
+          <strong style={{ color: 'var(--success)' }}>Approved</strong>
           <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.approved}</div>
         </div>
-        <div style={{ flex: 1, padding: '1rem', background: '#ef444420', borderRadius: '0.5rem' }}>
-          <strong style={{ color: '#ef4444' }}>Rejected</strong>
+        <div style={{ flex: 1, padding: '1rem', background: 'var(--danger-soft)', borderRadius: '0.5rem' }}>
+          <strong style={{ color: 'var(--danger)' }}>Rejected</strong>
           <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.rejected}</div>
         </div>
       </div>
@@ -63,14 +63,14 @@ export default function AdminSponsorTransfersPage() {
         <button onClick={() => setFilter('approved')} className={`btn ${filter === 'approved' ? 'btn-primary' : 'btn-secondary'}`}>Approved</button>
         <button onClick={() => setFilter('rejected')} className={`btn ${filter === 'rejected' ? 'btn-primary' : 'btn-secondary'}`}>Rejected</button>
         <div style={{ flex: 1 }} />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email" style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem' }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email" className="input" style={{ maxWidth: '240px' }} />
         <button onClick={handleSearch} className="btn btn-secondary">Search</button>
       </div>
 
       {loading ? <div className="loading-spinner loading-spinner-lg" /> :
       error ? <div className="error-message">{error}</div> :
       transfers.length === 0 ? <p>No transfers found</p> :
-      <div style={{ overflowX: 'auto' }}>
+      <div className="table-wrap-modern">
         <table className="admin-table">
           <thead>
             <tr>

@@ -23,19 +23,25 @@
   --primary: #5B5FFF;
   --primary-dim: #4849E0;
   --primary-light: rgba(91,95,255,0.12);
+  --primary-soft: rgba(91,95,255,0.06);
   --secondary: #8B5CF6;
   --secondary-dim: #7C3AED;
   --accent: #38BDF8;
   --accent-dim: #0EA5E9;
   --accent-light: rgba(56,189,248,0.12);
+  --accent-soft: rgba(56,189,248,0.06);
   --success: #22C55E;
   --success-light: rgba(34,197,94,0.12);
+  --success-soft: rgba(34,197,94,0.06);
   --warning: #F59E0B;
   --warning-light: rgba(245,158,11,0.12);
+  --warning-soft: rgba(245,158,11,0.06);
   --danger: #EF4444;
   --danger-light: rgba(239,68,68,0.12);
+  --danger-soft: rgba(239,68,68,0.06);
   --info: #3B82F6;
   --info-light: rgba(59,130,246,0.12);
+  --info-soft: rgba(59,130,246,0.06);
   --radius: 18px;
   --radius-lg: 24px;
   --radius-xl: 32px;
@@ -804,6 +810,30 @@ a:hover { color: var(--primary); text-decoration: none; }
   border: 1px solid var(--border);
   background: var(--surface);
 }
+.admin-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
+}
+.admin-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+.admin-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+}
+.admin-table tr:last-child td { border-bottom: none; }
+.admin-table tr:hover td { background: rgba(255,255,255,0.03); }
 
 /* ===== Badges ===== */
 .badge {
@@ -1337,6 +1367,17 @@ a:hover { color: var(--primary); text-decoration: none; }
   min-height: 100vh;
 }
 .admin-dashboard-content.full { margin-left: 0; }
+.admin-main, .admin-content {
+  flex: 1;
+  padding: 1.5rem;
+  margin-left: var(--sidebar-width);
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+@media (max-width: 768px) {
+  .admin-main, .admin-content { margin-left: 0; padding: 1rem; }
+}
 
 /* ===== Recent Activity ===== */
 .recent-activity {
@@ -2269,7 +2310,7 @@ a:hover { color: var(--primary); text-decoration: none; }
 /* ===== Kanban ===== */
 .kanban-board {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 1rem;
 }
 .kanban-column {
@@ -2279,6 +2320,14 @@ a:hover { color: var(--primary); text-decoration: none; }
   padding: 1rem;
   max-height: 600px;
   overflow-y: auto;
+}
+.kanban-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
 }
 .kanban-card {
   background: rgba(255,255,255,0.04);
@@ -2294,8 +2343,7 @@ a:hover { color: var(--primary); text-decoration: none; }
   background: rgba(91,95,255,0.04);
 }
 
-@media (max-width: 1024px) { .kanban-board { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 640px) { .kanban-board { grid-template-columns: 1fr; } .kanban-column { max-height: 400px; } }
+@media (max-width: 640px) { .kanban-column { max-height: 400px; } }
 
 /* ===== Topup ===== */
 .topup-form-grid {

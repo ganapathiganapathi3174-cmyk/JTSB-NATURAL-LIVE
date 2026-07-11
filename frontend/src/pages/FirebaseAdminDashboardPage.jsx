@@ -720,7 +720,7 @@ export default function FirebaseAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="stats-grid-modern" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginTop: '1rem' }}>
+            <div className="stats-grid-modern" style={{ marginTop: '1rem' }}>
               <div className="stat-card-modern" style={{ '--accent-soft': 'transparent', border: '1px solid var(--border, #e2e8f0)' }}>
                 <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.todayCollection.toFixed(2)}</div>
                 <div className="stat-label" style={{ fontSize: '0.7rem' }}>Daily Collection</div>
@@ -794,7 +794,7 @@ export default function FirebaseAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="stats-grid-modern" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginTop: '1rem', gap: '0.5rem' }}>
+            <div className="stats-grid-modern" style={{ marginTop: '1rem', gap: '0.5rem' }}>
               <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--success-soft, rgba(34, 197, 94, 0.08))', borderRadius: '0.5rem' }}>
                 <div style={{ fontSize: '0.65rem', color: 'var(--muted, #64748b)', marginBottom: '0.15rem' }}>Payments</div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--success)' }}>{paymentAnalytics.approvedPaymentsCount}</div>
@@ -1296,8 +1296,8 @@ export default function FirebaseAdminDashboardPage() {
                       </div>
                       {(showClaimHistory.claimInfo.items || []).length > 0 && (
                         <div style={{ marginTop: '0.75rem', maxHeight: '300px', overflowY: 'auto' }}>
-                          <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted, #64748b)' }}>Referred Users & Top-up Details</h4>
-                          <table className="table-wrap-modern" style={{ fontSize: '0.75rem', width: '100%' }}>
+                          <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted)' }}>Referred Users & Top-up Details</h4>
+                          <div className="table-wrap-modern"><table style={{ fontSize: '0.75rem', width: '100%' }}>
                             <thead>
                               <tr>
                                 <th>User Name</th>
@@ -1324,6 +1324,7 @@ export default function FirebaseAdminDashboardPage() {
                             </tbody>
                           </table>
                         </div>
+                      </div>
                       )}
                     </div>
                   )}

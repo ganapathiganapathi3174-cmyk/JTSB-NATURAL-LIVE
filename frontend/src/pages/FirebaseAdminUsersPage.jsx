@@ -228,7 +228,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               </div>
             </div>
             {user._source === 'pending_registration' && (
-              <div className="detail-row" style={{ background: 'rgba(245,165,36,0.1)', borderRadius: '6px', padding: '0.5rem', marginBottom: '0.5rem' }}>
+              <div className="detail-row" style={{ background: 'var(--warning-soft)', borderRadius: '6px', padding: '0.5rem', marginBottom: '0.5rem' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--warning)' }}>{'\u23F3'} Pending Registration</div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>This user has registered but not yet completed payment. The account will be created after payment is verified.</div>
               </div>

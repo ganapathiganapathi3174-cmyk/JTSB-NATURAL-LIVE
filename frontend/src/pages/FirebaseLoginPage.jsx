@@ -149,7 +149,7 @@ export default function FirebaseLoginPage() {
 
         {showSetPasswordField && setPasswordFor ? (
           <div className="card-dim mb-md" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)' }}>
-            <p style={{ fontSize: '0.85rem', margin: '0 0 0.75rem', color: '#16A34A', fontWeight: 600 }}>
+            <p style={{ fontSize: '0.85rem', margin: '0 0 0.75rem', color: 'var(--success)', fontWeight: 600 }}>
               Your account is approved! Set a password to login.
             </p>
             <form onSubmit={handleSetPassword}>

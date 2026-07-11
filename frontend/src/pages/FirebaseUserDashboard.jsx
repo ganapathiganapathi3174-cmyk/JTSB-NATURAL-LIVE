@@ -415,7 +415,7 @@ export default function FirebaseUserDashboard() {
         </div>
       )}
       {topupSuccessMsg && (
-        <div className="card-dim mb-md animate-fade-in-up" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: '#16A34A' }}>
+        <div className="card-dim mb-md animate-fade-in-up" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--success)' }}>
           {topupSuccessMsg}
         </div>
       )}
@@ -425,19 +425,19 @@ export default function FirebaseUserDashboard() {
         <div className="flex flex-col" style={{ gap: '1.25rem' }}>
           <div className="flex items-center" style={{ gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', width: '64px', height: '64px', flexShrink: 0 }}>
-              <div style={{ width: '64px', height: '64px', borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, var(--accent), var(--accent-purple))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.5rem', fontWeight: 700 }}>
+              <div style={{ width: '64px', height: '64px', borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, var(--accent), var(--accent-purple))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text)', fontSize: '1.5rem', fontWeight: 700 }}>
                 {user?.profile_picture_url ? (
                   <img src={user.profile_picture_url} alt={user?.name || 'User'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (user?.name ? user.name.charAt(0).toUpperCase() : '?')}
               </div>
               <input type="file" id="profile-pic-input" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={handleProfilePicSelect} />
               <button onClick={() => document.getElementById('profile-pic-input').click()} disabled={uploadingProfilePic}
-                style={{ position: 'absolute', bottom: 0, right: 0, width: '24px', height: '24px', borderRadius: '50%', border: '2px solid var(--surface)', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.7rem', padding: 0 }}>
+                style={{ position: 'absolute', bottom: 0, right: 0, width: '24px', height: '24px', borderRadius: '50%', border: '2px solid var(--surface)', background: 'var(--accent)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.7rem', padding: 0 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               </button>
               {user?.profile_picture_url && (
                 <button onClick={handleRemoveProfilePic} disabled={uploadingProfilePic}
-                  style={{ position: 'absolute', top: 0, right: 0, width: '20px', height: '20px', borderRadius: '50%', border: '2px solid var(--surface)', background: 'var(--danger)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.6rem', padding: 0 }}>
+                  style={{ position: 'absolute', top: 0, right: 0, width: '20px', height: '20px', borderRadius: '50%', border: '2px solid var(--surface)', background: 'var(--danger)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.6rem', padding: 0 }}>
                   ✕
                 </button>
               )}
@@ -470,13 +470,13 @@ export default function FirebaseUserDashboard() {
 
           {user?.account_status === 'inactive' && isReferralLimitReached && (
             <div className="card-dim" style={{ background: 'var(--warning-light)', border: '1px solid rgba(245,158,11,0.2)', padding: '1rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
-              <h3 style={{ margin: '0 0 0.25rem', fontSize: '0.95rem', color: '#D97706' }}>Account Inactive — Waiting for Admin Approval</h3>
+              <h3 style={{ margin: '0 0 0.25rem', fontSize: '0.95rem', color: 'var(--warning)' }}>Account Inactive — Waiting for Admin Approval</h3>
               <p className="text-muted text-sm" style={{ margin: 0 }}>Your referral link has reached the maximum of 2 successful registrations. An admin will review and reactivate your account.</p>
             </div>
           )}
           {user?.account_status === 'inactive' && isSponsorClaimPending && (
             <div className="card-dim" style={{ background: 'var(--warning-light)', border: '1px solid rgba(245,158,11,0.2)', padding: '1rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
-              <h3 style={{ margin: '0 0 0.25rem', fontSize: '0.95rem', color: '#D97706' }}>Account Inactive — Waiting for Admin Approval</h3>
+              <h3 style={{ margin: '0 0 0.25rem', fontSize: '0.95rem', color: 'var(--warning)' }}>Account Inactive — Waiting for Admin Approval</h3>
               <p className="text-muted text-sm" style={{ margin: 0 }}>Your sponsor claim is pending admin review.</p>
             </div>
           )}
@@ -493,21 +493,21 @@ export default function FirebaseUserDashboard() {
           <div className="stat-label">Completed Referrals</div>
         </div>
         <div className="stat-card-glass">
-          <div className="stat-icon" style={{ background: 'var(--success-light)', color: '#16A34A' }}>
+          <div className="stat-icon" style={{ background: 'var(--success-light)', color: 'var(--success)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
           <div className="stat-value">₹{totalTopupIncome.toFixed(2)}</div>
           <div className="stat-label">Total Rewards</div>
         </div>
         <div className="stat-card-glass">
-          <div className="stat-icon" style={{ background: 'var(--warning-light)', color: '#D97706' }}>
+          <div className="stat-icon" style={{ background: 'var(--warning-light)', color: 'var(--warning)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 9v6"/><path d="M9 12h6"/></svg>
           </div>
           <div className="stat-value">₹{walletBalance.toFixed(2)}</div>
           <div className="stat-label">Wallet Balance</div>
         </div>
         <div className="stat-card-glass">
-          <div className="stat-icon" style={{ background: 'var(--purple-glow)', color: '#7C3AED' }}>
+          <div className="stat-icon" style={{ background: 'var(--purple-glow)', color: 'var(--accent)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
           <div className={`stat-value ${user?.status === 'approved' ? 'text-gradient-success' : user?.status === 'rejected' ? 'text-gradient-danger' : 'text-gradient-warning'}`}>
@@ -574,7 +574,7 @@ export default function FirebaseUserDashboard() {
                 </div>
                 {pendingReferralCount > 0 && (
                   <div className="flex items-center gap-sm">
-                    <span className="text-lg font-bold" style={{ color: '#D97706' }}>{pendingReferralCount}</span>
+                    <span className="text-lg font-bold" style={{ color: 'var(--warning)' }}>{pendingReferralCount}</span>
                     <span className="text-muted text-sm">Pending</span>
                   </div>
                 )}
@@ -631,11 +631,11 @@ export default function FirebaseUserDashboard() {
 
         <div className="grid grid-4" style={{ gap: '0.75rem', marginBottom: '1rem' }}>
           <div className="surface-card text-center">
-            <div className="text-lg font-bold count-animate" style={{ color: '#16A34A' }}>{approvedTopups.length}</div>
+            <div className="text-lg font-bold count-animate" style={{ color: 'var(--success)' }}>{approvedTopups.length}</div>
             <div className="text-sm text-muted">Approved</div>
           </div>
           <div className="surface-card text-center">
-            <div className="text-lg font-bold count-animate" style={{ color: '#D97706' }}>{pendingTopups.length}</div>
+            <div className="text-lg font-bold count-animate" style={{ color: 'var(--warning)' }}>{pendingTopups.length}</div>
             <div className="text-sm text-muted">Pending</div>
           </div>
           <div className="surface-card text-center">
@@ -730,7 +730,7 @@ export default function FirebaseUserDashboard() {
                   <tr key={inc.id}>
                     <td className="text-sm">{inc.createdAt ? new Date(inc.createdAt).toLocaleDateString() : '—'}</td>
                     <td className="text-sm">{inc.fromUserName || inc.fromUserId || '—'}</td>
-                    <td className="font-semibold" style={{ color: inc.status === 'claimed' ? 'var(--muted)' : '#16A34A' }}>+₹{Number(inc.amount || 0).toFixed(2)}</td>
+                    <td className="font-semibold" style={{ color: inc.status === 'claimed' ? 'var(--muted)' : 'var(--success)' }}>+₹{Number(inc.amount || 0).toFixed(2)}</td>
                     <td>
                       {inc.status === 'locked' && <span className="badge badge-warning">Locked</span>}
                       {inc.status === 'eligible' && <span className="badge badge-success">Eligible</span>}

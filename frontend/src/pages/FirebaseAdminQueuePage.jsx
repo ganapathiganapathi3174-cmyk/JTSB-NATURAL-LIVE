@@ -128,7 +128,7 @@ export default function FirebaseAdminQueuePage() {
                   <h3>Queue Summary</h3>
                 </div>
                 <div className="admin-card-body">
-                  <table className="admin-table">
+                  <div className="table-wrap-modern"><table className="admin-table">
                     <thead>
                       <tr>
                         <th>Metric</th>
@@ -146,6 +146,7 @@ export default function FirebaseAdminQueuePage() {
                       <tr><td>Pending Registrations</td><td>{queueData.pending_registrations}</td></tr>
                     </tbody>
                   </table>
+                  </div>
                   <p className="text-sm text-muted" style={{ marginTop: '0.5rem' }}>
                     Last updated: {queueData.timestamp ? new Date(queueData.timestamp).toLocaleString() : 'N/A'}
                   </p>

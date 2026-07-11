@@ -59,12 +59,12 @@ export default function AdminPendingPaymentsPage() {
 
   const statusStyle = (status) => {
     const s = status?.toLowerCase() || '';
-    if (s === 'verified' || s === 'approved') return { background: '#22c55e20', color: '#22c55e', border: '1px solid #22c55e' };
-    if (s === 'expired') return { background: '#ef444420', color: '#ef4444', border: '1px solid #ef4444' };
-    if (s === 'rejected') return { background: '#ef444420', color: '#ef4444', border: '1px solid #ef4444' };
-    if (s === 'pending') return { background: '#f59e0b20', color: '#f59e0b', border: '1px solid #f59e0b' };
-    if (s === 'manual_review') return { background: '#f9731620', color: '#f97316', border: '1px solid #f97316' };
-    return { background: '#6b728020', color: '#6b7280' };
+    if (s === 'verified' || s === 'approved') return { background: 'var(--success-soft)', color: 'var(--success)', border: '1px solid var(--success)' };
+    if (s === 'expired') return { background: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid var(--danger)' };
+    if (s === 'rejected') return { background: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid var(--danger)' };
+    if (s === 'pending') return { background: 'var(--warning-soft)', color: 'var(--warning)', border: '1px solid var(--warning)' };
+    if (s === 'manual_review') return { background: 'var(--warning-soft)', color: 'var(--warning)', border: '1px solid var(--warning)' };
+    return { background: 'var(--surface-2)', color: 'var(--muted)' };
   };
 
   const displayStatus = (s) => {
@@ -78,11 +78,11 @@ export default function AdminPendingPaymentsPage() {
     : payments;
 
   const statCards = [
-    { label: 'Pending', value: stats.pending || 0, color: '#f59e0b' },
-    { label: 'Verified', value: stats.verified || 0, color: '#22c55e' },
-    { label: 'Manual Review', value: stats.manual_review || 0, color: '#f97316' },
-    { label: 'Expired', value: stats.expired || 0, color: '#ef4444' },
-    { label: 'Rejected', value: stats.rejected || 0, color: '#dc2626' },
+    { label: 'Pending', value: stats.pending || 0, cssVar: 'warning' },
+    { label: 'Verified', value: stats.verified || 0, cssVar: 'success' },
+    { label: 'Manual Review', value: stats.manual_review || 0, cssVar: 'warning' },
+    { label: 'Expired', value: stats.expired || 0, cssVar: 'danger' },
+    { label: 'Rejected', value: stats.rejected || 0, cssVar: 'danger' },
   ];
 
   return (
@@ -93,8 +93,8 @@ export default function AdminPendingPaymentsPage() {
           <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
             Auto-expires after {timeoutMinutes} minutes
             {isLive
-              ? <span style={{ color: '#22c55e', marginLeft: '0.5rem' }}>● Live</span>
-              : <span style={{ color: '#ef4444', marginLeft: '0.5rem' }}>○ Disconnected</span>
+              ? <span style={{ color: 'var(--success)', marginLeft: '0.5rem' }}>● Live</span>
+              : <span style={{ color: 'var(--danger)', marginLeft: '0.5rem' }}>○ Disconnected</span>
             }
           </p>
         </div>
@@ -108,10 +108,10 @@ export default function AdminPendingPaymentsPage() {
         {statCards.map(card => (
           <div key={card.label} style={{
             flex: 1, minWidth: 120, padding: '1rem', borderRadius: '0.5rem',
-            background: `${card.color}15`, border: `1px solid ${card.color}40`,
+            background: `var(--${card.cssVar}-soft)`, border: `1px solid var(--${card.cssVar})`,
             textAlign: 'center',
           }}>
-            <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: card.color }}>{card.value}</div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: `var(--${card.cssVar})` }}>{card.value}</div>
             <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.25rem' }}>{card.label}</div>
           </div>
         ))}
@@ -153,12 +153,12 @@ export default function AdminPendingPaymentsPage() {
                   <td>
                     <div style={{ fontWeight: 500 }}>{p.userName}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{p.userEmail}</div>
-                    <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: '#9ca3af' }}>
+                    <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'var(--muted)' }}>
                       {p.userId?.slice(0, 12)}...
                     </div>
                   </td>
                   <td>
-                    <span className="badge" style={{ background: p.type === 'registration' ? '#3b82f620' : '#8b5cf620', color: p.type === 'registration' ? '#3b82f6' : '#8b5cf6' }}>
+                    <span className="badge" style={{ background: p.type === 'registration' ? 'var(--primary-soft)' : 'var(--accent-soft)', color: p.type === 'registration' ? 'var(--primary)' : 'var(--accent)' }}>
                       {p.type}
                     </span>
                   </td>
@@ -175,7 +175,7 @@ export default function AdminPendingPaymentsPage() {
                   <td style={{ fontSize: '0.85rem' }}>
                     {p.elapsedMinutes?.toFixed(1)}m
                   </td>
-                  <td style={{ fontSize: '0.85rem', color: p.remainingMinutes <= 2 ? '#ef4444' : 'var(--muted)' }}>
+                  <td style={{ fontSize: '0.85rem', color: p.remainingMinutes <= 2 ? 'var(--danger)' : 'var(--muted)' }}>
                     {p.status === 'pending' ? `${p.remainingMinutes?.toFixed(1)}m` : '-'}
                   </td>
                 </tr>

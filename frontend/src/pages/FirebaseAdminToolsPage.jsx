@@ -524,8 +524,8 @@ export default function FirebaseAdminToolsPage() {
                   </button>
                 </div>
 
-                <div className="audit-table">
-                  <table>
+                <div className="table-wrap-modern">
+                  <table className="admin-table">
                     <thead>
                       <tr>
                         <th>Action</th>

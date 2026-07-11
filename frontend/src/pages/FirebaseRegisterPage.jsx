@@ -254,7 +254,7 @@ export default function FirebaseRegisterPage() {
           </div>
         )}
         {success && (
-          <div className="card-dim mb-md" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: '#16A34A' }}>
+          <div className="card-dim mb-md" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--success)' }}>
             {success}
           </div>
         )}
@@ -323,7 +323,7 @@ export default function FirebaseRegisterPage() {
           <div className="text-center" style={{ padding: '1rem 0' }}>
             <div style={{
               width: 64, height: 64, borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--success), #4ADE80)', color: '#fff',
+              background: 'linear-gradient(135deg, var(--success), #4ADE80)', color: 'var(--text)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '1.75rem', margin: '0 auto 1.25rem', boxShadow: '0 0 30px rgba(34,197,94,0.3)'
             }}>✓</div>
