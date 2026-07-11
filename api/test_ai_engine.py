@@ -59,7 +59,7 @@ def create_test_image(width=720, height=1600, **kwargs):
 
     status = kwargs.get('status', 'SUCCESS')
     amount = kwargs.get('amount', '₹120.00')
-    sender = kwargs.get('sender', 'jayarajj-3@okicici')
+    sender = kwargs.get('sender', 'jayarajj126-3@okicici')
     receiver = kwargs.get('receiver', 'merchant@upi')
     utr = kwargs.get('utr', '1234567890123456')
     date = kwargs.get('date', '27 Jun 2026')
@@ -125,7 +125,7 @@ class TestAIEngine(unittest.TestCase):
         real = TRUSTED_DIR / 'payment_a0f14bd0.jpeg'
         if real.exists():
             cls.test_screenshots['real'] = str(real)
-            cls.real_expected = {'amount': 120, 'receiverUpi': 'jayarajj-3@okicici', 'utr': '1234567892222'}
+            cls.real_expected = {'amount': 120, 'receiverUpi': 'jayarajj126-3@okicici', 'utr': '1234567892222'}
         else:
             cls.real_expected = None
         cls.synthetic_images = []
@@ -402,3 +402,4 @@ if __name__ == '__main__':
         sys.exit(0)
 
     unittest.main(argv=[a for a in sys.argv if not a.startswith('--')])
+

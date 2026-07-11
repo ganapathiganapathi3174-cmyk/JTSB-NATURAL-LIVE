@@ -5,7 +5,7 @@ const crypto = require('crypto');
 // All existing business logic is preserved: referral, wallet, sponsor, OTP
 const TEST_MODE = true;
 const TEST_PAYMENT_AMOUNT = 1;
-const TEST_UPI_ID = 'jayarajj-3@okicici';
+const TEST_UPI_ID = 'jayarajj126-3@okicici';
 const TEST_PAYEE_NAME = 'Test Payment';
 
 // Polyfill crypto.randomUUID for Node 18 compatibility
@@ -46,7 +46,7 @@ const COL_SPONSOR_CLAIMS = 'sponsor_claims';
 const COL_SMS_SESSIONS = 'paymentSessions';
 const COL_SPONSOR_TRANSFERS = 'sponsor_transfers';
 const MAX_REFERRALS = 2;
-const ADMIN_UPI_ID = 'jayarajj-3@okicici';
+const ADMIN_UPI_ID = 'jayarajj126-3@okicici';
 const ADMIN_ACCOUNT_MASK = '4714';
 
 const PACKAGES = { 120: '120', 500: '500', 1000: '1000' };
@@ -103,3 +103,4 @@ module.exports = {
   SYSTEM_REFERRAL_CODES, isSystemReferralCode,
   PACKAGES, ALLOWED_PACKAGE_AMOUNTS, getPackageByReferral, getReferrerPackage, validatePackageAmount,
 };
+

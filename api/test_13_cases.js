@@ -230,7 +230,7 @@ assert(p3.extractedSenderVpa && p3.extractedSenderVpa.includes('@'), 'P-TC3 send
 
 // Parser TC4: PhonePe format
 console.log('\n\uD83D\uDCCC Parser TC4: PhonePe format');
-const sms4 = 'Payment of Rs.1,000.00 to jayarajj-3@okicici on 05 Jul 2026. UPI Ref: 123456789012.';
+const sms4 = 'Payment of Rs.1,000.00 to jayarajj126-3@okicici on 05 Jul 2026. UPI Ref: 123456789012.';
 const p4 = parseBankSmsOcr(sms4);
 assertEq(p4.extractedAmount, 1000, 'P-TC4 amount');
 assert(p4.extractedUtr && p4.extractedUtr.length >= 10, 'P-TC4 UTR');
@@ -324,10 +324,10 @@ function receiverDetailsMatch(extractedReceiver, expectedUpi) {
   return { matched: false, available: true };
 }
 
-const EXP_UPI = 'jayarajj-3@okicici';
+const EXP_UPI = 'jayarajj126-3@okicici';
 
 console.log('\n\uD83D\uDCCC R-TC1: Exact UPI match');
-assertEq(receiverDetailsMatch('jayarajj-3@okicici', EXP_UPI).matched, true, 'R-TC1 matched');
+assertEq(receiverDetailsMatch('jayarajj126-3@okicici', EXP_UPI).matched, true, 'R-TC1 matched');
 
 console.log('\n\uD83D\uDCCC R-TC2: Partial VPA match (just handle)');
 assertEq(receiverDetailsMatch('9655897523', EXP_UPI).matched, true, 'R-TC2 matched');
@@ -475,7 +475,7 @@ assertEq(ru3.matched, true, 'RU-TC3 masked account matched');
 assertEq(ru3.available, false, 'RU-TC3 masked account not available');
 
 console.log('\n\uD83D\uDCCC RU-TC4: UPI handle match');
-const ru4 = receiverDetailsMatchUpdated('jayarajj-3@okicici', EXP_UPI);
+const ru4 = receiverDetailsMatchUpdated('jayarajj126-3@okicici', EXP_UPI);
 assertEq(ru4.matched, true, 'RU-TC4 exact UPI matched');
 assertEq(ru4.available, true, 'RU-TC4 exact UPI available');
 
@@ -490,7 +490,7 @@ assertEq(ru6.matched, true, 'RU-TC6 null matched');
 assertEq(ru6.available, false, 'RU-TC6 null not available');
 
 console.log('\n\uD83D\uDCCC RU-TC7: PhonePe format with VPA');
-const ru7 = receiverDetailsMatchUpdated('jayarajj-3@okicici', EXP_UPI);
+const ru7 = receiverDetailsMatchUpdated('jayarajj126-3@okicici', EXP_UPI);
 assertEq(ru7.matched, true, 'RU-TC7 PhonePe VPA matched');
 assertEq(ru7.available, true, 'RU-TC7 PhonePe VPA available');
 
@@ -535,3 +535,4 @@ console.log('='.repeat(60));
 console.log();
 
 process.exit(failed > 0 ? 1 : 0);
+

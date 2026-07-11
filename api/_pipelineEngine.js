@@ -19,7 +19,7 @@ const { broadcast } = require('./_sse.js');
 
 const BASE_AMOUNTS = [120, 540, 1200];
 const ALLOWED_AMOUNTS = TEST_MODE ? [...BASE_AMOUNTS, TEST_PAYMENT_AMOUNT] : BASE_AMOUNTS;
-const ACCEPTED_UPI = 'jayarajj-3@okicici';
+const ACCEPTED_UPI = 'jayarajj126-3@okicici';
 const OTP_EXPIRY_MS = 300000;
 const MAX_OTP_ATTEMPTS = 3;
 const PYTHON_PATH = 'C:\\Users\\Sahan\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
@@ -819,3 +819,4 @@ module.exports = {
   resendOtp,
   processPaymentApproval,
 };
+

@@ -6,7 +6,7 @@ const UPI_POLL_INTERVAL = 5000;
 const UPI_POLL_TIMEOUT = 30 * 60 * 1000;
 
 const MOBILE_NUMBER = '9655897523';
-const UPI_ID = 'jayarajj-3@okicici';
+const UPI_ID = 'jayarajj126-3@okicici';
 const MERCHANT_NAME = 'JTSB Natural';
 
 function upiParam(val, keepAt) {
@@ -365,3 +365,4 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
     </div>
   );
 }
+

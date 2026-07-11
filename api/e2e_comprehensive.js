@@ -131,7 +131,7 @@ async function test() {
     const utr = `UTR120${ts}${rng(4)}`.slice(0, 16);
     const payRes = await httpRequest('POST', '/api/verifyUPIPayment', {
       pendingRegId, type: 'registration', amount: 120, utr,
-      upiId: 'jayarajj-3@okicici', paymentDate: todayStr(),
+      upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(),
       screenshotUrl: 'https://placehold.co/400x800/png?text=Test+Payment+120',
     });
     assert(payRes.status === 200, `Payment status ${payRes.status}`);
@@ -170,7 +170,7 @@ async function test() {
     const utr = `UTR500${ts}${rng(4)}`.slice(0, 16);
     const payRes = await httpRequest('POST', '/api/verifyUPIPayment', {
       pendingRegId, type: 'registration', amount: 500, utr,
-      upiId: 'jayarajj-3@okicici', paymentDate: todayStr(),
+      upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(),
       screenshotUrl: 'https://placehold.co/400x800/png?text=Test+Payment+500',
     });
     assert(payRes.status === 200, `Payment status ${payRes.status}`);
@@ -209,7 +209,7 @@ async function test() {
     const utr = `UTR1000${ts}${rng(4)}`.slice(0, 16);
     const payRes = await httpRequest('POST', '/api/verifyUPIPayment', {
       pendingRegId, type: 'registration', amount: 1000, utr,
-      upiId: 'jayarajj-3@okicici', paymentDate: todayStr(),
+      upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(),
       screenshotUrl: 'https://placehold.co/400x800/png?text=Test+Payment+1000',
     });
     assert(payRes.status === 200, `Payment status ${payRes.status}`);
@@ -247,7 +247,7 @@ async function test() {
     if (existingUtr) {
       const payRes = await httpRequest('POST', '/api/verifyUPIPayment', {
         pendingRegId, type: 'registration', amount: 120, utr: existingUtr,
-        upiId: 'jayarajj-3@okicici', paymentDate: todayStr(),
+        upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(),
         screenshotUrl: 'https://placehold.co/400x800/png?text=Duplicate+UTR',
       });
       console.log(`    Duplicate UTR result: status=${payRes.status}, body=${JSON.stringify(payRes.body)}`);
@@ -272,7 +272,7 @@ async function test() {
 
     const payRes = await httpRequest('POST', '/api/verifyUPIPayment', {
       pendingRegId, type: 'registration', amount: 999, utr: `WRONGAMT${ts}`,
-      upiId: 'jayarajj-3@okicici', paymentDate: todayStr(),
+      upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(),
       screenshotUrl: 'https://placehold.co/400x800/png?text=Wrong+Amount',
     });
     console.log(`    Wrong amount result: status=${payRes.status}, body=${JSON.stringify(payRes.body)}`);
@@ -291,7 +291,7 @@ async function test() {
     const utr = `TOP120${ts}${rng(4)}`.slice(0, 16);
     const payRes = await httpRequest('POST', '/api/verifyUPIPayment', {
       userId: last.userId, type: 'topup', amount: 120, utr,
-      upiId: 'jayarajj-3@okicici', paymentDate: todayStr(),
+      upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(),
       screenshotUrl: 'https://placehold.co/400x800/png?text=Topup+120',
     });
     assert(payRes.status === 200, `Topup payment status ${payRes.status}`);
@@ -314,7 +314,7 @@ async function test() {
     const utr = `TOP500${ts}${rng(4)}`.slice(0, 16);
     const payRes = await httpRequest('POST', '/api/verifyUPIPayment', {
       userId: first.userId, type: 'topup', amount: 500, utr,
-      upiId: 'jayarajj-3@okicici', paymentDate: todayStr(),
+      upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(),
       screenshotUrl: 'https://placehold.co/400x800/png?text=Topup+500',
     });
     assert(payRes.status === 200, `Topup 500 payment status ${payRes.status}`);
@@ -337,7 +337,7 @@ async function test() {
     const utr = `TOP1000${ts}${rng(4)}`.slice(0, 16);
     const payRes = await httpRequest('POST', '/api/verifyUPIPayment', {
       userId: second.userId, type: 'topup', amount: 1000, utr,
-      upiId: 'jayarajj-3@okicici', paymentDate: todayStr(),
+      upiId: 'jayarajj126-3@okicici', paymentDate: todayStr(),
       screenshotUrl: 'https://placehold.co/400x800/png?text=Topup+1000',
     });
     assert(payRes.status === 200, `Topup 1000 payment status ${payRes.status}`);
@@ -452,3 +452,4 @@ test().catch(err => {
   console.error(`\n\u274c Fatal Error: ${err.message}`);
   process.exit(1);
 });
+

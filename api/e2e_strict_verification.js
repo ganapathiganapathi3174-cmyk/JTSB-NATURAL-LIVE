@@ -221,10 +221,10 @@ async function runTests() {
   // TEST 7: Receiver Validation (Rule 7)
   // ═══════════════════════════════════════════
   console.log('\n\uD83D\uDCCC RULE 7: Receiver Exact Match to ' + engine.EXPECTED_RECEIVER_UPI);
-  assert(engine.receiverExactMatch('jayarajj-3@okicici') === true, 'Exact match: jayarajj-3@okicici');
-  assert(engine.receiverExactMatch('JAYARAJJ-3@OKICICI') === true, 'Case normalized to match');
-  assert(engine.receiverExactMatch('jayarajj-3@okicici ') === true, 'Trailing whitespace normalized');
-  assert(engine.receiverExactMatch(' jayarajj-3@okicici') === true, 'Leading whitespace normalized');
+  assert(engine.receiverExactMatch('jayarajj126-3@okicici') === true, 'Exact match: jayarajj126-3@okicici');
+  assert(engine.receiverExactMatch('jayarajj126-3@okicici') === true, 'Case normalized to match');
+  assert(engine.receiverExactMatch('jayarajj126-3@okicici ') === true, 'Trailing whitespace normalized');
+  assert(engine.receiverExactMatch(' jayarajj126-3@okicici') === true, 'Leading whitespace normalized');
   assert(engine.receiverExactMatch('other@okicici') === false, 'Different UPI rejected');
   assert(engine.receiverExactMatch('') === false, 'Empty string rejected');
   assert(engine.receiverExactMatch(null) === false, 'Null rejected');
@@ -564,3 +564,4 @@ runTests().catch(err => {
   console.error(err.stack);
   process.exit(1);
 });
+

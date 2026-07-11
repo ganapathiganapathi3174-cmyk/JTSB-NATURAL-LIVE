@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import QrCodeDisplay from './QrCodeDisplay.jsx';
 
 const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
-const ADMIN_UPI = 'jayarajj-3@okicici';
+const ADMIN_UPI = 'jayarajj126-3@okicici';
 const MERCHANT_NAME = 'JTSB Natural';
 const MOBILE_NUMBER = '9655897523';
 
@@ -667,3 +667,4 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
     </div>
   );
 }
+

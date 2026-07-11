@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3001';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'jayaraj@gmail.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'jayaraj7523';
-const ADMIN_UPI = 'jayarajj-3@okicici';
+const ADMIN_UPI = 'jayarajj126-3@okicici';
 
 let results = { passed: 0, failed: 0, errors: [] };
 let adminToken = null;
@@ -414,3 +414,4 @@ runE2ETest().catch(err => {
   console.error('\n\u274c Fatal Error: ' + err.message);
   process.exit(1);
 });
+

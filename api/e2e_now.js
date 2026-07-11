@@ -100,7 +100,7 @@ async function runE2ETest() {
     type: 'registration',
     amount: 120,
     utr,
-    upiId: 'jayarajj-3@okicici',
+    upiId: 'jayarajj126-3@okicici',
     paymentDate: todayStr(),
     screenshotUrl: 'https://example.com/e2e_test.png',
   });
@@ -209,3 +209,4 @@ runE2ETest().catch(err => {
   console.error(`\n\u274c Fatal Error: ${err.message}`);
   process.exit(1);
 });
+

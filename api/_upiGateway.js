@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 const MERCHANT_NAME = 'JTSB Natural';
-const UPI_ID = 'jayarajj-3@okicici';
+const UPI_ID = 'jayarajj126-3@okicici';
 const MOBILE_NUMBER = '9655897523';
 const DEFAULT_TIMEOUT_MINUTES = 10;
 
@@ -205,3 +205,4 @@ module.exports = {
   UPI_APPS,
   DEFAULT_TIMEOUT_MINUTES,
 };
+
