@@ -42,22 +42,22 @@ export default function AdminSponsorTransfersPage() {
         <button onClick={() => navigate('/fb-admin/dashboard')} className="btn btn-secondary">Back to Dashboard</button>
       </div>
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div style={{ flex: 1, padding: '1rem', background: 'var(--warning-soft)', borderRadius: '0.5rem' }}>
-          <strong style={{ color: 'var(--warning)' }}>Pending</strong>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.pending}</div>
+      <div className="stats-grid-modern">
+        <div className="stat-card-modern" style={{ background: 'var(--warning-soft)', border: '1px solid var(--warning)', padding: '1rem' }}>
+          <span style={{ color: 'var(--warning)', fontWeight: 600 }}>Pending</span>
+          <div className="stat-number">{stats.pending}</div>
         </div>
-        <div style={{ flex: 1, padding: '1rem', background: 'var(--success-soft)', borderRadius: '0.5rem' }}>
-          <strong style={{ color: 'var(--success)' }}>Approved</strong>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.approved}</div>
+        <div className="stat-card-modern" style={{ background: 'var(--success-soft)', border: '1px solid var(--success)', padding: '1rem' }}>
+          <span style={{ color: 'var(--success)', fontWeight: 600 }}>Approved</span>
+          <div className="stat-number">{stats.approved}</div>
         </div>
-        <div style={{ flex: 1, padding: '1rem', background: 'var(--danger-soft)', borderRadius: '0.5rem' }}>
-          <strong style={{ color: 'var(--danger)' }}>Rejected</strong>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.rejected}</div>
+        <div className="stat-card-modern" style={{ background: 'var(--danger-soft)', border: '1px solid var(--danger)', padding: '1rem' }}>
+          <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Rejected</span>
+          <div className="stat-number">{stats.rejected}</div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="flex-row" style={{ gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <button onClick={() => setFilter('')} className={`btn ${!filter ? 'btn-primary' : 'btn-secondary'}`}>All</button>
         <button onClick={() => setFilter('pending')} className={`btn ${filter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}>Pending</button>
         <button onClick={() => setFilter('approved')} className={`btn ${filter === 'approved' ? 'btn-primary' : 'btn-secondary'}`}>Approved</button>

@@ -87,9 +87,9 @@ export default function AdminPendingPaymentsPage() {
 
   return (
     <div className="admin-page" style={{ padding: '2rem' }}>
-      <div className="admin-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      <div className="admin-header">
         <div>
-          <h1 style={{ margin: 0 }}>Pending Payment Queue</h1>
+          <h1>Pending Payment Queue</h1>
           <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
             Auto-expires after {timeoutMinutes} minutes
             {isLive
@@ -98,20 +98,19 @@ export default function AdminPendingPaymentsPage() {
             }
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="flex-row" style={{ gap: '0.5rem' }}>
           <button onClick={loadPayments} className="btn btn-secondary">Refresh</button>
           <button onClick={() => navigate('/fb-admin/dashboard')} className="btn btn-secondary">Dashboard</button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+      <div className="stats-grid-modern">
         {statCards.map(card => (
-          <div key={card.label} style={{
-            flex: 1, minWidth: 120, padding: '1rem', borderRadius: '0.5rem',
+          <div key={card.label} className="stat-card-modern" style={{
             background: `var(--${card.cssVar}-soft)`, border: `1px solid var(--${card.cssVar})`,
             textAlign: 'center',
           }}>
-            <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: `var(--${card.cssVar})` }}>{card.value}</div>
+            <div className="stat-number" style={{ color: `var(--${card.cssVar})` }}>{card.value}</div>
             <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.25rem' }}>{card.label}</div>
           </div>
         ))}
