@@ -18,17 +18,18 @@ export default class ErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <div className="error-boundary">
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>&#9888;</div>
           <h2>Something went wrong</h2>
           <p>Please try refreshing the page.</p>
           {process.env.NODE_ENV !== 'production' && this.state.error && (
-            <pre style={{ background: '#1a1a2e', color: '#ff6b6b', padding: '1rem', borderRadius: '8px', margin: '1rem 0', fontSize: '0.8rem', overflow: 'auto', maxWidth: '100%' }}>
+            <pre>
               {this.state.error.message}
               {this.state.error.stack}
             </pre>
           )}
           <button
             onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
-            className="btn btn-primary"
+            className="btn btn-primary btn-lg"
           >
             Refresh Page
           </button>

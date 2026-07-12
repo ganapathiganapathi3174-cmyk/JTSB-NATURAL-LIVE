@@ -233,10 +233,10 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
 
   if (step === 'success') {
     return (
-      <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-        <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--success)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', margin: '0 auto 1rem' }}>✓</div>
+      <div className="flex flex-col items-center py-2 animate-fade-in-up">
+        <div className="flex-center" style={{ width: 56, height: 56, borderRadius: 'var(--radius-full)', background: 'var(--success)', color: '#fff', fontSize: '1.5rem', margin: '0 auto 1rem' }}>&#10003;</div>
         <h3 style={{ margin: 0 }}>Payment Successful!</h3>
-        <p className="muted" style={{ marginTop: '0.5rem' }}>Your payment has been confirmed.</p>
+        <p className="text-muted mt-sm">Your payment has been confirmed.</p>
       </div>
     );
   }
@@ -246,7 +246,7 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
       paymentStatus === 'expired' || paymentStatus === 'failed' ? '#ef4444' : 'var(--primary)';
 
     return (
-      <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+      <div className="flex flex-col items-center py-2 animate-fade-in-up">
         <div style={{
           width: 64, height: 64, borderRadius: '50%',
           background: statusColor, color: '#fff',
@@ -254,7 +254,7 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
           fontSize: '1.5rem', margin: '0 auto 1rem',
           animation: paymentStatus === 'pending' ? 'pulse 1.5s infinite' : 'none',
         }}>
-          {paymentStatus === 'approved' ? '✓' : paymentStatus === 'expired' || paymentStatus === 'failed' ? '✗' : '⏳'}
+          {paymentStatus === 'approved' ? '\u2713' : paymentStatus === 'expired' || paymentStatus === 'failed' ? '\u2715' : '\u23F3'}
         </div>
         <h3 style={{ margin: 0 }}>
           {paymentStatus === 'pending' ? 'Waiting for Payment Verification' :
@@ -262,17 +262,17 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
            paymentStatus === 'expired' ? 'Payment Expired' :
            paymentStatus === 'failed' ? 'Payment Failed' : 'Processing...'}
         </h3>
-        <p className="muted" style={{ marginTop: '0.75rem', maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>{statusMessage}</p>
+        <p className="text-muted mt" style={{ maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>{statusMessage}</p>
         {elapsed > 0 && paymentStatus === 'pending' && (
-          <p style={{ fontSize: '0.85rem', color: '#f59e0b', marginTop: '0.5rem' }}>⏱ {elapsed} min elapsed</p>
+          <p className="text-sm" style={{ color: '#f59e0b', marginTop: '0.5rem' }}>&#9201; {elapsed} min elapsed</p>
         )}
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
+        <div className="flex gap-sm justify-center mt-md flex-wrap">
           {(paymentStatus === 'expired' || paymentStatus === 'failed') && (
-            <button type="button" className="btn btn-primary btn-sm" onClick={handleRetry} disabled={verifying}>
+            <button type="button" className="btn btn-primary" onClick={handleRetry} disabled={verifying}>
               {verifying ? 'Retrying...' : 'Retry Payment'}
             </button>
           )}
-          <button type="button" className="btn btn-ghost btn-sm" onClick={handleReset}>
+          <button type="button" className="btn btn-ghost" onClick={handleReset}>
             {paymentStatus === 'expired' || paymentStatus === 'failed' ? 'Try Different Method' : 'Cancel'}
           </button>
         </div>
@@ -281,38 +281,60 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
   }
 
   return (
-    <div className="mobile-payment-option">
+    <div className="animate-fade-in-up">
       {error && (
-        <div className="alert alert-error" style={{ marginBottom: '0.75rem', whiteSpace: 'pre-line' }}>{error}</div>
+        <div className="alert alert-error">{error}</div>
       )}
 
-      <div className="mobile-number-card">
-        <div className="mobile-number-label">Pay via Mobile Number</div>
-        <div className="mobile-number-display">{MOBILE_NUMBER}</div>
-        <div className="mobile-number-sub">Send to this number via any UPI app</div>
-        <div className="mobile-actions">
+      <div className="card card-body mb-md text-center">
+        <p className="text-sm text-muted mb-xs">Pay via Mobile Number</p>
+        <div className="text-xl font-bold" style={{ color: 'var(--violet-200)' }}>{MOBILE_NUMBER}</div>
+        <p className="text-xs text-tertiary mt-xs">Send to this number via any UPI app</p>
+        <div className="flex justify-center gap-sm mt-sm">
           <button
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => copyToClipboard(MOBILE_NUMBER, 'number')}
           >
-            {copied === 'number' ? '✓ Copied!' : 'Copy Number'}
+            {copied === 'number' ? '\u2713 Copied!' : 'Copy Number'}
           </button>
         </div>
       </div>
 
-      <div className="mobile-app-grid">
+      <div className="grid-2 mb-md">
         {UPI_APPS.map(app => (
           <button
             key={app.id}
             type="button"
-            className="mobile-app-btn"
+            className="btn"
             onClick={() => createOrderAndOpenApp(app.id)}
             disabled={verifying}
-            style={{ '--app-color': app.color }}
+            style={{
+              background: app.color,
+              color: '#fff',
+              border: 'none',
+              fontWeight: 600,
+              fontSize: '0.8125rem',
+              padding: '0.75rem 0.5rem',
+              flexDirection: 'column',
+              gap: '0.375rem',
+              height: 'auto',
+              minHeight: 56,
+              borderRadius: 'var(--radius-md)',
+            }}
           >
-            <span className="mobile-app-icon">{app.icon}</span>
-            <span className="mobile-app-name">{app.name}</span>
+            <span className="badge badge-xs" style={{
+              width: 26, height: 26, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: '0.65rem',
+              padding: 0,
+            }}>{app.icon}</span>
+            <span>{app.name}</span>
           </button>
         ))}
       </div>
@@ -322,43 +344,40 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
         className={`btn btn-primary w-full${verifying ? ' btn-loading' : ''}`}
         onClick={() => createOrderAndOpenApp('GENERIC')}
         disabled={verifying}
-        style={{ marginTop: '0.75rem' }}
       >
         {verifying ? 'Creating order...' : 'Open UPI App'}
       </button>
 
-      <div className="mobile-divider"><span>OR</span></div>
+      <div className="section-divider"><span>OR</span></div>
 
-      <div className="mobile-fallback">
+      <div className="flex flex-col gap-sm mt">
         <button
           type="button"
-          className="btn btn-ghost btn-sm w-full"
+          className="btn btn-ghost w-full"
           onClick={() => setShowQR(!showQR)}
         >
           {showQR ? 'Hide QR Code' : 'Show QR Code'}
         </button>
 
         {showQR && (
-          <div className="mobile-qr-section">
+          <div className="flex flex-col items-center gap-sm">
             <QrCodeDisplay
               value={buildFallbackUpiIntent(amount)}
               size={180}
             />
-            <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.5rem', textAlign: 'center' }}>
-              Scan with any UPI app to pay ₹{amount}
-            </p>
+            <p className="text-sm text-muted text-center">Scan with any UPI app to pay &#8377;{amount}</p>
           </div>
         )}
 
-        <div className="mobile-upi-id-row">
-          <div className="mobile-upi-id-label">UPI ID:</div>
-          <div className="mobile-upi-id-value">{UPI_ID}</div>
+        <div className="card-dim flex items-center gap-sm">
+          <span className="text-sm text-muted">UPI ID:</span>
+          <span className="text-sm font-mono" style={{ color: 'var(--violet-200)', flex: 1 }}>{UPI_ID}</span>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => copyToClipboard(UPI_ID, 'upi')}
           >
-            {copied === 'upi' ? '✓ Copied!' : 'Copy'}
+            {copied === 'upi' ? '\u2713 Copied!' : 'Copy'}
           </button>
         </div>
       </div>

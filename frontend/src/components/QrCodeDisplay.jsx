@@ -17,8 +17,8 @@ export default function QrCodeDisplay({ value, size = 200, bgColor = '#ffffff', 
   if (!value) return null;
 
   return (
-    <div className="qr-code-display">
-      <canvas ref={canvasRef} style={{ borderRadius: 8, border: '1px solid var(--border)' }} />
+    <div className="premium-qr">
+      <canvas ref={canvasRef} />
     </div>
   );
 }

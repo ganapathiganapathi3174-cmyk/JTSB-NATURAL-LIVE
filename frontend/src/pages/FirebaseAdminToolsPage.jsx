@@ -276,17 +276,12 @@ export default function FirebaseAdminToolsPage() {
   }
 
   return (
-    <div className="layout-page">
+    <div className="page-wrap">
       <AdminSidebar userName={getAdminName()} />
-
-      <main>
-        <div className="layout-inner">
-          <div className="page-header">
-            <h1 className="page-title">
-              <span className="admin-page-title-icon">{'\u2699\uFE0F'}</span>
-              Admin Tools
-            </h1>
-          </div>
+      <main className="layout-inner">
+        <div className="page-header">
+          <h1 className="page-title">Admin Tools</h1>
+        </div>
 
           <div className="tools-tabs">
             {TABS.map(tab => (
@@ -389,7 +384,7 @@ export default function FirebaseAdminToolsPage() {
               <div className="tools-grid">
                 <div className="card">
                   <h2 className="card-title" style={{ marginBottom: '1rem' }}>{'\u{1F50D}'} Re-run OCR</h2>
-                  <p className="muted text-sm" style={{ marginBottom: '1rem' }}>Reset OCR state for a payment and re-extract text from the screenshot.</p>
+                  <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>Reset OCR state for a payment and re-extract text from the screenshot.</p>
                   <div className="filters">
                     <input
                       placeholder="Enter Payment ID"
@@ -404,7 +399,7 @@ export default function FirebaseAdminToolsPage() {
 
                 <div className="card">
                   <h2 className="card-title" style={{ marginBottom: '1rem' }}>{'\u{1F504}'} Re-run Verification</h2>
-                  <p className="muted text-sm" style={{ marginBottom: '1rem' }}>Reset verification state and re-run the full verification pipeline.</p>
+                  <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>Reset verification state and re-run the full verification pipeline.</p>
                   <div className="filters">
                     <input
                       placeholder="Enter Payment ID"
@@ -477,7 +472,7 @@ export default function FirebaseAdminToolsPage() {
                   <h2 className="card-title">{'\u{1F4E5}'} Download Reports</h2>
                 </div>
                 <div className="tools-section">
-                  <p className="muted text-sm" style={{ marginBottom: '1rem' }}>Generate and download payment reports in CSV format.</p>
+                  <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>Generate and download payment reports in CSV format.</p>
                   <div className="tools-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
                     <button className={`btn-ghost${reportLoading === 'daily' ? ' loading' : ''}`} onClick={() => handleDownloadReport('daily')} disabled={reportLoading !== null}>
                       {reportLoading === 'daily' ? 'Generating...' : '\u{1F4C5}'} Daily Report
@@ -562,7 +557,6 @@ export default function FirebaseAdminToolsPage() {
               </div>
             </div>
           )}
-        </div>
       </main>
     </div>
   );

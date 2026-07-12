@@ -97,7 +97,7 @@ export default function AdminMessageHistory() {
               <div className="loading-text">Loading messages...</div>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="admin-empty-state"><p className="muted">No messages found.</p></div>
+            <div className="admin-empty-state"><p className="text-muted">No messages found.</p></div>
           ) : (
             <div className="table-wrap">
               <table className="table-modern table-wrap">

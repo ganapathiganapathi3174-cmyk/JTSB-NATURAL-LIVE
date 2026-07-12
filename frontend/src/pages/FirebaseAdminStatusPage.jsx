@@ -48,16 +48,16 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
 const StatusCard = React.memo(function StatusCard({ user, statusColor, onDragStart, onDragEnd, onTouchStart }) {
   return (
     <div
-      className="kanban-card"
+      className="card card-dim"
       draggable
       onDragStart={(e) => onDragStart(e, user)}
       onDragEnd={onDragEnd}
       onTouchStart={(e) => { if (onTouchStart) onTouchStart(e, user); }}
-      style={{ borderLeftColor: statusColor }}
+      style={{ borderLeft: `3px solid ${statusColor}`, cursor: 'grab', marginBottom: '0.5rem' }}
     >
-      <div className="kanban-card-name">{user.name}</div>
-      <div className="kanban-card-email">{user.email}</div>
-      <div className="kanban-card-meta">
+      <div className="font-semibold text-sm">{user.name}</div>
+      <div className="text-xs text-muted">{user.email}</div>
+      <div className="flex gap-sm mt-xs text-xs text-tertiary">
         {user.phone && <span>{user.phone}</span>}
         {user.referral_code && <span>#{user.referral_code}</span>}
       </div>
@@ -79,18 +79,20 @@ const StatusColumn = React.memo(function StatusColumn({ statusKey, config, users
 
   return (
     <div
-      className={`kanban-column ${isOver ? 'kanban-column-over' : ''}`}
+      className={`card${isOver ? ' card-hover' : ''}`}
       data-status={statusKey}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      style={{ borderTopColor: config.color }}
+      style={{ borderTop: `3px solid ${config.color}`, gridColumn: 'span 1' }}
     >
-      <div className="kanban-header">
-        <span className="kanban-dot" style={{ background: config.color }} />
-        <span className="kanban-title">{config.label}</span>
-        <span className="kanban-count">{users.length}</span>
+      <div className="flex items-center justify-between mb-md" style={{ padding: '0.75rem 0.75rem 0', borderBottom: '1px solid var(--border)', paddingBottom: '0.625rem' }}>
+        <div className="flex items-center gap-sm">
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: config.color, display: 'inline-block' }} />
+          <span className="font-semibold text-sm">{config.label}</span>
+        </div>
+        <span className="badge">{users.length}</span>
       </div>
-      <div className="kanban-body">
+      <div style={{ padding: '0.5rem', minHeight: 100 }}>
         {users.map(user => (
           <div
             key={user.id}
@@ -106,7 +108,7 @@ const StatusColumn = React.memo(function StatusColumn({ statusKey, config, users
           </div>
         ))}
         {users.length === 0 && (
-          <div className="kanban-empty">Drop users here</div>
+          <div className="text-center text-muted text-sm" style={{ padding: '2rem 0' }}>Drop users here</div>
         )}
       </div>
     </div>
@@ -281,62 +283,51 @@ export default function FirebaseAdminStatusPage() {
   }
 
   return (
-    <div className="layout-page">
+    <div className="page-wrap">
       <AdminSidebar userName={getAdminName()} />
-
-      <main>
-        <div className="layout-inner">
-          <div className="page-header">
-            <h1 className="page-title">
-              <span className="admin-page-title-icon">{'\u{1F4CB}'}</span>
-              Status Board
-            </h1>
-            <div className="page-actions">
-              <span className="muted text-sm">
-                Showing {filteredCount} of {totalCount} users
-              </span>
-            </div>
-          </div>
-
-          <div className="card mb-md">
-            <div className="filters" style={{ justifyContent: 'space-between' }}>
-              <input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by name, email, phone, code..."
-              />
-            </div>
-          </div>
-
-          <div className="kanban-board">
-            {Object.entries(STATUSES).map(([key, config]) => (
-              <StatusColumn
-                key={key}
-                statusKey={key}
-                config={config}
-                users={groupedUsers[key] || []}
-                onDrop={handleDrop}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onTouchStart={handleTouchStart}
-                isOver={draggedOverStatus === key}
-                draggedUser={draggedUser}
-              />
-            ))}
+      <main className="layout-inner">
+        <div className="page-header">
+          <h1 className="page-title">Status Board</h1>
+          <div className="page-actions">
+            <span className="text-sm text-muted">Showing {filteredCount} of {totalCount} users</span>
           </div>
         </div>
 
-        {toast && (
-          <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
-        )}
-        {confirm && (
-          <ConfirmModal
-            message={confirm.message}
-            onConfirm={confirm.onConfirm}
-            onCancel={confirm.onCancel}
+        <div className="card mb-md" style={{ padding: '0.75rem 1rem' }}>
+          <input
+            className="input"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search by name, email, phone, code..."
           />
-        )}
+        </div>
+
+        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          {Object.entries(STATUSES).map(([key, config]) => (
+            <StatusColumn
+              key={key}
+              statusKey={key}
+              config={config}
+              users={groupedUsers[key] || []}
+              onDrop={handleDrop}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onTouchStart={handleTouchStart}
+              isOver={draggedOverStatus === key}
+              draggedUser={draggedUser}
+            />
+          ))}
+        </div>
       </main>
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {confirm && (
+        <ConfirmModal
+          message={confirm.message}
+          onConfirm={confirm.onConfirm}
+          onCancel={confirm.onCancel}
+        />
+      )}
     </div>
   );
 }

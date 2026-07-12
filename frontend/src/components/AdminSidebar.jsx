@@ -148,8 +148,11 @@ export default function AdminSidebar({ pendingCounts = {}, userName }) {
         </div>
 
         <div className="sidebar-user">
-          <div className="sidebar-user-name">{userName || 'Admin'}</div>
-          <div className="sidebar-user-role">Administrator</div>
+          <div className="sidebar-user-avatar">{(userName || 'A')[0].toUpperCase()}</div>
+          <div className="sidebar-user-info">
+            <div className="sidebar-user-name">{userName || 'Admin'}</div>
+            <div className="sidebar-user-role">Administrator</div>
+          </div>
         </div>
 
         <nav className="sidebar-nav">

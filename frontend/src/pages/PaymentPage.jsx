@@ -29,11 +29,16 @@ export default function PaymentPage() {
 
   if (submitted) {
     return (
-      <div className="page-wrap" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="card text-center animate-fade-in-up" style={{ maxWidth: 440, padding: '2.5rem' }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, var(--success), #4ADE80)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.75rem', margin: '0 auto 1.25rem', boxShadow: '0 0 30px rgba(34,197,94,0.3)' }}>✓</div>
-          <h2 style={{ margin: 0 }} className="text-gradient-success">Topup Submitted!</h2>
-          <p className="text-muted text-sm" style={{ marginTop: '0.75rem', lineHeight: 1.6 }}>Your topup request has been submitted. Wallet will be updated after verification.</p>
+      <div className="flex flex-center" style={{ minHeight: '100vh' }}>
+        <div className="card text-center animate-fade-in-up" style={{ maxWidth: 440, width: '100%' }}>
+          <div className="badge" style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: 'linear-gradient(135deg, var(--success), #4ADE80)', color: 'var(--text)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.75rem', margin: '0 auto 1.25rem', boxShadow: '0 0 30px rgba(34,197,94,0.3)'
+          }}>✓</div>
+          <h2 className="text-lg font-bold mb-sm text-gradient-success" style={{ margin: 0 }}>Topup Submitted!</h2>
+          <p className="text-muted text-sm mb-md" style={{ lineHeight: 1.6 }}>Your topup request has been submitted. Wallet will be updated after verification.</p>
           <Link to="/fb/dashboard" className="btn btn-primary mt-lg" style={{ display: 'inline-flex' }}>Back to Dashboard</Link>
         </div>
       </div>
@@ -41,22 +46,20 @@ export default function PaymentPage() {
   }
 
   return (
-    <div className="page-wrap" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="flex flex-center" style={{ minHeight: '100vh' }}>
       <div className="text-center mb-lg animate-fade-in-up">
-        <div className="brand" style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>
+        <div className="text-lg font-bold mb-xs">
           <span className="text-gradient">JTSB Natural</span>
         </div>
-        <p className="text-muted text-sm" style={{ margin: 0 }}>Premium FinTech Platform</p>
+        <p className="text-muted text-sm">Premium FinTech Platform</p>
       </div>
 
-      <div className="card animate-fade-in-up stagger-1" style={{ width: '100%', maxWidth: 480, padding: '1.5rem' }}>
-        <h1 style={{ margin: '0 0 0.25rem', fontSize: '1.35rem', letterSpacing: '-0.03em' }} className="text-gradient">Wallet Topup</h1>
-        <p className="text-muted text-sm mb-lg" style={{ margin: '0 0 1.25rem' }}>Add funds to your wallet via UPI</p>
+      <div className="card animate-fade-in-up stagger-1" style={{ width: '100%', maxWidth: 480 }}>
+        <h1 className="text-xl font-bold mb-xs text-gradient">Wallet Topup</h1>
+        <p className="text-muted text-sm mb-lg">Add funds to your wallet via UPI</p>
 
         {error && (
-          <div className="card-dim mb-md" style={{ background: 'var(--danger-light)', border: '1px solid rgba(239,68,68,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--danger)' }}>
-            {error}
-          </div>
+          <div className="alert-error mb-md">{error}</div>
         )}
 
         <UpiPayment

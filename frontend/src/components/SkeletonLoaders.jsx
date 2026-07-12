@@ -27,12 +27,9 @@ export function TableSkeleton({ rows = 5, cols = 6 }) {
 
 export function CardSkeleton({ count = 4 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(160px, 1fr))`, gap: '0.75rem' }}>
+    <div className="stats-grid">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="skeleton-card-modern" style={{
-          background: '#fff', borderRadius: '10px', padding: '1.25rem',
-          border: '1px solid var(--border, #e5e7eb)',
-        }}>
+        <div key={i} className="skeleton-card-modern">
           <div className="skeleton skeleton-line-sm" style={{ width: '40%', marginBottom: '0.5rem' }} />
           <div className="skeleton skeleton-line-lg" style={{ width: '60%' }} />
         </div>
@@ -49,10 +46,7 @@ export function PageSkeleton() {
       </div>
       <CardSkeleton count={4} />
       <div style={{ marginTop: '1.5rem' }}>
-        <div className="skeleton-card-modern" style={{
-          background: '#fff', borderRadius: '10px', padding: '1.25rem',
-          border: '1px solid var(--border, #e5e7eb)',
-        }}>
+        <div className="skeleton-card-modern">
           <div className="skeleton skeleton-line" style={{ width: '160px', marginBottom: '1rem' }} />
           <TableSkeleton rows={4} cols={5} />
         </div>

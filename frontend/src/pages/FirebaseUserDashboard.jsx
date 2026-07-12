@@ -287,13 +287,13 @@ export default function FirebaseUserDashboard() {
   if (loading) {
     return (
       <div className="page-wrap" style={{ minHeight: '100vh' }}>
-        <div className="loading-full">
+        <div className="flex flex-col items-center" style={{ padding: '2rem' }}>
           {error && (
-            <div className="card-dim mb-md" style={{ background: 'var(--danger-light)', border: '1px solid rgba(239,68,68,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--danger)' }}>
+            <div className="alert-error mb-md w-full" style={{ maxWidth: 600 }}>
               {error}
             </div>
           )}
-          <div className="skeleton-card" style={{ width: '100%', maxWidth: 600 }}>
+          <div className="skeleton-card w-full" style={{ maxWidth: 600 }}>
             <div className="skeleton skeleton-line-lg" />
             <div className="skeleton skeleton-line-sm" />
             <div className="mt-lg">
@@ -306,7 +306,7 @@ export default function FirebaseUserDashboard() {
               <div className="skeleton skeleton-line" style={{ width: '45%' }} />
             </div>
           </div>
-          <div className="skeleton-card" style={{ width: '100%', maxWidth: 600 }}>
+          <div className="skeleton-card w-full" style={{ maxWidth: 600 }}>
             <div className="skeleton skeleton-line-lg" style={{ width: '50%' }} />
             <div className="skeleton skeleton-line" />
             <div className="skeleton skeleton-line" style={{ width: '35%' }} />
@@ -367,10 +367,9 @@ export default function FirebaseUserDashboard() {
 
   return (
     <div className="page-wrap has-bottom-nav">
-      <div className="card mb-lg animate-fade-in-up" style={{ padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-        <div className="brand" style={{ fontSize: '1.15rem' }}>
-          <span className="text-gradient">JTSB Natural</span>
-        </div>
+      {/* Top Bar */}
+      <div className="flex flex-between items-center mb-md" style={{ padding: '0.75rem 0' }}>
+        <div className="text-lg font-bold"><span className="text-gradient">JTSB Natural</span></div>
         <div className="flex items-center gap-md">
           <div style={{ position: 'relative' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowBellDropdown(v => !v)}
@@ -378,25 +377,25 @@ export default function FirebaseUserDashboard() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
-              {unreadCount > 0 && <span className="badge badge-danger" style={{ position: 'absolute', top: '-4px', right: '-4px', fontSize: '0.6rem', padding: '0.1rem 0.35rem', borderRadius: '10px' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
+              {unreadCount > 0 && <span className="badge badge-danger badge-xs" style={{ position: 'absolute', top: '-4px', right: '-4px' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
             </button>
             {showBellDropdown && (
               <>
                 <div className="modal-overlay" style={{ background: 'transparent' }} onClick={() => setShowBellDropdown(false)} />
                 <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, width: '340px', maxHeight: '420px', overflowY: 'auto', marginTop: '4px', padding: 0 }}>
-                  <div style={{ padding: '0.7rem 1rem', borderBottom: '1px solid var(--border-light)', fontWeight: 600, fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Notifications</span>
-                    <Link to="/fb/messages" style={{ fontSize: '0.75rem', fontWeight: 500 }} onClick={() => setShowBellDropdown(false)}>View all</Link>
+                  <div className="flex-between items-center" style={{ padding: '0.7rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
+                    <span className="font-semibold text-sm">Notifications</span>
+                    <Link to="/fb/messages" className="text-sm font-semibold" onClick={() => setShowBellDropdown(false)}>View all</Link>
                   </div>
                   {recentNotifications.length === 0 ? (
-                    <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--muted)', fontSize: '0.8rem' }}>No notifications yet</div>
+                    <div className="text-muted text-sm text-center" style={{ padding: '1.5rem' }}>No notifications yet</div>
                   ) : (
                     recentNotifications.map(n => (
-                      <Link to="/fb/messages" key={n.id} style={{ display: 'block', padding: '0.6rem 1rem', borderBottom: '1px solid var(--border-light)', textDecoration: 'none', color: 'inherit', background: n.status === 'unread' ? 'var(--accent-light)' : 'transparent' }}
+                      <Link to="/fb/messages" key={n.id} className="flex flex-col" style={{ padding: '0.6rem 1rem', borderBottom: '1px solid var(--border-light)', textDecoration: 'none', color: 'inherit', background: n.status === 'unread' ? 'var(--accent-light)' : 'transparent' }}
                         onClick={() => setShowBellDropdown(false)}>
-                        <div style={{ fontSize: '0.8rem', fontWeight: n.status === 'unread' ? 600 : 400, marginBottom: '0.15rem' }}>{n.title || 'Notification'}</div>
+                        <div className="text-sm" style={{ fontWeight: n.status === 'unread' ? 600 : 400, marginBottom: '0.15rem' }}>{n.title || 'Notification'}</div>
                         <div className="text-muted text-sm truncate">{n.message}</div>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--muted-2)', marginTop: '0.2rem' }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</div>
+                        <div className="text-xs" style={{ color: 'var(--muted-2)', marginTop: '0.2rem' }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</div>
                       </Link>
                     ))
                   )}
@@ -409,22 +408,20 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {error && (
-        <div className="card-dim mb-md animate-fade-in-up" style={{ background: 'var(--danger-light)', border: '1px solid rgba(239,68,68,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--danger)' }}>
-          {error}
-        </div>
+        <div className="alert-error mb-md animate-fade-in-up">{error}</div>
       )}
       {topupSuccessMsg && (
-        <div className="card-dim mb-md animate-fade-in-up" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--success)' }}>
-          {topupSuccessMsg}
-        </div>
+        <div className="alert-success mb-md animate-fade-in-up">{topupSuccessMsg}</div>
       )}
 
       {/* Profile Card */}
-      <div className="card mb-lg animate-fade-in-up stagger-1" style={{ padding: '1.5rem' }}>
-        <div className="flex flex-col" style={{ gap: '1.25rem' }}>
-          <div className="flex items-center" style={{ gap: '1rem', flexWrap: 'wrap' }}>
+      <div className="card mb-lg animate-fade-in-up stagger-1">
+        <div className="flex flex-col gap-md">
+          <div className="flex items-center gap" style={{ flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', width: '64px', height: '64px', flexShrink: 0 }}>
-              <div style={{ width: '64px', height: '64px', borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, var(--accent), var(--accent-purple))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text)', fontSize: '1.5rem', fontWeight: 700 }}>
+              <div className="avatar-lg" style={{
+                background: 'linear-gradient(135deg, var(--accent), var(--accent-purple))',
+              }}>
                 {user?.profile_picture_url ? (
                   <img src={user.profile_picture_url} alt={user?.name || 'User'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (user?.name ? user.name.charAt(0).toUpperCase() : '?')}
@@ -443,47 +440,47 @@ export default function FirebaseUserDashboard() {
               {uploadingProfilePic && <div className="skeleton" style={{ position: 'absolute', inset: 0, borderRadius: '50%' }} />}
             </div>
             <div style={{ flex: 1 }}>
-              <h2 style={{ margin: 0, fontSize: '1.15rem', letterSpacing: '-0.02em' }}>{user?.name || 'User'}</h2>
-              <p className="text-muted text-sm" style={{ margin: '0.1rem 0' }}>{user?.email || ''}</p>
+              <h2 className="text-lg font-bold mb-xs" style={{ letterSpacing: '-0.02em' }}>{user?.name || 'User'}</h2>
+              <p className="text-muted text-sm">{user?.email || ''}</p>
               <div className="flex items-center gap-sm mt-sm" style={{ flexWrap: 'wrap' }}>
                 <span className={`badge ${user?.status === 'approved' ? 'badge-success' : user?.status === 'rejected' ? 'badge-danger' : 'badge-info'}`}>
                   {user?.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Pending'}
                 </span>
-                {user?.is_qualified && <span className="badge badge-purple">Qualified</span>}
-                {user?.account_status === 'inactive' && !user?.sponsor_awaiting_credit && <span className="badge badge-neutral">Inactive</span>}
+                {user?.is_qualified && <span className="badge badge-primary">Qualified</span>}
+                {user?.account_status === 'inactive' && !user?.sponsor_awaiting_credit && <span className="badge badge-pending">Inactive</span>}
                 {user?.topup_referral_qualified && !user?.sponsor_topup_completed && !user?.sponsor_cycle_completed && pendingTopups.length === 0 && <span className="badge badge-success">Sponsor Eligible</span>}
                 {user?.sponsor_awaiting_credit && !user?.sponsor_credited && <span className="badge badge-warning">Sponsor Inactive</span>}
                 {user?.sponsor_credited && <span className="badge badge-success">Credited</span>}
               </div>
             </div>
             <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
-              <Link to="/fb/messages" className="quick-btn" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>
+              <Link to="/fb/messages" className="quick-btn">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                Inbox{unreadCount > 0 && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '0.05rem 0.35rem' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
+                Inbox{unreadCount > 0 && <span className="badge badge-danger badge-xs ml-sm">{unreadCount > 9 ? '9+' : unreadCount}</span>}
               </Link>
-              <Link to="/fb/chat" className="quick-btn" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>Chat</Link>
-              <Link to="/fb/sponsor-marketplace" className="quick-btn" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>Sponsor</Link>
-              <Link to="/fb/sponsor-requests" className="quick-btn" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>Requests</Link>
+              <Link to="/fb/chat" className="quick-btn">Chat</Link>
+              <Link to="/fb/sponsor-marketplace" className="quick-btn">Sponsor</Link>
+              <Link to="/fb/sponsor-requests" className="quick-btn">Requests</Link>
             </div>
           </div>
 
           {user?.account_status === 'inactive' && isReferralLimitReached && (
-            <div className="card-dim" style={{ background: 'var(--warning-light)', border: '1px solid rgba(245,158,11,0.2)', padding: '1rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
-              <h3 style={{ margin: '0 0 0.25rem', fontSize: '0.95rem', color: 'var(--warning)' }}>Account Inactive — Waiting for Admin Approval</h3>
-              <p className="text-muted text-sm" style={{ margin: 0 }}>Your referral link has reached the maximum of 2 successful registrations. An admin will review and reactivate your account.</p>
+            <div className="card-dim text-center">
+              <h3 className="font-semibold text-sm mb-xs" style={{ color: 'var(--warning)' }}>Account Inactive — Waiting for Admin Approval</h3>
+              <p className="text-muted text-sm">Your referral link has reached the maximum of 2 successful registrations. An admin will review and reactivate your account.</p>
             </div>
           )}
           {user?.account_status === 'inactive' && isSponsorClaimPending && (
-            <div className="card-dim" style={{ background: 'var(--warning-light)', border: '1px solid rgba(245,158,11,0.2)', padding: '1rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
-              <h3 style={{ margin: '0 0 0.25rem', fontSize: '0.95rem', color: 'var(--warning)' }}>Account Inactive — Waiting for Admin Approval</h3>
-              <p className="text-muted text-sm" style={{ margin: 0 }}>Your sponsor claim is pending admin review.</p>
+            <div className="card-dim text-center">
+              <h3 className="font-semibold text-sm mb-xs" style={{ color: 'var(--warning)' }}>Account Inactive — Waiting for Admin Approval</h3>
+              <p className="text-muted text-sm">Your sponsor claim is pending admin review.</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-4 animate-fade-in-up stagger-2" style={{ gap: '1rem', marginBottom: '1.5rem' }}>
+      <div className="stats-grid mb-lg animate-fade-in-up stagger-2">
         <div className="stat-card">
           <div className="stat-icon" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -517,16 +514,16 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {/* Contact Details */}
-      <div className="card mb-lg animate-fade-in-up stagger-3" style={{ padding: '1.25rem' }}>
-        <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 600 }}>Contact Details</h3>
-        <div className="grid grid-2" style={{ gap: '0.75rem' }}>
+      <div className="card mb-lg animate-fade-in-up stagger-3">
+        <h3 className="font-semibold mb-sm">Contact Details</h3>
+        <div className="flex flex-col gap-sm">
           <div className="flex items-center gap-sm">
             <span className="text-muted text-sm" style={{ minWidth: '60px' }}>Email</span>
-            <span className="text-sm font-medium">{user?.email || '—'}</span>
+            <span className="text-sm font-semibold">{user?.email || '—'}</span>
           </div>
           <div className="flex items-center gap-sm">
             <span className="text-muted text-sm" style={{ minWidth: '60px' }}>Phone</span>
-            <span className="text-sm font-medium">{user?.phone || '—'}</span>
+            <span className="text-sm font-semibold">{user?.phone || '—'}</span>
           </div>
           <div className="flex items-center gap-sm">
             <span className="text-muted text-sm" style={{ minWidth: '60px' }}>Status</span>
@@ -537,7 +534,7 @@ export default function FirebaseUserDashboard() {
           {user?.referred_by && (
             <div className="flex items-center gap-sm">
               <span className="text-muted text-sm" style={{ minWidth: '60px' }}>Referred By</span>
-              <span className="text-sm font-medium">{referrerInfo ? `${referrerInfo.name} (${referrerInfo.email})` : user.referred_by}</span>
+              <span className="text-sm font-semibold">{referrerInfo ? `${referrerInfo.name} (${referrerInfo.email})` : user.referred_by}</span>
             </div>
           )}
         </div>
@@ -545,11 +542,11 @@ export default function FirebaseUserDashboard() {
 
       {/* Referral Section */}
       {user?.referral_code && (
-        <div className="card mb-lg animate-fade-in-up stagger-4" style={{ padding: '1.25rem' }}>
+        <div className="card mb-lg animate-fade-in-up stagger-4">
           {isActive ? (
             <>
-              <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 600 }} className="text-gradient">Refer & Earn</h3>
-              <p className="text-muted text-sm mb-md" style={{ margin: '0 0 1rem' }}>Invite friends to earn rewards</p>
+              <h3 className="text-gradient font-semibold mb-xs">Refer & Earn</h3>
+              <p className="text-muted text-sm mb-md">Invite friends to earn rewards</p>
 
               <div className="flex items-center gap-sm mb-md" style={{ flexWrap: 'wrap' }}>
                 <span className="chip">Code: <strong>{user?.referral_code}</strong></span>
@@ -577,12 +574,12 @@ export default function FirebaseUserDashboard() {
                     <span className="text-muted text-sm">Pending</span>
                   </div>
                 )}
-                {approvedReferralCount >= 2 && <span className="badge badge-purple">✓ Qualified</span>}
+                {approvedReferralCount >= 2 && <span className="badge badge-primary">✓ Qualified</span>}
               </div>
             </>
           ) : (
             <>
-              <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 600 }}>Refer & Earn</h3>
+              <h3 className="font-semibold mb-xs">Refer & Earn</h3>
               {isSuspicious ? (
                 <p className="text-muted text-sm">Your account is currently suspended.</p>
               ) : pendingReferralCount > 0 ? (
@@ -603,11 +600,11 @@ export default function FirebaseUserDashboard() {
 
       {/* Referral Progress */}
       {!isQualified && !isActive && !user?.is_first_payment_done && (
-        <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
-          <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 600 }}>Complete Referrals to Unlock Payment</h3>
+        <div className="card mb-lg animate-fade-in-up stagger-5">
+          <h3 className="font-semibold mb-sm">Complete Referrals to Unlock Payment</h3>
           <p className="text-muted text-sm mb-md">Sponsor benefits unlock after 2 completed referrals.</p>
           {pendingReferralCount > 0 && (
-            <div className="card-dim mb-sm" style={{ background: 'var(--accent-light)', border: '1px solid var(--accent-glow)', padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}>
+            <div className="card-dim mb-sm">
               {pendingReferralCount} referral(s) pending completion. Only completed referrals count.
             </div>
           )}
@@ -621,28 +618,28 @@ export default function FirebaseUserDashboard() {
       )}
 
       {/* Topup Section */}
-      <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
-        <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 600 }} className="flex items-center gap-sm">
+      <div className="card mb-lg animate-fade-in-up stagger-5">
+        <h3 className="font-semibold mb-xs flex items-center gap-sm">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           Topup
         </h3>
         <p className="text-muted text-sm mb-md">Add funds to your wallet via UPI. Payment is verified automatically.</p>
 
-        <div className="grid grid-4" style={{ gap: '0.75rem', marginBottom: '1rem' }}>
-          <div className="surface-card text-center">
-            <div className="text-lg font-bold count-animate" style={{ color: 'var(--success)' }}>{approvedTopups.length}</div>
+        <div className="stats-grid mb-md" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="stat-card text-center">
+            <div className="text-lg font-bold" style={{ color: 'var(--success)' }}>{approvedTopups.length}</div>
             <div className="text-sm text-muted">Approved</div>
           </div>
-          <div className="surface-card text-center">
-            <div className="text-lg font-bold count-animate" style={{ color: 'var(--warning)' }}>{pendingTopups.length}</div>
+          <div className="stat-card text-center">
+            <div className="text-lg font-bold" style={{ color: 'var(--warning)' }}>{pendingTopups.length}</div>
             <div className="text-sm text-muted">Pending</div>
           </div>
-          <div className="surface-card text-center">
-            <div className="text-lg font-bold count-animate" style={{ color: 'var(--danger)' }}>{rejectedTopups.length}</div>
+          <div className="stat-card text-center">
+            <div className="text-lg font-bold" style={{ color: 'var(--danger)' }}>{rejectedTopups.length}</div>
             <div className="text-sm text-muted">Rejected</div>
           </div>
-          <div className="surface-card text-center">
-            <div className="text-lg font-bold count-animate text-gradient">₹{totalTopupIncome.toFixed(2)}</div>
+          <div className="stat-card text-center">
+            <div className="text-lg font-bold text-gradient">₹{totalTopupIncome.toFixed(2)}</div>
             <div className="text-sm text-muted">Total Income</div>
           </div>
         </div>
@@ -655,9 +652,9 @@ export default function FirebaseUserDashboard() {
 
         {topups.length > 0 && (
           <div className="mt-md">
-            <h4 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem' }}>Topup History</h4>
+            <h4 className="font-semibold text-sm mb-sm">Topup History</h4>
             <div className="table-wrap">
-              <table className="table" style={{ minWidth: 500 }}>
+              <table style={{ minWidth: 500 }}>
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -687,23 +684,23 @@ export default function FirebaseUserDashboard() {
           </div>
         )}
 
-        <div className="surface-card mt-md">
-          <h4 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Topup Referral Income</h4>
+        <div className="mt-md">
+          <h4 className="font-semibold text-sm mb-sm">Topup Referral Income</h4>
 
           {!userHasOwnTopup && (
-            <div className="card-dim mb-md" style={{ background: 'var(--warning-light)', border: '1px solid rgba(245,158,11,0.2)', padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}>
+            <div className="card-dim mb-md">
               <strong>Topup required!</strong> Complete your own topup to unlock referral income claims.
             </div>
           )}
 
           {lockedIncome.length > 0 && (
-            <div className="card-dim mb-md" style={{ background: 'var(--warning-light)', border: '1px solid rgba(245,158,11,0.2)', padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}>
+            <div className="card-dim mb-md">
               <strong>{lockedIncome.length} income record(s) locked.</strong> Complete your own topup to make them eligible.
             </div>
           )}
 
           {pendingClaimAmount > 0 && (
-            <div className="card-dim mb-md" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div className="card-dim mb-md flex-between items-center" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
               <span><strong>₹{pendingClaimAmount.toFixed(2)}</strong> eligible for claim!</span>
               {userHasOwnTopup && !user?.sponsor_awaiting_credit && !user?.sponsor_credited && (
                 <button className="btn btn-primary btn-sm" onClick={handleClaimSponsorBonus} disabled={bulkClaiming}>
@@ -714,7 +711,7 @@ export default function FirebaseUserDashboard() {
           )}
 
           <div className="table-wrap">
-            <table className="table" style={{ minWidth: 400 }}>
+            <table style={{ minWidth: 400 }}>
               <thead>
                 <tr>
                   <th>Date</th>
@@ -733,7 +730,7 @@ export default function FirebaseUserDashboard() {
                     <td>
                       {inc.status === 'locked' && <span className="badge badge-warning">Locked</span>}
                       {inc.status === 'eligible' && <span className="badge badge-success">Eligible</span>}
-                      {inc.status === 'claimed' && <span className="badge badge-neutral">Claimed</span>}
+                      {inc.status === 'claimed' && <span className="badge badge-pending">Claimed</span>}
                       {!inc.status && <span className="badge badge-info">Pending</span>}
                     </td>
                     <td>
@@ -754,11 +751,11 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {/* Password */}
-      <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
-        <div className="flex items-center justify-between">
+      <div className="card mb-lg animate-fade-in-up stagger-5">
+        <div className="flex-between items-center">
           <div>
             <span className="font-semibold text-sm">Password</span>
-            <span className={`chip ml-sm ${user?.password ? 'chip-success' : 'chip-danger'}`}>
+            <span className={`chip ml-sm ${user?.password ? 'badge-success' : 'badge-danger'}`}>
               {user?.password ? 'Set' : 'Not Set'}
             </span>
           </div>
@@ -786,14 +783,14 @@ export default function FirebaseUserDashboard() {
 
       {/* Referrals List */}
       {(user?.payment_status === 'approved' || user?.payment_status === 'success') && (
-        <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
-          <div className="flex items-center justify-between mb-md">
-            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600 }}>My Referrals ({approvedReferralCount})</h3>
+        <div className="card mb-lg animate-fade-in-up stagger-5">
+          <div className="flex-between items-center mb-md">
+            <h3 className="font-semibold text-sm">My Referrals ({approvedReferralCount})</h3>
             <span className="badge badge-info">Views: {viewCount}</span>
           </div>
 
           {pendingReferralCount > 0 && (
-            <div className="card-dim mb-md" style={{ background: 'var(--accent-light)', border: '1px solid var(--accent-glow)', padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}>
+            <div className="card-dim mb-md">
               Waiting for {pendingReferralCount} referral(s) to complete registration.
             </div>
           )}
@@ -803,7 +800,7 @@ export default function FirebaseUserDashboard() {
           ) : (
             <div className="card-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
               {referrals.map(ref => (
-                <div key={ref.id} className="surface-card">
+                <div key={ref.id} className="card-dim">
                   <div className="font-semibold text-sm">{ref.name}</div>
                   <div className="text-muted text-xs">{ref.email}</div>
                   <div className="text-muted text-xs">{ref.phone || '—'}</div>
@@ -819,24 +816,24 @@ export default function FirebaseUserDashboard() {
       )}
 
       {/* Activity */}
-      <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
-        <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 600 }} className="flex items-center gap-sm">
+      <div className="card mb-lg animate-fade-in-up stagger-5">
+        <h3 className="font-semibold text-sm mb-sm flex items-center gap-sm">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Recent Activity
         </h3>
         {recentNotifications.length === 0 ? (
           <p className="text-muted text-sm">No recent activity.</p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="flex flex-col">
             {recentNotifications.slice(0, 5).map(n => (
-              <div key={n.id} className="flex items-start gap-sm" style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--border-light)', fontSize: '0.85rem' }}>
+              <div key={n.id} className="flex items-start gap-sm" style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--border-light)' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', marginTop: '0.35rem', flexShrink: 0, background: n.status === 'unread' ? 'var(--accent)' : 'var(--muted-2)' }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: n.status === 'unread' ? 600 : 400, fontSize: '0.8rem' }}>{n.title || 'Notification'}</div>
+                  <div className="text-sm" style={{ fontWeight: n.status === 'unread' ? 600 : 400 }}>{n.title || 'Notification'}</div>
                   <div className="text-muted text-sm truncate">{n.message}</div>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--muted-2)', marginTop: '0.1rem' }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</div>
+                  <div className="text-xs" style={{ color: 'var(--muted-2)', marginTop: '0.1rem' }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</div>
                 </div>
-                <Link to="/fb/messages" style={{ fontSize: '0.7rem', whiteSpace: 'nowrap', flexShrink: 0 }}>View</Link>
+                <Link to="/fb/messages" className="text-sm" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>View</Link>
               </div>
             ))}
           </div>
@@ -844,8 +841,8 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {/* Timeline */}
-      <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
-        <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 600 }} className="flex items-center gap-sm">
+      <div className="card mb-lg animate-fade-in-up stagger-5">
+        <h3 className="font-semibold text-sm mb-sm flex items-center gap-sm">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Activity Timeline
         </h3>
@@ -857,9 +854,9 @@ export default function FirebaseUserDashboard() {
             {recentNotifications.filter(n => n.type && (n.type.includes('approv') || n.type.includes('reject') || n.type.includes('activat'))).map(n => (
               <div key={n.id} style={{ position: 'relative', paddingLeft: '1rem', paddingBottom: '1rem' }}>
                 <div style={{ position: 'absolute', left: '-1.3rem', top: '0.35rem', width: '12px', height: '12px', borderRadius: '50%', background: n.type.includes('reject') ? 'var(--danger)' : 'var(--success)', border: '2px solid var(--surface)', boxShadow: '0 0 0 2px var(--border)' }} />
-                <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>{n.title || 'Update'}</div>
-                <div className="text-muted text-sm" style={{ marginTop: '0.1rem' }}>{n.message}</div>
-                <div style={{ fontSize: '0.65rem', color: 'var(--muted-2)', marginTop: '0.1rem' }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</div>
+                <div className="font-semibold text-sm">{n.title || 'Update'}</div>
+                <div className="text-muted text-sm mt-xs">{n.message}</div>
+                <div className="text-xs" style={{ color: 'var(--muted-2)', marginTop: '0.1rem' }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</div>
               </div>
             ))}
             {recentNotifications.filter(n => n.type && (n.type.includes('approv') || n.type.includes('reject') || n.type.includes('activat'))).length === 0 && (

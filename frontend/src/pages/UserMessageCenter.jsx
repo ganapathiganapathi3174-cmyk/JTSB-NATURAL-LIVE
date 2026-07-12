@@ -87,12 +87,12 @@ export default function UserMessageCenter() {
   const grouped = groupByDate(notifications);
 
   return (
-    <div className="msg-center" style={{ maxWidth: '720px', margin: '0 auto', padding: '1rem' }}>
-      <div className="msg-center-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+    <div className="page-wrap" style={{ maxWidth: '720px', margin: '0 auto' }}>
+      <div className="flex-between items-center mb-md" style={{ paddingTop: '1rem' }}>
         <button className="btn-ghost btn-sm" onClick={() => navigate('/fb/dashboard')}>
           {'\u2190'} Dashboard
         </button>
-        <h1 className="msg-center-title" style={{ fontSize: '1.25rem', margin: 0 }}>Inbox</h1>
+        <h1 className="text-lg font-bold">Inbox</h1>
         {unreadCount > 0 && (
           <button className="btn-ghost btn-sm" onClick={handleMarkAllRead}>
             Mark All Read ({unreadCount})
@@ -101,52 +101,48 @@ export default function UserMessageCenter() {
       </div>
 
       {loading ? (
-        <div className="loading-page" style={{ padding: '2rem' }}>
+        <div className="flex flex-col items-center gap-md" style={{ padding: '2rem' }}>
           <div className="loading-spinner loading-spinner-lg" />
           <div className="loading-text">Loading messages...</div>
         </div>
       ) : notifications.length === 0 ? (
-        <div className="msg-empty">
-          <div style={{ textAlign: 'center', padding: '3rem 1rem', opacity: 0.5 }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '1rem' }}>
+        <div className="empty-state">
+          <div className="empty-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
               <polyline points="22,6 12,13 2,6" />
             </svg>
-            <p className="muted" style={{ margin: 0 }}>No messages yet.</p>
-            <p className="muted" style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Admin communications will appear here.</p>
           </div>
+          <p className="empty-text">No messages yet.</p>
+          <p className="text-muted text-sm">Admin communications will appear here.</p>
         </div>
       ) : (
-        <div className="msg-chat" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+        <div className="flex flex-col gap-sm">
           {Object.entries(grouped).reverse().map(([dateLabel, items]) => (
             <div key={dateLabel}>
-              <div className="chat-date-divider">
-                <span>{dateLabel}</span>
+              <div className="text-center mb-sm mt-md">
+                <span className="text-muted text-xs font-semibold" style={{ background: 'var(--surface-2)', padding: '0.2rem 0.75rem', borderRadius: 12 }}>{dateLabel}</span>
               </div>
               {items.map(n => (
                 <div
                   key={n.id}
-                  className={`msg-bubble ${n.status === 'unread' ? 'msg-bubble-unread' : ''}`}
                   onClick={() => handleMarkAsRead(n)}
+                  className={`card mb-sm animate-fade-in-up`}
                   style={{
-                    background: n.status === 'unread' ? 'rgba(91,95,255,0.08)' : 'var(--surface)',
-                    border: '1px solid',
-                    borderColor: n.status === 'unread' ? 'rgba(91,95,255,0.2)' : 'var(--border)',
-                    borderRadius: 'var(--radius)',
-                    padding: '0.75rem 1rem',
                     cursor: 'pointer',
-                    transition: 'background 0.15s',
+                    background: n.status === 'unread' ? 'var(--accent-light)' : '',
+                    border: n.status === 'unread' ? '1px solid var(--accent-glow)' : '',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <strong style={{ fontSize: '0.85rem' }}>{n.title || getTypeLabel(n.type)}</strong>
-                      {n.status === 'unread' && <span className="msg-unread-dot" />}
+                  <div className="flex-between items-center mb-xs">
+                    <div className="flex items-center gap-xs">
+                      <strong className="text-sm">{n.title || getTypeLabel(n.type)}</strong>
+                      {n.status === 'unread' && <span className="badge badge-primary badge-xs">New</span>}
                     </div>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--muted-2)', whiteSpace: 'nowrap' }}>{formatTime(n.createdAt)}</span>
+                    <span className="text-xs" style={{ color: 'var(--muted-2)', whiteSpace: 'nowrap' }}>{formatTime(n.createdAt)}</span>
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-2)', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{n.message}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--muted-2)', marginTop: '0.35rem' }}>
+                  <div className="text-sm" style={{ color: 'var(--text-2)', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{n.message}</div>
+                  <div className="text-xs mt-xs" style={{ color: 'var(--muted-2)' }}>
                     From: {n.senderName || 'Admin'} {'\u00B7'} <span style={{ color: n.status === 'read' ? 'var(--success)' : 'var(--muted-2)' }}>
                       {n.status === 'read' ? 'Read' : 'Sent'}
                     </span>

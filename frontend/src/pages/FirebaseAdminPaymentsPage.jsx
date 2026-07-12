@@ -32,9 +32,9 @@ function formatDateTime(dateStr) {
 }
 
 function getStatusBadge(s) {
-  if (s === 'approved' || s === 'success') return 'badge badge-paid';
-  if (s === 'rejected') return 'badge badge-error';
-  if (s === 'manual_review') return 'badge badge-warning';
+  if (s === 'approved' || s === 'success') return 'badge badge-success';
+  if (s === 'rejected') return 'badge badge-danger';
+  if (s === 'manual_review') return 'badge badge-pending';
   return 'badge badge-pending';
 }
 
@@ -46,9 +46,9 @@ function getStatusLabel(s) {
 }
 
 function MatchBadge({ matched }) {
-  return matched === true ? <span className="badge badge-paid" style={{ fontSize: '0.7rem' }}>{'\u2713'} Match</span>
-    : matched === false ? <span className="badge badge-error" style={{ fontSize: '0.7rem' }}>{'\u2715'} Mismatch</span>
-    : <span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>{'\u2014'}</span>;
+  return matched === true ? <span className="badge badge-success badge-xs">{'\u2713'} Match</span>
+    : matched === false ? <span className="badge badge-danger badge-xs">{'\u2715'} Mismatch</span>
+    : <span className="badge badge-pending badge-xs">{'\u2014'}</span>;
 }
 
 function VerificationTimeline({ payment }) {
@@ -61,13 +61,13 @@ function VerificationTimeline({ payment }) {
     { label: 'Decision', done: !!payment.payment_status && payment.payment_status !== 'pending', time: payment.verified_at },
   ];
   return (
-    <div className="verification-timeline">
+    <div className="flex flex-col gap-sm" style={{ padding: '0.5rem 0' }}>
       {steps.map((s, i) => (
-        <div key={i} className={`timeline-step ${s.done ? 'done' : 'pending'}`}>
-          <div className="timeline-dot" />
-          <div className="timeline-content">
-            <div className="timeline-label">{s.label}</div>
-            {s.time && <div className="timeline-time">{formatDateTime(s.time)}</div>}
+        <div key={i} className="flex items-center gap-sm" style={{ opacity: s.done ? 1 : 0.4 }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.done ? 'var(--success)' : 'var(--border)', flexShrink: 0 }} />
+          <div className="flex flex-col" style={{ gap: 0 }}>
+            <div className="text-sm font-semibold">{s.label}</div>
+            {s.time && <div className="text-xs text-muted">{formatDateTime(s.time)}</div>}
           </div>
         </div>
       ))}
@@ -83,24 +83,22 @@ function PaymentDetailModal({ payment, onClose }) {
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px' }}>
         <div className="modal-header">
           <h2>Payment Details</h2>
-          <button onClick={onClose} className="btn btn-ghost btn-sm">{'\u2715'}</button>
+          <button onClick={onClose} className="modal-close">{'\u2715'}</button>
         </div>
         <div className="modal-body">
-          {/* Verification Status Banner */}
-          <div className={`verification-banner ${payment.payment_status}`} style={{ padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', fontWeight: 600, fontSize: '0.9rem', textAlign: 'center' }}>
+          <div className={`alert ${payment.payment_status === 'approved' || payment.payment_status === 'success' ? 'alert-success' : payment.payment_status === 'rejected' ? 'alert-error' : payment.payment_status === 'manual_review' ? 'alert-warning' : 'alert-info'}`} style={{ fontWeight: 600, textAlign: 'center', marginBottom: '1rem' }}>
             {getStatusLabel(payment.payment_status)}
             {payment.final_score ? <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>(Score: {payment.final_score}%)</span> : null}
             {payment.ocrConfidence ? <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>OCR: {payment.ocrConfidence}%</span> : null}
           </div>
 
-          {/* OCR Results Section */}
           {(payment.ocrConfidence > 0 || ocr.extractedAmount) && (
-            <div className="card-section-sm" style={{ marginBottom: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>OCR Extraction Results</h4>
+            <div className="card-dim mb-md">
+              <h4 className="card-title mb-sm" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>OCR Extraction Results</h4>
               <div className="detail-grid-sm" style={{ gap: '0.35rem' }}>
                 <div className="detail-row"><span className="detail-label">OCR Confidence</span><span className="detail-value">{payment.ocrConfidence || 0}%</span></div>
                 <div className="detail-row"><span className="detail-label">Extracted Amount</span><span className="detail-value">{ocr.extractedAmount ? '\u20B9' + ocr.extractedAmount : 'Not found'}</span></div>
-                <div className="detail-row"><span className="detail-label">Extracted UTR</span><span className="detail-value" style={{ fontFamily: 'monospace' }}>{ocr.extractedUtr || 'Not found'}</span></div>
+                <div className="detail-row"><span className="detail-label">Extracted UTR</span><span className="detail-value font-mono">{ocr.extractedUtr || 'Not found'}</span></div>
                 <div className="detail-row"><span className="detail-label">Receiver UPI</span><span className="detail-value">{ocr.extractedReceiverUpi || 'Not found'}</span></div>
                 <div className="detail-row"><span className="detail-label">Sender UPI</span><span className="detail-value">{ocr.extractedSenderUpi || 'Not found'}</span></div>
                 <div className="detail-row"><span className="detail-label">Date</span><span className="detail-value">{ocr.extractedDate || 'Not found'}</span></div>
@@ -111,10 +109,9 @@ function PaymentDetailModal({ payment, onClose }) {
             </div>
           )}
 
-          {/* Match Indicators */}
-          <div className="card-section-sm" style={{ marginBottom: '1rem' }}>
-            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Field Matching</h4>
-            <div className="detail-grid-sm" style={{ gap: '0.35rem' }}>
+          <div className="card-dim mb-md">
+            <h4 className="card-title mb-sm" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Field Matching</h4>
+            <div className="detail-grid">
               <div className="detail-row"><span className="detail-label">Amount</span><MatchBadge matched={payment.matchedAmount} /></div>
               <div className="detail-row"><span className="detail-label">Receiver UPI</span><MatchBadge matched={payment.matchedReceiver} /></div>
               <div className="detail-row"><span className="detail-label">UTR</span><MatchBadge matched={payment.matchedUtr} /></div>
@@ -122,33 +119,30 @@ function PaymentDetailModal({ payment, onClose }) {
             </div>
           </div>
 
-          {/* Verdict / Rejection Reasons */}
           {payment.rejection_reasons && payment.rejection_reasons.length > 0 && (
-            <div className="card-section-sm" style={{ marginBottom: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Decision Reason</h4>
-              <ul style={{ margin: 0, paddingLeft: '1rem', fontSize: '0.85rem', color: '#dc2626' }}>
+            <div className="card-dim mb-md">
+              <h4 className="card-title mb-sm" style={{ fontSize: '0.85rem', color: 'var(--danger)' }}>Decision Reason</h4>
+              <ul className="text-sm" style={{ margin: 0, paddingLeft: '1rem', color: 'var(--danger)' }}>
                 {(Array.isArray(payment.rejection_reasons) ? payment.rejection_reasons : [payment.rejection_reasons]).map((r, i) => (
-                  <li key={i} style={{ marginBottom: '0.25rem' }}>{r}</li>
+                  <li key={i} className="mb-xs">{r}</li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Timeline */}
-          <div className="card-section-sm" style={{ marginBottom: '1rem' }}>
-            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Verification Timeline</h4>
+          <div className="card-dim mb-md">
+            <h4 className="card-title mb-sm" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Verification Timeline</h4>
             <VerificationTimeline payment={payment} />
           </div>
 
-          {/* Basic Info */}
-          <div className="card-section-sm">
-            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payment Info</h4>
-            <div className="detail-grid-sm">
+          <div className="card-dim">
+            <h4 className="card-title mb-sm" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Payment Info</h4>
+            <div className="detail-grid mb-sm">
               <div className="detail-row"><span className="detail-label">Name</span><span className="detail-value">{payment.name}</span></div>
               <div className="detail-row"><span className="detail-label">Email</span><span className="detail-value">{payment.email || '\u2014'}</span></div>
               <div className="detail-row"><span className="detail-label">Phone</span><span className="detail-value">{payment.phone || '\u2014'}</span></div>
               <div className="detail-row"><span className="detail-label">Amount</span><span className="detail-value">{payment.amount ? '\u20B9' + payment.amount : '\u2014'}</span></div>
-              <div className="detail-row"><span className="detail-label">UTR</span><span className="detail-value" style={{ fontFamily: 'monospace' }}>{payment.utr || '\u2014'}</span></div>
+              <div className="detail-row"><span className="detail-label">UTR</span><span className="detail-value font-mono">{payment.utr || '\u2014'}</span></div>
               <div className="detail-row"><span className="detail-label">UPI ID</span><span className="detail-value">{payment.upi_id || '\u2014'}</span></div>
               <div className="detail-row"><span className="detail-label">Status</span><span className={getStatusBadge(payment.payment_status)}>{getStatusLabel(payment.payment_status)}</span></div>
               <div className="detail-row"><span className="detail-label">Created</span><span className="detail-value">{formatDateTime(payment.created_at)}</span></div>
@@ -157,20 +151,19 @@ function PaymentDetailModal({ payment, onClose }) {
           </div>
 
           {payment.screenshot_url && (
-            <div className="card-section-sm" style={{ marginTop: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Screenshot</h4>
+            <div className="card-dim mt-lg">
+              <h4 className="card-title mb-sm" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Screenshot</h4>
               <a href={payment.screenshot_url} target="_blank" rel="noopener noreferrer">
                 <img src={payment.screenshot_url} alt="Payment Screenshot"
-                  style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border, #d1d5db)' }} />
+                  style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)' }} />
               </a>
             </div>
           )}
 
-          {/* Raw OCR Text Collapsible */}
           {ocr.rawText && (
-            <details style={{ marginTop: '1rem' }}>
-              <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: '#6b7280', fontWeight: 600 }}>Raw OCR Text</summary>
-              <pre style={{ fontSize: '0.75rem', background: 'var(--surface-2)', padding: '0.5rem', borderRadius: '6px', maxHeight: '150px', overflow: 'auto', width: '100%', marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>
+            <details className="mt-lg">
+              <summary className="text-sm font-semibold" style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>Raw OCR Text</summary>
+              <pre className="text-xs mt-sm p-sm" style={{ background: 'var(--bg-alt)', borderRadius: '6px', maxHeight: '150px', overflow: 'auto', width: '100%', whiteSpace: 'pre-wrap' }}>
                 {ocr.rawText}
               </pre>
             </details>
@@ -192,16 +185,16 @@ function DeleteConfirmModal({ payment, onConfirm, onCancel, loading }) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Confirm Delete Payment</h2>
-          <button onClick={onCancel} className="btn btn-ghost btn-sm">{'\u2715'}</button>
+          <button onClick={onCancel} className="modal-close">{'\u2715'}</button>
         </div>
         <div className="modal-body">
-          <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+          <div className="alert alert-error">
             <strong>{'\u26A0\uFE0F'} Warning:</strong> This will permanently delete the payment <strong>{payment.utr || payment.id}</strong>, remove the uploaded screenshot from storage, and log this action. This CANNOT be undone!
           </div>
-          <div className="detail-grid card-section-sm" style={{ marginBottom: '1rem' }}>
+          <div className="card-dim mb-sm">
             <div className="detail-row">
               <span className="detail-label">UTR</span>
-              <span className="detail-value" style={{ fontFamily: 'monospace' }}>{payment.utr || '—'}</span>
+              <span className="detail-value font-mono">{payment.utr || '—'}</span>
             </div>
             <div className="detail-row">
               <span className="detail-label">User</span>
@@ -219,8 +212,8 @@ function DeleteConfirmModal({ payment, onConfirm, onCancel, loading }) {
           <textarea className="input w-full mb-sm"
             placeholder="Reason for deletion (required)"
             value={reason} onChange={e => { setReason(e.target.value); setError(''); }}
-            rows={2} style={{ resize: 'vertical' }} />
-          {error && <div className="alert alert-error" style={{ marginBottom: '0.5rem', fontSize: '0.85rem' }}>{error}</div>}
+            rows={2} />
+          {error && <div className="alert alert-error text-sm">{error}</div>}
         </div>
         <div className="modal-footer">
           <button className={`btn btn-danger${loading ? ' btn-loading' : ''}`}
@@ -413,28 +406,28 @@ export default function FirebaseAdminPaymentsPage() {
   }
 
   return (
-    <div className="layout-page">
+    <div className="page-wrap">
       <AdminSidebar pendingCounts={pendingCounts} userName={getAdminName()} />
       <main className="layout-inner">
         <div className="page-header">
           <h1 className="page-title">
-            <span className="admin-page-title-icon">{'\u{1F4B3}'}</span>
+            {'\u{1F4B3}'}
             Payments
           </h1>
           <div className="page-actions">
-            <span className="badge badge-pending text-xs">{stats.pending} pending</span>
+            <span className="badge badge-pending badge-xs">{stats.pending} pending</span>
           </div>
         </div>
 
         {fetchError && (
-          <div className="card-dim" style={{ marginBottom: '1rem', borderColor: 'rgba(239,68,68,0.2)', color: 'var(--danger)' }}>
+          <div className="alert alert-error">
             <strong>Error:</strong> {fetchError}
             {diagnostics && (
-              <pre style={{ fontSize: '0.75rem', marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>
+              <pre className="text-xs mt-sm" style={{ whiteSpace: 'pre-wrap' }}>
                 {JSON.stringify(diagnostics, null, 2)}
               </pre>
             )}
-            <button onClick={fetchPayments} style={{ marginLeft: '1rem', padding: '0.25rem 0.75rem', fontSize: '0.8rem', cursor: 'pointer' }}>Retry</button>
+            <button onClick={fetchPayments} className="btn btn-ghost btn-sm ml-auto">Retry</button>
           </div>
         )}
 
@@ -463,7 +456,7 @@ export default function FirebaseAdminPaymentsPage() {
 
         <div className="card mb-md">
           <div className="card-header">
-            <h2 className="card-modern-title">{'\u{1F50D}'} Search & Filter</h2>
+            <h2 className="card-title">{'\u{1F50D}'} Search & Filter</h2>
             <button className="btn btn-ghost btn-xs" onClick={() => {
               const headers = ['Date', 'Name', 'Email', 'Mobile', 'Amount', 'Amount Match', 'UTR', 'UTR Match', 'Status', 'Score', 'Reasons'];
               const rows = filteredPayments.map(p => [
@@ -481,8 +474,8 @@ export default function FirebaseAdminPaymentsPage() {
               a.click(); URL.revokeObjectURL(a.href);
             }}>{'\u{1F4E5}'} Export CSV</button>
           </div>
-          <div className="filters" style={{ flexWrap: 'wrap' }}>
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name, email, or UTR..." />
+          <div className="filters">
+            <input className="search-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name, email, or UTR..." />
             <select value={smartFilter} onChange={e => updateSmartFilter(e.target.value)}>
               <option value="">All Payments</option>
               <option value="pending">Pending</option>
@@ -493,9 +486,9 @@ export default function FirebaseAdminPaymentsPage() {
               <option value="today">Today</option>
               <option value="week">This Week</option>
             </select>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="From date" style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border, #d1d5db)', fontSize: '0.85rem', maxWidth: '150px' }} />
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} title="To date" style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border, #d1d5db)', fontSize: '0.85rem', maxWidth: '150px' }} />
-            <select value={sortBy} onChange={e => { setSortBy(e.target.value); }} style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border, #d1d5db)', fontSize: '0.85rem' }}>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="From date" />
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} title="To date" />
+            <select value={sortBy} onChange={e => { setSortBy(e.target.value); }}>
               <option value="created_at">Date</option>
               <option value="amount">Amount</option>
               <option value="name">Name</option>
@@ -509,9 +502,9 @@ export default function FirebaseAdminPaymentsPage() {
 
         <div className="card">
           <div className="card-header">
-            <h2 className="card-modern-title">{'\u{1F4CB}'} Payments ({filteredPayments.length})</h2>
+            <h2 className="card-title">{'\u{1F4CB}'} Payments ({filteredPayments.length})</h2>
           </div>
-          <p className="muted text-sm mb-md">
+          <p className="text-sm text-muted mb-md" style={{ padding: '0 1.25rem' }}>
             UPI payments are auto-verified via server-side trigger upon creation.
           </p>
           <div className="table-wrap">
@@ -535,28 +528,28 @@ export default function FirebaseAdminPaymentsPage() {
                   const canModify = p.payment_status !== 'approved' && p.payment_status !== 'success';
                   return (
                     <tr key={p.id}>
-                      <td data-label="Date" className="text-xs whitespace-nowrap">
-                        {p.created_at ? <><div>{new Date(p.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div><div className="relative-time">{getRelativeTime(p.created_at)}</div></> : '—'}
+                      <td data-label="Date" style={{ whiteSpace: 'nowrap' }}>
+                        {p.created_at ? <><div className="text-sm">{new Date(p.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div><div className="text-xs text-muted">{getRelativeTime(p.created_at)}</div></> : '—'}
                       </td>
                       <td data-label="Name">
-                        <div className="font-semibold" style={{ color: p.name === 'User Not Found' ? '#dc2626' : 'inherit' }}>
+                        <div className="font-semibold" style={{ color: p.name === 'User Not Found' ? 'var(--danger)' : 'inherit' }}>
                           {p.name}
                         </div>
                       </td>
-                      <td data-label="Email" style={{ fontSize: '0.85rem' }}>{p.email || '—'}</td>
-                      <td data-label="Mobile" style={{ fontSize: '0.85rem' }}>{p.phone || '—'}</td>
-                      <td data-label="Amount" style={{ fontWeight: 600 }}>
+                      <td data-label="Email" className="text-sm">{p.email || '—'}</td>
+                      <td data-label="Mobile" className="text-sm">{p.phone || '—'}</td>
+                      <td data-label="Amount" className="font-semibold">
                         {p.amount ? '\u20B9' + p.amount : '—'}
                         {p.matchedAmount !== undefined && (
-                          <span className={p.matchedAmount ? 'badge badge-paid' : 'badge badge-error'} style={{ fontSize: '0.6rem', marginLeft: '0.3rem', padding: '0.1rem 0.3rem', verticalAlign: 'middle' }}>
+                          <span className={p.matchedAmount ? 'badge badge-success badge-xs' : 'badge badge-danger badge-xs'} style={{ marginLeft: '0.3rem' }}>
                             {p.matchedAmount ? '\u2713' : '\u2715'}
                           </span>
                         )}
                       </td>
-                      <td data-label="UTR" style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                      <td data-label="UTR" className="font-mono text-sm">
                         {p.utr || '—'}
                         {p.matchedUtr !== undefined && (
-                          <span className={p.matchedUtr ? 'badge badge-paid' : 'badge badge-error'} style={{ fontSize: '0.6rem', marginLeft: '0.3rem', padding: '0.1rem 0.3rem', verticalAlign: 'middle' }}>
+                          <span className={p.matchedUtr ? 'badge badge-success badge-xs' : 'badge badge-danger badge-xs'} style={{ marginLeft: '0.3rem' }}>
                             {p.matchedUtr ? '\u2713' : '\u2715'}
                           </span>
                         )}
@@ -566,18 +559,18 @@ export default function FirebaseAdminPaymentsPage() {
                       </td>
                       <td data-label="Score" style={{ textAlign: 'center' }}>
                         {p.final_score > 0 ? (
-                          <span className={`badge ${p.final_score >= 90 ? 'badge-paid' : p.final_score >= 80 ? 'badge-warning' : 'badge-error'}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }}>
+                          <span className={`badge ${p.final_score >= 90 ? 'badge-success' : p.final_score >= 80 ? 'badge-pending' : 'badge-danger'}`}>
                             {p.final_score}%
                           </span>
                         ) : p.ocrConfidence > 0 ? (
-                          <span className="badge badge-pending" style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }}>
+                          <span className="badge badge-pending">
                             OCR {p.ocrConfidence}%
                           </span>
                         ) : (
-                          <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>{'\u2014'}</span>
+                          <span className="text-muted text-sm">{'\u2014'}</span>
                         )}
                       </td>
-                      <td data-label="Reasons" style={{ fontSize: '0.75rem', maxWidth: '140px', wordBreak: 'break-word', color: p.rejection_reasons?.length ? '#dc2626' : '#9ca3af' }}>
+                      <td data-label="Reasons" className="text-sm" style={{ maxWidth: '140px', wordBreak: 'break-word', color: p.rejection_reasons?.length ? 'var(--danger)' : 'var(--text-tertiary)' }}>
                         {p.rejection_reasons && p.rejection_reasons.length > 0
                           ? p.rejection_reasons.slice(0, 2).join('; ') + (p.rejection_reasons.length > 2 ? '…' : '')
                           : p.verification_reason
@@ -585,7 +578,7 @@ export default function FirebaseAdminPaymentsPage() {
                             : '—'}
                       </td>
                       <td data-label="Actions">
-                        <div className="flex-actions" style={{ flexDirection: 'column', gap: '0.25rem' }}>
+                        <div className="flex flex-col gap-xs">
                           <button className="btn btn-primary btn-xs"
                             onClick={() => setSelectedPayment(p)}>Details</button>
                           {canModify && (
@@ -602,7 +595,7 @@ export default function FirebaseAdminPaymentsPage() {
                             </>
                           )}
                           {!canModify && (
-                            <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>Locked</span>
+                            <span className="text-xs text-muted">Locked</span>
                           )}
                         </div>
                       </td>
@@ -610,7 +603,7 @@ export default function FirebaseAdminPaymentsPage() {
                   );
                 })}
                   {filteredPayments.length === 0 && (
-                    <tr><td colSpan={9} className="muted text-center" style={{ padding: '2rem' }}>No payments found.</td></tr>
+                    <tr><td colSpan={9} className="text-center text-muted" style={{ padding: '2rem' }}>No payments found.</td></tr>
                   )}
               </tbody>
             </table>

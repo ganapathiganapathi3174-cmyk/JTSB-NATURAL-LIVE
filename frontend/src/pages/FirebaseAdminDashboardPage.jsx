@@ -55,13 +55,13 @@ function AddUserModal({ onClose, onAdded }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-glass" onClick={e => e.stopPropagation()}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Add New User</h2>
           <button onClick={onClose} className="modal-close">{'\u2715'}</button>
         </div>
         <div className="modal-body">
-          <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+          <div className="alert alert-error">
             Only add users who have completed payment. Login will be enabled after approval.
           </div>
 
@@ -85,7 +85,7 @@ function AddUserModal({ onClose, onAdded }) {
               <label>Temporary Password (optional)</label>
               <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave empty for auto-generated" />
             </div>
-            <button className={`btn-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading} style={{ width: '100%' }}>
+            <button className={`btn btn-primary w-full${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading}>
               {loading ? 'Creating...' : 'Create User'}
             </button>
           </form>
@@ -408,16 +408,15 @@ export default function FirebaseAdminDashboardPage() {
   }), [stats]);
 
   return (
-    <div className="layout-page">
+    <div className="page-wrap">
       <AdminSidebar pendingCounts={pendingCounts} userName={getAdminName()} />
-
       <main className="layout-inner">
         <div className="page-header">
           <h1 className="page-title">
             Dashboard Overview
           </h1>
           <div className="page-actions">
-            <button className="btn-primary" onClick={() => setShowAddUser(true)}>
+            <button className="btn btn-primary" onClick={() => setShowAddUser(true)}>
               + Add User
             </button>
             <span className={`sse-indicator ${sseConnected ? 'online' : 'offline'}`}>
@@ -556,21 +555,21 @@ export default function FirebaseAdminDashboardPage() {
           </div>
           <div className="card-body">
             <div className="priority-grid">
-              <Link to="/fb-admin/topups" className="priority-card priority-border-accent" style={{ textDecoration: 'none' }}>
-                <div className="card-icon">{'\u{1F4E4}'}</div>
-                <div className="card-value" style={{ color: 'var(--accent)' }}>{stats.pendingTopups}</div>
-                <div className="card-label">Pending Topups</div>
+              <Link to="/fb-admin/topups" className="priority-card" style={{ textDecoration: 'none' }}>
+                <div>{'\u{1F4E4}'}</div>
+                <div className="stat-value" style={{ color: 'var(--accent)' }}>{stats.pendingTopups}</div>
+                <div className="stat-label">Pending Topups</div>
                 <span className="priority-link">View {'\u2192'}</span>
               </Link>
-              <Link to="/fb-admin/payments?status=approved" className="priority-card priority-border-success" style={{ textDecoration: 'none' }}>
-                <div className="card-icon">{'\u{1F4B3}'}</div>
-                <div className="card-value" style={{ color: 'var(--success)' }}>{stats.approvedPayments}</div>
-                <div className="card-label">Approved Payments</div>
+              <Link to="/fb-admin/payments?status=approved" className="priority-card" style={{ textDecoration: 'none' }}>
+                <div>{'\u{1F4B3}'}</div>
+                <div className="stat-value" style={{ color: 'var(--success)' }}>{stats.approvedPayments}</div>
+                <div className="stat-label">Approved Payments</div>
               </Link>
-              <Link to="/fb-admin/topups?status=approved" className="priority-card priority-border-success" style={{ textDecoration: 'none' }}>
-                <div className="card-icon">{'\u{1F4E4}'}</div>
-                <div className="card-value" style={{ color: 'var(--success)' }}>{stats.approvedTopups}</div>
-                <div className="card-label">Approved Top-Ups</div>
+              <Link to="/fb-admin/topups?status=approved" className="priority-card" style={{ textDecoration: 'none' }}>
+                <div>{'\u{1F4E4}'}</div>
+                <div className="stat-value" style={{ color: 'var(--success)' }}>{stats.approvedTopups}</div>
+                <div className="stat-label">Approved Top-Ups</div>
                 <span className="priority-link">View {'\u2192'}</span>
               </Link>
             </div>
@@ -609,18 +608,18 @@ export default function FirebaseAdminDashboardPage() {
           <div className="card">
             <div className="card-header">
               <h2 className="card-title">{'\u{1F4CA}'} System Health</h2>
-              <button className="btn-ghost btn-sm" onClick={fetchHealth} disabled={healthLoading}>
+              <button className="btn btn-ghost btn-sm" onClick={fetchHealth} disabled={healthLoading}>
                 {healthLoading ? '...' : '\u{1F504}'}
               </button>
             </div>
             <div className="card-body">
               {healthData ? (
                 <>
-                  <div className="health-grid" style={{ marginBottom: '0.75rem' }}>
+                  <div className="health-grid">
                     {healthData.health && Object.entries(healthData.health).slice(0, 6).map(([key, val]) => (
                       <div key={key} className="health-item">
                         <span className={`health-dot ${val?.status === 'ok' ? 'online' : val?.status === 'degraded' ? 'degraded' : 'offline'}`} />
-                        <span className="health-label">{key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                        <span className="health-metric-label">{key.charAt(0).toUpperCase() + key.slice(1)}</span>
                       </div>
                     ))}
                   </div>
@@ -642,31 +641,31 @@ export default function FirebaseAdminDashboardPage() {
                         </div>
                         <div className="health-metric">
                           <span className="health-metric-label">Auth Failure Rate</span>
-                          <span className={`health-metric-value ${(healthData.metrics.auth?.failure_rate || 0) > 10 ? 'danger' : 'success'}`}>
+                          <span className="health-metric-value" style={{ color: (healthData.metrics.auth?.failure_rate || 0) > 10 ? 'var(--danger)' : 'var(--success)' }}>
                             {healthData.metrics.auth?.failure_rate || 0}%
                           </span>
                         </div>
                         <div className="health-metric">
                           <span className="health-metric-label">Payment Approval Rate</span>
-                          <span className={`health-metric-value ${(healthData.metrics.payments?.approval_rate || 0) > 50 ? 'success' : 'warning'}`}>
+                          <span className="health-metric-value" style={{ color: (healthData.metrics.payments?.approval_rate || 0) > 50 ? 'var(--success)' : 'var(--warning)' }}>
                             {healthData.metrics.payments?.approval_rate || 0}%
                           </span>
                         </div>
                         <div className="health-metric">
                           <span className="health-metric-label">OCR Success Rate</span>
-                          <span className={`health-metric-value ${(healthData.metrics.ocr?.success_rate || 0) > 80 ? 'success' : (healthData.metrics.ocr?.success_rate || 0) > 50 ? 'warning' : 'danger'}`}>
+                          <span className="health-metric-value" style={{ color: (healthData.metrics.ocr?.success_rate || 0) > 80 ? 'var(--success)' : (healthData.metrics.ocr?.success_rate || 0) > 50 ? 'var(--warning)' : 'var(--danger)' }}>
                             {healthData.metrics.ocr?.success_rate || 0}%
                           </span>
                         </div>
                         <div className="health-metric">
                           <span className="health-metric-label">DB Errors</span>
-                          <span className={`health-metric-value ${(healthData.metrics.database?.supabase_errors || 0) > 0 ? 'danger' : 'success'}`}>
+                          <span className="health-metric-value" style={{ color: (healthData.metrics.database?.supabase_errors || 0) > 0 ? 'var(--danger)' : 'var(--success)' }}>
                             {healthData.metrics.database?.supabase_errors || 0}
                           </span>
                         </div>
                         <div className="health-metric">
                           <span className="health-metric-label">Queue Pending</span>
-                          <span className={`health-metric-value ${(healthData.queue?.pending || 0) > 0 ? 'warning' : 'success'}`}>
+                          <span className="health-metric-value" style={{ color: (healthData.queue?.pending || 0) > 0 ? 'var(--warning)' : 'var(--success)' }}>
                             {healthData.queue?.pending || 0}
                           </span>
                         </div>
@@ -721,37 +720,37 @@ export default function FirebaseAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="stats-grid" style={{ marginTop: '1rem' }}>
+            <div className="stats-grid">
               <div className="stat-card">
-                <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.todayCollection.toFixed(2)}</div>
-                <div className="stat-label" style={{ fontSize: '0.7rem' }}>Daily Collection</div>
+                <div className="stat-value text-lg">₹{paymentAnalytics.todayCollection.toFixed(2)}</div>
+                <div className="stat-label text-xs">Daily Collection</div>
               </div>
               <div className="stat-card">
-                <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.weekCollection.toFixed(2)}</div>
-                <div className="stat-label" style={{ fontSize: '0.7rem' }}>Weekly Collection</div>
+                <div className="stat-value text-lg">₹{paymentAnalytics.weekCollection.toFixed(2)}</div>
+                <div className="stat-label text-xs">Weekly Collection</div>
               </div>
               <div className="stat-card">
-                <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.monthCollection.toFixed(2)}</div>
-                <div className="stat-label" style={{ fontSize: '0.7rem' }}>Monthly Collection</div>
+                <div className="stat-value text-lg">₹{paymentAnalytics.monthCollection.toFixed(2)}</div>
+                <div className="stat-label text-xs">Monthly Collection</div>
               </div>
               <div className="stat-card">
-                <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.yearCollection.toFixed(2)}</div>
-                <div className="stat-label" style={{ fontSize: '0.7rem' }}>Yearly Collection</div>
+                <div className="stat-value text-lg">₹{paymentAnalytics.yearCollection.toFixed(2)}</div>
+                <div className="stat-label text-xs">Yearly Collection</div>
               </div>
             </div>
 
-            <div style={{ marginTop: '1.5rem' }}>
-              <div className="card-header" style={{ padding: '0 0 0.75rem 0', borderBottom: '1px solid var(--border)', marginBottom: '0.75rem' }}>
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className="mt-lg">
+              <div className="flex flex-between items-center mb-md" style={{ borderBottom: '1px solid var(--border)' }}>
+                <h3 className="card-title" style={{ fontSize: '0.95rem' }}>
                   {'\u{1F4CB}'} Payment Collection Records
-                  <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 400 }}>
+                  <span className="text-xs text-muted font-semibold">
                     ({filteredEntries.length} entries)
                   </span>
                 </h3>
-                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                <div className="flex gap-xs flex-wrap">
                   {['Approved Only', 'Today', 'This Week', 'This Month'].map(f => (
                     <button key={f}
-                      className={`btn-sm ${analyticsFilter === f ? 'btn-primary' : 'btn-ghost'}`}
+                      className={`btn btn-sm ${analyticsFilter === f ? 'btn-primary' : 'btn-ghost'}`}
                       onClick={() => setAnalyticsFilter(f)}>
                       {f}
                     </button>
@@ -772,21 +771,21 @@ export default function FirebaseAdminDashboardPage() {
                   </thead>
                   <tbody>
                     {filteredEntries.length === 0 ? (
-                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: '2rem' }}>No approved entries found</td></tr>
+                      <tr><td colSpan={6} className="text-center text-muted" style={{ padding: '2rem' }}>No approved entries found</td></tr>
                     ) : filteredEntries.slice(0, 100).map((e, i) => (
                       <tr key={e.transactionId + '-' + e.userId + '-' + i}>
-                        <td data-label="User ID"><code style={{ fontSize: '0.75rem' }}>{e.userId ? e.userId.substring(0, 12) + '...' : '—'}</code></td>
+                        <td data-label="User ID"><code className="text-xs">{e.userId ? e.userId.substring(0, 12) + '...' : '—'}</code></td>
                         <td data-label="User Name" className="font-semibold">{e.userName || '—'}</td>
-                        <td data-label="Transaction ID" style={{ fontSize: '0.8rem' }}>{e.transactionId}</td>
+                        <td data-label="Transaction ID" className="text-sm">{e.transactionId}</td>
                         <td data-label="Amount" className="font-bold">₹{e.amount.toFixed(2)}</td>
-                        <td data-label="Payment Date" style={{ fontSize: '0.8rem' }}>
+                        <td data-label="Payment Date" className="text-sm">
                           {e.paymentDate ? new Date(e.paymentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                         </td>
-                        <td data-label="Approval Status"><span className="badge badge-paid badge-xs">Approved</span></td>
+                        <td data-label="Approval Status"><span className="badge badge-success badge-xs">Approved</span></td>
                       </tr>
                     ))}
                     {filteredEntries.length > 100 && (
-                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: '0.5rem', fontSize: '0.8rem' }}>
+                      <tr><td colSpan={6} className="text-center text-muted text-sm" style={{ padding: '0.5rem' }}>
                         Showing 100 of {filteredEntries.length} entries
                       </td></tr>
                     )}
@@ -795,26 +794,26 @@ export default function FirebaseAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="stats-grid" style={{ marginTop: '1rem', gap: '0.5rem' }}>
-              <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--success-soft, rgba(34, 197, 94, 0.08))', borderRadius: '0.5rem' }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginBottom: '0.15rem' }}>Payments</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--success)' }}>{paymentAnalytics.approvedPaymentsCount}</div>
+            <div className="stats-grid mt-lg" style={{ gap: '0.5rem' }}>
+              <div className="card-dim text-center">
+                <div className="text-xs text-muted mb-xs">Payments</div>
+                <div className="stat-value" style={{ color: 'var(--success)' }}>{paymentAnalytics.approvedPaymentsCount}</div>
               </div>
-              <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--accent-soft, rgba(139, 92, 246, 0.08))', borderRadius: '0.5rem' }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginBottom: '0.15rem' }}>Topups</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent)' }}>{paymentAnalytics.approvedTopupsCount}</div>
+              <div className="card-dim text-center">
+                <div className="text-xs text-muted mb-xs">Topups</div>
+                <div className="stat-value" style={{ color: 'var(--accent)' }}>{paymentAnalytics.approvedTopupsCount}</div>
               </div>
-              <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--info-soft, rgba(59, 130, 246, 0.08))', borderRadius: '0.5rem' }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginBottom: '0.15rem' }}>Collection Growth</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--info)' }}>
+              <div className="card-dim text-center">
+                <div className="text-xs text-muted mb-xs">Collection Growth</div>
+                <div className="stat-value" style={{ color: 'var(--info)' }}>
                   {paymentAnalytics.totalCollectionAmount > 0
                     ? ((paymentAnalytics.monthCollection / paymentAnalytics.totalCollectionAmount) * 100).toFixed(1) + '%'
                     : '0%'}
                 </div>
               </div>
-              <div style={{ textAlign: 'center', padding: '0.5rem', background: 'rgba(234, 179, 8, 0.08)', borderRadius: '0.5rem' }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginBottom: '0.15rem' }}>Total Users Paid</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#eab308' }}>{paymentAnalytics.approvedPaymentsCount}</div>
+              <div className="card-dim text-center">
+                <div className="text-xs text-muted mb-xs">Total Users Paid</div>
+                <div className="stat-value" style={{ color: '#eab308' }}>{paymentAnalytics.approvedPaymentsCount}</div>
               </div>
             </div>
           </div>
@@ -860,21 +859,21 @@ export default function FirebaseAdminDashboardPage() {
                         <td data-label="Total" className="font-bold">{s.referrals_count + s.topup_referrals_count}</td>
                         <td data-label="Own Topup">
                           {s.sponsor_topup_completed ? (
-                            <span className="badge badge-paid badge-xs">Done</span>
+                            <span className="badge badge-success badge-xs">Done</span>
                           ) : (
                             <span className="badge badge-pending badge-xs">Pending</span>
                           )}
                         </td>
                         <td data-label="Account">
                           {s.account_status === 'inactive' ? (
-                            <span className="badge badge-rejected badge-xs">Inactive</span>
+                            <span className="badge badge-danger badge-xs">Inactive</span>
                           ) : (
-                            <span className="badge badge-paid badge-xs">Active</span>
+                            <span className="badge badge-success badge-xs">Active</span>
                           )}
                         </td>
                         <td data-label="Credit Status">
                           {s.sponsor_credited ? (
-                            <span className="badge badge-paid badge-xs">Credited</span>
+                            <span className="badge badge-success badge-xs">Credited</span>
                           ) : s.sponsor_awaiting_credit ? (
                             <span className="badge badge-pending badge-xs">Awaiting</span>
                           ) : (
@@ -883,11 +882,11 @@ export default function FirebaseAdminDashboardPage() {
                         </td>
                         <td data-label="Amount" className="font-bold">
                           {s.sponsor_credited ? (
-                            <span className="text-success">₹{Number(s.sponsor_credited_amount || 0).toFixed(2)}</span>
-                          ) : <span className="muted">—</span>}
+                            <span style={{ color: 'var(--success)' }}>₹{Number(s.sponsor_credited_amount || 0).toFixed(2)}</span>
+                          ) : <span className="text-muted">—</span>}
                         </td>
                         <td data-label="Action">
-                          <span className="muted text-xs">Auto-managed</span>
+                          <span className="text-muted text-xs">Auto-managed</span>
                         </td>
                       </tr>
                     ))}
@@ -899,7 +898,7 @@ export default function FirebaseAdminDashboardPage() {
         )}
 
         {sponsorClaims.filter(c => c.status === 'pending').length > 0 && (
-          <div className="card" style={{ borderLeft: '3px solid var(--warning, #f59e0b)' }}>
+          <div className="card" style={{ borderLeft: '3px solid var(--warning)' }}>
             <div className="card-header">
               <h2 className="card-title">{'\u{1F3C6}'} Pending Sponsor Claims ({sponsorClaims.filter(c => c.status === 'pending').length})</h2>
             </div>
@@ -926,25 +925,25 @@ export default function FirebaseAdminDashboardPage() {
                           <td><code>{sponsor?.referral_code || '—'}</code></td>
                           <td className="font-bold" style={{ color: 'var(--success)' }}>₹{Number(c.claim_amount || 0).toFixed(2)}</td>
                           <td>{c.items_count || 0}</td>
-                          <td style={{ fontSize: '0.8rem' }}>{c.claim_date ? new Date(c.claim_date).toLocaleDateString() : '—'}</td>
+                          <td className="text-sm">{c.claim_date ? new Date(c.claim_date).toLocaleDateString() : '—'}</td>
                           <td><span className="badge badge-pending badge-xs">Pending</span></td>
                           <td>
-                            <div style={{ display: 'flex', gap: '0.35rem' }}>
-                              <button className="btn-primary btn-sm"
+                            <div className="flex gap-xs">
+                              <button className="btn btn-success btn-sm"
                                 onClick={() => {
                                   const enriched = { ...sponsor, inactiveReason: 'Sponsor Claim Pending Admin Approval', claimInfo: c };
                                   setApproveSponsorUser(enriched);
                                 }}>
                                 {'\u2713'} Approve
                               </button>
-                              <button className="btn-danger btn-sm"
+                              <button className="btn btn-danger btn-sm"
                                 onClick={() => {
                                   const enriched = { ...sponsor, inactiveReason: 'Sponsor Claim Pending Admin Approval', claimInfo: c };
                                   setRejectSponsorUser(enriched);
                                 }}>
                                 {'\u2715'} Reject
                               </button>
-                              <button className="btn-ghost btn-sm"
+                              <button className="btn btn-ghost btn-sm"
                                 onClick={() => {
                                   const enriched = { ...sponsor, inactiveReason: 'Sponsor Claim Pending Admin Approval', claimInfo: c };
                                   setShowClaimHistory(enriched);
@@ -989,33 +988,33 @@ export default function FirebaseAdminDashboardPage() {
                         <td data-label="Sponsor No"><code>{u.referral_code || '—'}</code></td>
                         <td data-label="Name" className="font-semibold">{u.name}</td>
                         <td data-label="Email" className="text-sm">{u.email}</td>
-                        <td data-label="Status"><span className="badge badge-rejected badge-xs">Inactive</span></td>
+                        <td data-label="Status"><span className="badge badge-danger badge-xs">Inactive</span></td>
                         <td data-label="Reason">
-                          <span className={`badge ${u.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-rejected'} badge-xs`}>
+                          <span className={`badge ${u.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-danger'} badge-xs`}>
                             {u.inactiveReason}
                           </span>
                         </td>
                         <td data-label="Refs">{u.referrals_count}</td>
                         <td data-label="Topup Refs">{u.topup_referrals_count}</td>
                         <td data-label="Actions">
-                          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          <div className="flex gap-xs flex-wrap">
                             {(u.inactiveReason && (u.inactiveReason.includes('Referral Limit') || u.inactiveReason.includes('Sponsor Claim Pending'))) && (
-                              <button className="btn-primary btn-sm"
+                              <button className="btn btn-success btn-sm"
                                 onClick={() => setApproveSponsorUser(u)}>
                                 {'\u2713'} Approve
                               </button>
                             )}
                             {u.inactiveReason && u.inactiveReason.includes('Sponsor Claim Pending') && (
-                              <button className="btn-danger btn-sm"
+                              <button className="btn btn-danger btn-sm"
                                 onClick={() => { setRejectSponsorUser(u); setRejectSponsorReason(''); }}>
                                 {'\u2715'} Reject
                               </button>
                             )}
-                            <button className="btn-ghost btn-sm"
+                            <button className="btn btn-ghost btn-sm"
                               onClick={() => { setShowClaimHistory(u); }}>
                               {'\u{1F4CB}'} Details
                             </button>
-                            <button className="btn-danger btn-sm"
+                            <button className="btn btn-danger btn-sm"
                               onClick={() => { setActionUser(u); setActionReason(''); }}>
                               {'\u2715'} Delete
                             </button>
@@ -1032,13 +1031,13 @@ export default function FirebaseAdminDashboardPage() {
 
         {actionUser && (
           <div className="modal-overlay" onClick={() => setActionUser(null)}>
-            <div className="modal-glass" onClick={e => e.stopPropagation()}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>Permanently Delete User</h2>
-                <button onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} className="btn-ghost btn-sm">{'\u2715'}</button>
+                <button onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} className="modal-close">{'\u2715'}</button>
               </div>
               <div className="modal-body">
-                <div className="detail-grid card-section-sm">
+                <div className="detail-grid">
                   <div className="detail-row">
                     <span className="detail-label">User</span>
                     <span className="detail-value">{actionUser.name}</span>
@@ -1049,21 +1048,21 @@ export default function FirebaseAdminDashboardPage() {
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Status</span>
-                    <div>
-                      <span className="badge badge-rejected badge-xs">Inactive</span>
-                      <span className={`badge ${actionUser.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-rejected'} badge-xs`} style={{ marginLeft: '0.25rem' }}>
+                    <div className="flex gap-xs">
+                      <span className="badge badge-danger badge-xs">Inactive</span>
+                      <span className={`badge ${actionUser.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-danger'} badge-xs`}>
                         {actionUser.inactiveReason}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="alert alert-error" style={{ margin: '1rem 0' }}>
+                <div className="alert alert-error">
                   <strong>⚠️ Permanent Data Loss Warning:</strong><br />
                   This will permanently delete this user and ALL associated data including topups, transactions, payments, screenshots, messages, chat history, and notifications. This action CANNOT be undone!
                 </div>
 
-                <div className="field modal-field-mb">
+                <div className="field">
                   <label>Reason for deletion</label>
                   <textarea
                     className="input"
@@ -1075,18 +1074,18 @@ export default function FirebaseAdminDashboardPage() {
                 </div>
 
                 {actionMsg && (
-                  <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
+                  <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'}`}>
                     {actionMsg}
                   </div>
                 )}
               </div>
               <div className="modal-footer">
-                <button className={`btn-danger${actionLoading ? ' btn-loading' : ''}`}
+                <button className={`btn btn-danger${actionLoading ? ' btn-loading' : ''}`}
                   onClick={() => handleDeleteInactive(actionUser.id, actionReason)}
                   disabled={actionLoading}>
                   {actionLoading ? 'Deleting...' : '\u2715 Confirm Delete'}
                 </button>
-                <button className="btn-ghost" onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} disabled={actionLoading}>
+                <button className="btn btn-ghost" onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} disabled={actionLoading}>
                   Cancel
                 </button>
               </div>
@@ -1096,13 +1095,13 @@ export default function FirebaseAdminDashboardPage() {
 
         {approveSponsorUser && (
           <div className="modal-overlay" onClick={() => setApproveSponsorUser(null)}>
-            <div className="modal-glass" onClick={e => e.stopPropagation()}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>Approve Sponsor Claim</h2>
-                <button onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} className="btn-ghost btn-sm">{'\u2715'}</button>
+                <button onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} className="modal-close">{'\u2715'}</button>
               </div>
               <div className="modal-body">
-                <div className="detail-grid card-section-sm">
+                <div className="detail-grid">
                   <div className="detail-row">
                     <span className="detail-label">Sponsor Name</span>
                     <span className="detail-value">{approveSponsorUser.name}</span>
@@ -1121,13 +1120,13 @@ export default function FirebaseAdminDashboardPage() {
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Current Status</span>
-                    <span className="detail-value"><span className="badge badge-rejected badge-xs">Inactive</span></span>
+                    <span className="detail-value"><span className="badge badge-danger badge-xs">Inactive</span></span>
                   </div>
                 </div>
 
                 {approveSponsorUser.claimInfo && (
-                  <div className="card-section-sm" style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Claim Details</h3>
+                  <div className="card-dim mt-lg">
+                    <h3 className="card-title mb-md">Claim Details</h3>
                     <div className="detail-grid">
                       <div className="detail-row">
                         <span className="detail-label">Claim Amount</span>
@@ -1144,10 +1143,10 @@ export default function FirebaseAdminDashboardPage() {
                     </div>
 
                     {(approveSponsorUser.claimInfo.items || []).length > 0 && (
-                      <div style={{ marginTop: '0.75rem' }}>
-                        <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted)' }}>Referred Users Generating Eligibility</h4>
+                      <div className="mt-md">
+                        <h4 className="text-sm text-muted font-semibold mb-sm">Referred Users Generating Eligibility</h4>
                         <div className="table-wrap" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                          <table style={{ fontSize: '0.75rem' }}>
+                          <table className="text-xs">
                             <thead>
                               <tr>
                                 <th>User Name</th>
@@ -1163,10 +1162,10 @@ export default function FirebaseAdminDashboardPage() {
                                 <tr key={item.income_id || idx}>
                                   <td>{item.referred_user_name || '—'}</td>
                                   <td className="font-bold">₹{Number(item.topup_amount || 0).toFixed(2)}</td>
-                                  <td style={{ fontSize: '0.7rem' }}>{item.topup_date ? new Date(item.topup_date).toLocaleDateString() : '—'}</td>
-                                  <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.transaction_id || '—'}</td>
+                                  <td className="text-xs">{item.topup_date ? new Date(item.topup_date).toLocaleDateString() : '—'}</td>
+                                  <td className="font-mono text-xs">{item.transaction_id || '—'}</td>
                                   <td>{item.payment_method || 'UPI'}</td>
-                                  <td><span className="badge badge-paid badge-xs">{item.payment_status || 'approved'}</span></td>
+                                  <td><span className="badge badge-success badge-xs">{item.payment_status || 'approved'}</span></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1177,23 +1176,23 @@ export default function FirebaseAdminDashboardPage() {
                   </div>
                 )}
 
-                <div className="alert alert-warning text-sm" style={{ marginTop: '1rem' }}>
+                <div className="alert alert-warning text-sm">
                   <strong>Approve:</strong> Credits <strong>₹{Number(approveSponsorUser.claimInfo?.claim_amount || 0).toFixed(2)}</strong> to sponsor's wallet and reactivates account. Referral history and wallet history remain unchanged.
                 </div>
 
                 {actionMsg && (
-                  <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
+                  <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'}`}>
                     {actionMsg}
                   </div>
                 )}
               </div>
               <div className="modal-footer">
-                <button className={`btn-primary${approveSponsorLoading ? ' btn-loading' : ''}`}
+                <button className={`btn btn-primary${approveSponsorLoading ? ' btn-loading' : ''}`}
                   onClick={() => handleApproveSponsor(approveSponsorUser.id)}
                   disabled={approveSponsorLoading}>
                   {approveSponsorLoading ? 'Approving...' : '\u2713 Approve & Credit ₹' + Number(approveSponsorUser.claimInfo?.claim_amount || 0).toFixed(2)}
                 </button>
-                <button className="btn-ghost" onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} disabled={approveSponsorLoading}>
+                <button className="btn btn-ghost" onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} disabled={approveSponsorLoading}>
                   Cancel
                 </button>
               </div>
@@ -1203,13 +1202,13 @@ export default function FirebaseAdminDashboardPage() {
 
         {rejectSponsorUser && (
           <div className="modal-overlay" onClick={() => setRejectSponsorUser(null)}>
-            <div className="modal-glass" onClick={e => e.stopPropagation()}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>Reject Sponsor Claim</h2>
-                <button onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} className="btn-ghost btn-sm">{'\u2715'}</button>
+                <button onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} className="modal-close">{'\u2715'}</button>
               </div>
               <div className="modal-body">
-                <div className="detail-grid card-section-sm">
+                <div className="detail-grid">
                   <div className="detail-row">
                     <span className="detail-label">Sponsor Name</span>
                     <span className="detail-value">{rejectSponsorUser.name}</span>
@@ -1220,7 +1219,7 @@ export default function FirebaseAdminDashboardPage() {
                   </div>
                 </div>
 
-                <div className="field modal-field-mb" style={{ marginTop: '1rem' }}>
+                <div className="field mt-lg">
                   <label>Rejection Reason</label>
                   <textarea
                     className="input"
@@ -1236,18 +1235,18 @@ export default function FirebaseAdminDashboardPage() {
                 </div>
 
                 {actionMsg && (
-                  <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
+                  <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'}`}>
                     {actionMsg}
                   </div>
                 )}
               </div>
               <div className="modal-footer">
-                <button className={`btn-danger${rejectSponsorLoading ? ' btn-loading' : ''}`}
+                <button className={`btn btn-danger${rejectSponsorLoading ? ' btn-loading' : ''}`}
                   onClick={() => handleRejectSponsor(rejectSponsorUser.id)}
                   disabled={rejectSponsorLoading}>
                   {rejectSponsorLoading ? 'Rejecting...' : '\u2715 Reject Claim'}
                 </button>
-                <button className="btn-ghost" onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} disabled={rejectSponsorLoading}>
+                <button className="btn btn-ghost" onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} disabled={rejectSponsorLoading}>
                   Cancel
                 </button>
               </div>
@@ -1257,13 +1256,13 @@ export default function FirebaseAdminDashboardPage() {
 
         {showClaimHistory && (
           <div className="modal-overlay" onClick={() => setShowClaimHistory(null)}>
-            <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
               <div className="modal-header">
                 <h2>Claim History — {showClaimHistory.name}</h2>
-                <button onClick={() => setShowClaimHistory(null)} className="btn-ghost btn-sm">{'\u2715'}</button>
+                <button onClick={() => setShowClaimHistory(null)} className="modal-close">{'\u2715'}</button>
               </div>
               <div className="modal-body">
-                <div className="detail-grid card-section-sm">
+                <div className="detail-grid">
                   <div className="detail-row">
                     <span className="detail-label">Sponsor Name</span>
                     <span className="detail-value">{showClaimHistory.name}</span>
@@ -1278,7 +1277,7 @@ export default function FirebaseAdminDashboardPage() {
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Current Status</span>
-                    <span className="detail-value"><span className="badge badge-rejected badge-xs">Inactive</span></span>
+                    <span className="detail-value"><span className="badge badge-danger badge-xs">Inactive</span></span>
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Inactive Reason</span>
@@ -1286,8 +1285,8 @@ export default function FirebaseAdminDashboardPage() {
                   </div>
                 </div>
                 {showClaimHistory.claimInfo && (
-                  <div style={{ marginTop: '1rem' }}>
-                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Claim Details</h3>
+                  <div className="mt-lg">
+                    <h3 className="card-title mb-md">Claim Details</h3>
                     <div className="detail-grid">
                       <div className="detail-row">
                         <span className="detail-label">Total Claim Amount</span>
@@ -1303,9 +1302,9 @@ export default function FirebaseAdminDashboardPage() {
                       </div>
                     </div>
                     {(showClaimHistory.claimInfo.items || []).length > 0 && (
-                      <div style={{ marginTop: '0.75rem', maxHeight: '300px', overflowY: 'auto' }}>
-                        <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted)' }}>Referred Users & Top-up Details</h4>
-                        <div className="table-wrap"><table style={{ fontSize: '0.75rem', width: '100%' }}>
+                      <div className="mt-md" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                        <h4 className="text-sm text-muted font-semibold mb-sm">Referred Users & Top-up Details</h4>
+                        <div className="table-wrap"><table className="text-xs w-full">
                           <thead>
                             <tr>
                               <th>User Name</th>
@@ -1321,12 +1320,12 @@ export default function FirebaseAdminDashboardPage() {
                             {showClaimHistory.claimInfo.items.map((item, idx) => (
                               <tr key={item.income_id || idx}>
                                 <td>{item.referred_user_name || '—'}</td>
-                                <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.referred_user_id ? item.referred_user_id.substring(0, 8) + '...' : '—'}</td>
+                                <td className="font-mono text-xs">{item.referred_user_id ? item.referred_user_id.substring(0, 8) + '...' : '—'}</td>
                                 <td className="font-bold">₹{Number(item.topup_amount || 0).toFixed(2)}</td>
-                                <td style={{ fontSize: '0.7rem' }}>{item.topup_date ? new Date(item.topup_date).toLocaleDateString() : '—'}</td>
-                                <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.transaction_id || '—'}</td>
+                                <td className="text-xs">{item.topup_date ? new Date(item.topup_date).toLocaleDateString() : '—'}</td>
+                                <td className="font-mono text-xs">{item.transaction_id || '—'}</td>
                                 <td>{item.payment_method || 'UPI'}</td>
-                                <td><span className="badge badge-paid badge-xs">{item.payment_status || 'approved'}</span></td>
+                                <td><span className="badge badge-success badge-xs">{item.payment_status || 'approved'}</span></td>
                               </tr>
                             ))}
                           </tbody>
@@ -1338,7 +1337,7 @@ export default function FirebaseAdminDashboardPage() {
                 )}
               </div>
               <div className="modal-footer">
-                <button className="btn-ghost" onClick={() => setShowClaimHistory(null)}>Close</button>
+                <button className="btn btn-ghost" onClick={() => setShowClaimHistory(null)}>Close</button>
               </div>
             </div>
           </div>

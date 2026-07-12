@@ -67,7 +67,7 @@ export default function FirebaseAdminQueuePage() {
   }
 
   return (
-    <div className="layout-page">
+    <div className="page-wrap">
       <AdminSidebar userName={getAdminName()} />
       <main className="layout-inner">
         <div className="page-header">
@@ -76,16 +76,19 @@ export default function FirebaseAdminQueuePage() {
             <button className="btn btn-primary" onClick={processPending} disabled={processing}>
               {processing ? 'Processing...' : '\u25B6 Process Pending'}
             </button>
-            <button className="btn btn-ghost" onClick={fetchQueue} disabled={loading}>
-              Refresh
-            </button>
+            <button className="btn btn-ghost" onClick={fetchQueue} disabled={loading}>Refresh</button>
           </div>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
         {actionMsg && <div className="alert alert-success">{actionMsg}</div>}
 
-        {loading && <div className="text-center"><div className="loading-spinner loading-spinner-lg" /><p>Loading queue...</p></div>}
+        {loading && (
+          <div className="flex flex-col items-center gap-md" style={{ padding: '2rem' }}>
+            <div className="loading-spinner loading-spinner-lg" />
+            <p className="text-muted text-sm">Loading queue...</p>
+          </div>
+        )}
 
         {queueData && (
           <>
@@ -108,7 +111,7 @@ export default function FirebaseAdminQueuePage() {
               <div className={`stat-card ${queueData.stuck_items > 0 ? 'accent-danger' : 'accent-success'}`}>
                 <div className="stat-value">{queueData.stuck_items}</div>
                 <div className="stat-label">Stuck Items</div>
-                <div className="stat-sub">Processing {'>'}5 min</div>
+                <div className="stat-sub">Processing &gt;5 min</div>
               </div>
               <div className="stat-card">
                 <div className="stat-value">{queueData.pending_verification}</div>
@@ -127,24 +130,25 @@ export default function FirebaseAdminQueuePage() {
                 <h3>Queue Summary</h3>
               </div>
               <div className="card-body">
-                <div className="table-wrap"><table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Metric</th>
-                      <th>Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr><td>Total Payments</td><td>{queueData.total_payments}</td></tr>
-                    <tr><td>Total Registrations</td><td>{queueData.total_registrations}</td></tr>
-                    <tr><td>OCR Queue</td><td>{queueData.ocr_queue}</td></tr>
-                    <tr><td>Retry Queue</td><td>{queueData.retry_queue}</td></tr>
-                    <tr><td>Manual Review</td><td>{queueData.manual_review}</td></tr>
-                    <tr><td>Stuck Items</td><td>{queueData.stuck_items}</td></tr>
-                    <tr><td>Pending Verification</td><td>{queueData.pending_verification}</td></tr>
-                    <tr><td>Pending Registrations</td><td>{queueData.pending_registrations}</td></tr>
-                  </tbody>
-                </table>
+                <div className="table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>Total Payments</td><td>{queueData.total_payments}</td></tr>
+                      <tr><td>Total Registrations</td><td>{queueData.total_registrations}</td></tr>
+                      <tr><td>OCR Queue</td><td>{queueData.ocr_queue}</td></tr>
+                      <tr><td>Retry Queue</td><td>{queueData.retry_queue}</td></tr>
+                      <tr><td>Manual Review</td><td>{queueData.manual_review}</td></tr>
+                      <tr><td>Stuck Items</td><td>{queueData.stuck_items}</td></tr>
+                      <tr><td>Pending Verification</td><td>{queueData.pending_verification}</td></tr>
+                      <tr><td>Pending Registrations</td><td>{queueData.pending_registrations}</td></tr>
+                    </tbody>
+                  </table>
                 </div>
                 <p className="text-sm text-muted" style={{ marginTop: '0.5rem' }}>
                   Last updated: {queueData.timestamp ? new Date(queueData.timestamp).toLocaleString() : 'N/A'}

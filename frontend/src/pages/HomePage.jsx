@@ -13,10 +13,7 @@ export default function HomePage() {
   }, [navigate]);
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      minHeight: '100vh', background: 'var(--bg)',
-    }}>
+    <div className="flex flex-center" style={{ minHeight: '100vh' }}>
       <div className="loading-spinner loading-spinner-lg" />
     </div>
   );

@@ -213,38 +213,40 @@ export default function FirebaseRegisterPage() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="text-center mb-md">
-        <div className="brand auth-title">
-          <span className="text-gradient">JTSB Natural</span>
+    <div className="flex flex-center" style={{ minHeight: '100vh' }}>
+      <div className="glass-card" style={{ maxWidth: 480, width: '100%' }}>
+        <div className="text-center mb-md">
+          <div className="text-xl font-bold mb-xs">
+            <span className="text-gradient">JTSB Natural</span>
+          </div>
+          <p className="text-muted text-sm">Premium FinTech Platform</p>
         </div>
-        <p className="auth-subtitle">Premium FinTech Platform</p>
-      </div>
 
-      {paymentStep !== 'form' && (
-        <div className="step-indicator">
-          <div className="step completed">
-            <span className="step-number">✓</span>
-            <span>Form</span>
+        {paymentStep !== 'form' && (
+          <div className="step-indicator mb-md">
+            <div className="step completed">
+              <span className="step-number">✓</span>
+              <span>Form</span>
+            </div>
+            <div className="step-line completed" />
+            <div className={`step ${paymentStep === 'upi' ? 'active' : ''} ${paymentStep === 'submitted' ? 'completed' : ''}`}>
+              <span className="step-number">{paymentStep === 'submitted' ? '✓' : '2'}</span>
+              <span>Payment</span>
+            </div>
+            <div className={`step-line ${paymentStep === 'submitted' ? 'completed' : ''}`} />
+            <div className={`step ${paymentStep === 'submitted' ? 'completed' : ''}`}>
+              <span className="step-number">{paymentStep === 'submitted' ? '✓' : '3'}</span>
+              <span>Done</span>
+            </div>
           </div>
-          <div className="step-line completed" />
-          <div className={`step ${paymentStep === 'upi' ? 'active' : ''} ${paymentStep === 'submitted' ? 'completed' : ''}`}>
-            <span className="step-number">{paymentStep === 'submitted' ? '✓' : '2'}</span>
-            <span>Payment</span>
-          </div>
-          <div className={`step-line ${paymentStep === 'submitted' ? 'completed' : ''}`} />
-          <div className={`step ${paymentStep === 'submitted' ? 'completed' : ''}`}>
-            <span className="step-number">{paymentStep === 'submitted' ? '✓' : '3'}</span>
-            <span>Done</span>
-          </div>
-        </div>
-      )}
+        )}
 
-      <div className="auth-card">
-        <h1 className="auth-title text-gradient">
-          {paymentStep === 'form' ? 'Create Account' : paymentStep === 'upi' ? 'Complete Payment' : 'Payment Submitted!'}
+        <h1 className="text-xl font-bold mb-xs">
+          <span className="text-gradient">
+            {paymentStep === 'form' ? 'Create Account' : paymentStep === 'upi' ? 'Complete Payment' : 'Payment Submitted!'}
+          </span>
         </h1>
-        <p className="auth-subtitle">
+        <p className="text-muted text-sm mb-md">
           {paymentStep === 'form' ? 'One-time payment for lifetime access' : 'Complete your registration'}
         </p>
 
@@ -279,12 +281,14 @@ export default function FirebaseRegisterPage() {
               {phoneExists && <p className="text-sm" style={{ color: 'var(--danger)' }}>Mobile number already registered.</p>}
             </div>
             <div className="field mb-md">
-              <input required type={showPassword ? 'text' : 'password'} value={password} minLength={6}
-                onChange={e => setPassword(e.target.value)} placeholder="Password * (min 8 chars, upper+lower+number)" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)}
-                className="btn-ghost" style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)', padding: '0.25rem', lineHeight: 1 }}>
-                {showPassword ? '🙈' : '👁️'}
-              </button>
+              <div className="flex items-center" style={{ position: 'relative' }}>
+                <input required type={showPassword ? 'text' : 'password'} value={password} minLength={6}
+                  onChange={e => setPassword(e.target.value)} placeholder="Password * (min 8 chars, upper+lower+number)" className="flex-1" style={{ paddingRight: '2.5rem' }} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="btn-ghost btn-icon" style={{ position: 'absolute', right: '0.5rem' }}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
             <div className="field mb-lg">
               <input value={referralCode} onChange={e => setReferralCode(e.target.value.toUpperCase())} placeholder="Referral Code (optional)" />
@@ -326,11 +330,11 @@ export default function FirebaseRegisterPage() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '1.75rem', margin: '0 auto 1.25rem', boxShadow: '0 0 30px rgba(34,197,94,0.3)'
             }}>✓</div>
-            <h2 style={{ margin: 0, fontSize: '1.25rem' }} className="text-gradient-success">Payment Submitted!</h2>
+            <h2 className="text-lg font-bold mb-sm text-gradient-success" style={{ margin: 0 }}>Payment Submitted!</h2>
             <p className="text-muted text-sm" style={{ marginTop: '0.75rem', lineHeight: 1.6 }}>
               Your payment is being verified. You will be able to login once your account is approved.
             </p>
-            <Link to="/fb/login" className="btn-primary" style={{ marginTop: '1rem', display: 'inline-flex' }}>
+            <Link to="/fb/login" className="btn-primary mt-lg" style={{ display: 'inline-flex' }}>
               Go to Login
             </Link>
           </div>
@@ -339,7 +343,7 @@ export default function FirebaseRegisterPage() {
         {paymentStep === 'form' && (
           <div className="flex items-center justify-center gap-sm mt-lg">
             <span className="text-muted text-sm">Already have an account?</span>
-            <Link to="/fb/login" style={{ fontWeight: 600, fontSize: '0.85rem' }}>Login</Link>
+            <Link to="/fb/login" className="font-semibold text-sm">Login</Link>
           </div>
         )}
       </div>

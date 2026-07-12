@@ -177,7 +177,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>User Details</h2>
-          <button onClick={onClose} className="btn btn-ghost btn-sm">{'\u2715'}</button>
+          <button onClick={onClose} className="modal-close">{'\u2715'}</button>
         </div>
         <div className="modal-body">
           <div className="detail-grid mb-md">
@@ -195,13 +195,13 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
             </div>
             <div className="detail-row">
               <span className="detail-label">Payment Status</span>
-              <span className={`badge ${user.payment_status === 'approved' || user.payment_status === 'success' ? 'badge-paid' : user.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+              <span className={`badge ${user.payment_status === 'approved' || user.payment_status === 'success' ? 'badge-success' : user.payment_status === 'rejected' ? 'badge-danger' : 'badge-pending'}`}>
                 {user.payment_status ? user.payment_status.charAt(0).toUpperCase() + user.payment_status.slice(1) : 'Pending'}
               </span>
             </div>
             <div className="detail-row">
               <span className="detail-label">Account Status</span>
-              <span className={`status-badge status-${user.account_status || 'inactive'}`}>
+              <span className={`badge ${user.account_status === 'active' ? 'badge-success' : user.account_status === 'suspended' ? 'badge-pending' : 'badge-danger'}`}>
                 {(user.account_status || 'inactive').charAt(0).toUpperCase() + (user.account_status || 'inactive').slice(1)}
               </span>
             </div>
@@ -219,18 +219,17 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
             </div>
             <div className="detail-row">
               <span className="detail-label">Referral Code</span>
-              <div>
+              <div className="flex items-center gap-sm">
                 <code style={{ fontSize: '0.95rem' }}>{user.referral_code}</code>
-                <button className="btn btn-ghost btn-xs ml-sm"
+                <button className="btn btn-ghost btn-xs"
                   onClick={() => navigator.clipboard.writeText(user.referral_code)}>
                   Copy
                 </button>
               </div>
             </div>
             {user._source === 'pending_registration' && (
-              <div className="detail-row" style={{ background: 'var(--warning-soft)', borderRadius: '6px', padding: '0.5rem', marginBottom: '0.5rem' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--warning)' }}>{'\u23F3'} Pending Registration</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>This user has registered but not yet completed payment. The account will be created after payment is verified.</div>
+              <div className="alert alert-warning text-sm" style={{ gridColumn: '1 / -1' }}>
+                <strong>{'\u23F3'} Pending Registration</strong> — This user has registered but not yet completed payment. The account will be created after payment is verified.
               </div>
             )}
             {user.referred_by && (
@@ -246,39 +245,36 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           </div>
 
           {loading ? (
-            <div className="muted mb-md">Loading referrals...</div>
+            <div className="text-muted mb-md">Loading referrals...</div>
           ) : referrals.length > 0 ? (
             <div className="mb-md">
-              <h4 className="section-label">
+              <h4 className="card-title mb-sm">
                 Referrals ({referrals.length})
               </h4>
-              <div className="flex-col gap-sm">
+              <div className="flex flex-col gap-sm">
                 {referrals.map((ref) => (
-                  <div key={ref.id} className="referral-card-row">
+                  <div key={ref.id} className="flex flex-between items-start gap-sm" style={{ padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '8px' }}>
                     <div>
-                      <div className="font-semibold" style={{ fontSize: '0.9rem' }}>{ref.name}</div>
+                      <div className="font-semibold text-sm">{ref.name}</div>
                       <div className="text-xs text-muted">{ref.email}</div>
-                      <div className="text-xs" style={{ marginTop: '0.15rem' }}>
+                      <div className="text-xs mt-xs">
                         {ref.referred_by_status === 'approved' ? (
-                          <span className="badge badge-paid badge-xs">Approved</span>
+                          <span className="badge badge-success badge-xs">Approved</span>
                         ) : ref.referred_by_status === 'pending' || !ref.referred_by_status ? (
                           <span className="badge badge-pending badge-xs">Pending</span>
                         ) : (
-                          <span className="badge badge-rejected badge-xs">{ref.referred_by_status}</span>
+                          <span className="badge badge-danger badge-xs">{ref.referred_by_status}</span>
                         )}
                       </div>
                     </div>
-                    <div className="flex-actions">
-                      <button className="btn btn-danger btn-xs"
-                        onClick={() => handleDeleteReferral(ref)}>
-                        Remove
-                      </button>
-                    </div>
+                    <button className="btn btn-danger btn-xs"
+                      onClick={() => handleDeleteReferral(ref)}>
+                      Remove
+                    </button>
                   </div>
                 ))}
                 {referrals.length > 0 && (
                   <button className="btn btn-danger btn-sm"
-                    style={{ marginTop: '0.25rem' }}
                     onClick={handleDeleteAllReferrals}>
                     Remove All Referrals
                   </button>
@@ -286,12 +282,12 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               </div>
             </div>
           ) : (
-            <div className="muted mb-md">No referrals yet</div>
+            <div className="text-muted mb-md">No referrals yet</div>
           )}
 
           {user.activated_at && (
-            <div className="verify-section mb-md">
-              <h4>Activation Info</h4>
+            <div className="card-dim mb-md">
+              <h4 className="card-title mb-sm">Activation Info</h4>
               <div className="text-sm">
                 <div><strong>Activated by:</strong> {user.activated_by || '\u2014'}</div>
                 <div><strong>Activated at:</strong> {user.activated_at ? new Date(user.activated_at).toLocaleString() : '\u2014'}</div>
@@ -300,7 +296,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
             </div>
           )}
 
-          <div className="flex-row-wrap">
+          <div className="flex gap-sm flex-wrap">
             {(user.account_status === 'inactive' || user.account_status === 'pending') && !showActivateConfirm && (
               <button className="btn btn-warning" onClick={() => setShowActivateConfirm(true)}>
                 Activate User
@@ -317,18 +313,18 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           </div>
 
           {showActivateConfirm && (
-            <div className="activation-card">
-              <h4 className="text-warning" style={{ margin: '0 0 0.5rem' }}>Activate User</h4>
-              <p className="muted text-sm mb-sm">
+            <div className="card-dim mt-md">
+              <h4 className="card-title mb-sm" style={{ color: 'var(--warning)' }}>Activate User</h4>
+              <p className="text-muted text-sm mb-sm">
                 Are you sure you want to activate this user?
               </p>
               <textarea className="input w-full mb-sm" placeholder="Reason for activation (optional)"
                 value={activateReason} onChange={e => setActivateReason(e.target.value)}
-                rows={2} style={{ resize: 'vertical' }} />
+                rows={2} />
               <textarea className="input w-full mb-sm" placeholder="Message to user (required)"
                 value={adminMessage} onChange={e => setAdminMessage(e.target.value)}
-                rows={2} style={{ resize: 'vertical' }} />
-              <div className="flex-row">
+                rows={2} />
+              <div className="flex gap-sm">
                 <button className="btn btn-warning" onClick={handleActivateUser} disabled={activating}>
                   {activating ? '\u23F3' : '\u2713'} Confirm Activation
                 </button>
@@ -340,13 +336,13 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           )}
 
           {activateMsg && (
-            <div className={`alert ${activateMsg.includes('succ') ? 'alert-success' : 'alert-error'}`} style={{ marginTop: '0.75rem' }}>
+            <div className={`alert mt-md ${activateMsg.includes('succ') ? 'alert-success' : 'alert-error'}`}>
               {activateMsg}
             </div>
           )}
 
           {resetMsg && (
-            <div className="alert alert-success" style={{ marginTop: '0.75rem', wordBreak: 'break-all' }}>
+            <div className="alert alert-success mt-md" style={{ wordBreak: 'break-all' }}>
               {resetMsg}
             </div>
           )}
@@ -356,18 +352,18 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                   <h2>Confirm Permanent Deletion</h2>
-                  <button onClick={() => setShowDeleteConfirm(false)} className="btn btn-ghost btn-sm">{'\u2715'}</button>
+                  <button onClick={() => setShowDeleteConfirm(false)} className="modal-close">{'\u2715'}</button>
                 </div>
                 <div className="modal-body">
-                  <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+                  <div className="alert alert-error">
                     <strong>{'\u26A0\uFE0F'} Warning:</strong> Are you sure you want to permanently delete <strong>{user.name}</strong> and all associated data? This includes all topups, transactions, payments, screenshots, messages, chat history, notifications, referral records, sponsor data, and uploaded files. This action CANNOT be undone!
                   </div>
                   <textarea className="input w-full mb-sm"
                     placeholder="Reason for deletion (required)"
                     value={deleteReason}
                     onChange={e => { setDeleteReason(e.target.value); setDeleteError(''); }}
-                    rows={2} style={{ resize: 'vertical' }} />
-                  {deleteError && <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>{deleteError}</div>}
+                    rows={2} />
+                  {deleteError && <div className="alert alert-error">{deleteError}</div>}
                 </div>
                 <div className="modal-footer">
                   <button className={`btn btn-danger${deleting ? ' btn-loading' : ''}`}
@@ -656,351 +652,348 @@ export default function FirebaseAdminUsersPage() {
   };
 
   return (
-    <div className="layout-page">
+    <div className="page-wrap">
       <AdminSidebar pendingCounts={pendingCounts} userName={getAdminName()} />
+      <main className="layout-inner">
+        <div className="page-header">
+          <h1 className="page-title">
+            {'\u{1F465}'}
+            User Management
+          </h1>
+          <div className="page-actions">
+            <span className="text-sm text-muted">
+              {users.length} total &middot; {users.filter(u => u.payment_status === 'approved' || u.payment_status === 'success').length} paid &middot; {users.filter(u => u.account_status === 'active').length} active
+            </span>
+          </div>
+        </div>
 
-      <main>
-        <div className="layout-inner">
-          <div className="page-header">
-            <h1 className="page-title">
-              <span className="admin-page-title-icon">{'\u{1F465}'}</span>
-              User Management
-            </h1>
-            <div className="page-actions">
-              <span className="muted text-sm">
-                {users.length} total &middot; {users.filter(u => u.payment_status === 'approved' || u.payment_status === 'success').length} paid &middot; {users.filter(u => u.account_status === 'active').length} active
-              </span>
+        <div className="card mb-md">
+          <div className="card-header">
+            <h2 className="card-title">{'\u{1F50D}'} Search & Filter</h2>
+            <div className="flex gap-sm">
+              <button className="btn btn-ghost btn-sm" onClick={() => exportToCSV(filteredUsers, `users-${new Date().toISOString().split('T')[0]}.csv`)}>
+                {'\u{1F4E5}'} Export CSV
+              </button>
             </div>
           </div>
+          <div className="filters">
+            <input className="search-input" value={q} onChange={e => setQ(e.target.value)}
+              placeholder="Search by name, email, phone, or referral_code..." />
+            <select value={statusFilter} onChange={e => updateStatusFilter(e.target.value)}>
+              <option value="">All Users</option>
+              <option value="pending_registration">Pending Registration</option>
+              <option value="pending">Payment: Pending</option>
+              <option value="approved">Payment: Approved</option>
+              <option value="rejected">Payment: Rejected</option>
+              <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>
+              <option value="account_active">Account: Active</option>
+              <option value="account_inactive">Account: Inactive</option>
+            </select>
+          </div>
+        </div>
 
-          <div className="card mb-md">
-            <div className="card-header">
-              <h2 className="card-title">{'\u{1F50D}'} Search & Filter</h2>
-              <div className="flex-row" style={{ gap: '0.5rem' }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => exportToCSV(filteredUsers, `users-${new Date().toISOString().split('T')[0]}.csv`)}>
-                  {'\u{1F4E5}'} Export CSV
+        {selectedIds.size > 0 && (
+          <div className="bulk-bar">
+            <span className="bulk-count">{selectedIds.size} user{selectedIds.size > 1 ? 's' : ''} selected</span>
+            <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)}>
+              {'\u2715'} Delete Selected
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>
+              Clear Selection
+            </button>
+          </div>
+        )}
+
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">{'\u{1F465}'} All Users ({filteredUsers.length})</h2>
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: '40px' }}>
+                    <input type="checkbox"
+                      checked={isAllSelected}
+                      onChange={handleSelectAll}
+                      style={{ cursor: 'pointer', width: '18px', height: '18px' }} />
+                  </th>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Payment</th>
+                  <th>Account</th>
+                  <th>Referral</th>
+                  <th>Topup</th>
+                  <th>Referrals</th>
+                  <th>Joined</th>
+                  <th>Approved</th>
+                  <th>Last Active</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map((u) => {
+                  return (
+                  <React.Fragment key={u.id}>
+                    <tr className={selectedIds.has(u.id) ? 'row-selected' : ''}>
+                      <td>
+                        <input type="checkbox"
+                          checked={selectedIds.has(u.id)}
+                          onChange={() => handleSelectOne(u.id)}
+                          style={{ cursor: 'pointer', width: '18px', height: '18px' }} />
+                      </td>
+                      <td data-label="Name">
+                        <div className="font-semibold">{u.name}</div>
+                        <div className="text-xs text-muted">{u.email}</div>
+                        <div className="font-mono text-xs" style={{ color: 'var(--primary)' }}>{u.referral_code || '\u2014'}</div>
+                      </td>
+                      <td data-label="Phone">{u.phone || '\u2014'}</td>
+                      <td data-label="Payment">
+                        <span className={`badge ${u.payment_status === 'approved' || u.payment_status === 'success' ? 'badge-success' : u.payment_status === 'rejected' ? 'badge-danger' : 'badge-pending'}`}>
+                          {u.payment_status ? u.payment_status.charAt(0).toUpperCase() + u.payment_status.slice(1) : 'Pending'}
+                        </span>
+                      </td>
+                      <td data-label="Account">
+                        <span className={`badge ${u.account_status === 'active' ? 'badge-success' : u.account_status === 'suspended' ? 'badge-pending' : 'badge-danger'}`}>
+                          {(u.account_status || 'inactive').charAt(0).toUpperCase() + (u.account_status || 'inactive').slice(1)}
+                        </span>
+                      </td>
+                      <td data-label="Referral">
+                        <span className={`badge ${u.referral_active === false ? 'badge-danger' : 'badge-success'}`}>
+                          {u.referral_active === false ? 'INACTIVE' : 'ACTIVE'}
+                        </span>
+                      </td>
+                      <td data-label="Topup">
+                        {u.sponsor_topup_completed ? (
+                          <span className="badge badge-success badge-xs">Done</span>
+                        ) : u.topup_referral_qualified ? (
+                          <span className="badge badge-pending badge-xs">Qualified</span>
+                        ) : (
+                          <span className="badge badge-xs">\u2014</span>
+                        )}
+                      </td>
+                      <td data-label="Referrals">
+                        <div>
+                          <div className="font-semibold text-sm">{u.total_referral_count || 0}</div>
+                          <button className="btn btn-ghost btn-xs"
+                            onClick={(e) => { e.stopPropagation(); handleToggleUserExpand(u.id); }}>
+                            {expandedUserId === u.id ? 'Hide' : `View${u.payment_status === 'approved' ? ` (${referralCounts[u.id] || 0})` : ''}`}
+                          </button>
+                        </div>
+                      </td>
+                      <td data-label="Joined" className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
+                        {u.joinedDate ? new Date(u.joinedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u2014'}
+                      </td>
+                      <td data-label="Approved" className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
+                        {u.approvedDate ? new Date(u.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u2014'}
+                      </td>
+                      <td data-label="Last Active" className="text-xs" style={{ whiteSpace: 'nowrap' }}>
+                        {u.lastActiveAt ? (
+                          <span style={{ color: getLastActiveStatus(u.lastActiveAt) === 'online' ? 'var(--success)' : getLastActiveStatus(u.lastActiveAt) === 'recent' ? 'var(--warning)' : 'var(--text-tertiary)' }}>
+                            {new Date(u.lastActiveAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        ) : <span className="text-muted">\u2014</span>}
+                      </td>
+                      <td data-label="Actions">
+                        <div className="flex flex-col gap-xs" onClick={(e) => e.stopPropagation()}>
+                          {(u.account_status === 'suspended' || u.account_status === 'inactive' || u.account_status === 'blocked') && (
+                            <button className="btn btn-success btn-xs"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`${API_BASE}/updateUserStatus`, {
+                                    method: 'POST',
+                                    headers: authHeaders(),
+                                    body: JSON.stringify({ userId: u.id, status: 'active', reason: 'Admin activated' }),
+                                  });
+                                  if (!res.ok) throw new Error((await res.json()).error || 'Activation failed');
+                                  toast('User activated');
+                                } catch (err) {
+                                  toast(err.message, 'error');
+                                }
+                              }}>Activate</button>
+                          )}
+                          {u.account_status === 'active' && (
+                            <button className="btn btn-warning btn-xs"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`${API_BASE}/updateUserStatus`, {
+                                    method: 'POST',
+                                    headers: authHeaders(),
+                                    body: JSON.stringify({ userId: u.id, status: 'suspended', reason: 'Admin suspended' }),
+                                  });
+                                  if (!res.ok) throw new Error((await res.json()).error || 'Suspend failed');
+                                  toast('User suspended');
+                                } catch (err) {
+                                  toast(err.message, 'error');
+                                }
+                              }}>Suspend</button>
+                          )}
+                          <button className="btn btn-primary btn-xs" onClick={() => setSelectedUser(u)}>View</button>
+                          <button className="btn btn-danger btn-xs" onClick={() => setDeleteConfirmUser(u)}>Del</button>
+                          {(u.referral_active === false) ? (
+                            <button className="btn btn-success btn-xs" onClick={() => handleReferralAction(u.id, 'activate')}>Activate Ref</button>
+                          ) : (
+                            <button className="btn btn-warning btn-xs" onClick={() => handleReferralAction(u.id, 'deactivate')}>Deact. Ref</button>
+                          )}
+                          <button className="btn btn-ghost btn-xs" onClick={() => handleReferralAction(u.id, 'reset')}>Reset Ref</button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedUserId === u.id && (
+                      <tr>
+                        <td colSpan={13} style={{ padding: '1rem', background: 'var(--bg-alt)' }}>
+                          {loadingReferrals ? (
+                            <div className="text-muted">Loading referrals...</div>
+                          ) : expandedReferrals.length > 0 ? (
+                            <>
+                              <div className="font-semibold mb-sm text-sm text-muted">
+                                Referred by {u.name}:
+                              </div>
+                              <div className="flex flex-col gap-sm">
+                                {expandedReferrals.map((ref) => (
+                                  <div key={ref.id} className="flex flex-between items-start gap-sm" style={{ padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                                    <div>
+                                      <div className="font-semibold text-sm">{ref.name}</div>
+                                      <div className="text-xs text-muted">{ref.phone || '\u2014'}</div>
+                                      <div className="mt-xs">
+                                        {ref.referred_by_status === 'approved' ? (
+                                          <span className="badge badge-success badge-xs">Approved</span>
+                                        ) : ref.referred_by_status === 'pending' || !ref.referred_by_status ? (
+                                          <span className="badge badge-pending badge-xs">Pending</span>
+                                        ) : (
+                                          <span className="badge badge-danger badge-xs">{ref.referred_by_status}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-muted text-sm">No referrals yet.</div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                  );
+                })}
+                {filteredUsers.length === 0 && (
+                  <tr><td colSpan={13}><div className="empty-state"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {deleteSuccessMsg && (
+          <div className="toast toast-success" style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999 }}>
+            {'\u2713'} {deleteSuccessMsg}
+          </div>
+        )}
+
+        {deleteConfirmUser && (
+          <div className="modal-overlay" onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Confirm Permanent Deletion</h2>
+                <button onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }} className="modal-close">{'\u2715'}</button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-error">
+                  <strong>{'\u26A0\uFE0F'} Warning:</strong> Are you sure you want to permanently delete <strong>{deleteConfirmUser.name}</strong> and all associated data? This includes all topups, transactions, payments, screenshots, messages, chat history, notifications, referral records, sponsor data, and uploaded files. This action CANNOT be undone!
+                </div>
+                <textarea className="input w-full mb-sm"
+                  placeholder="Reason for deletion (required)"
+                  value={deleteReason}
+                  onChange={e => { setDeleteReason(e.target.value); setDeleteError(''); }}
+                  rows={2} />
+                {deleteError && <div className="alert alert-error">{deleteError}</div>}
+              </div>
+              <div className="modal-footer">
+                <button className={`btn btn-danger${deletingUser ? ' btn-loading' : ''}`}
+                  onClick={async () => {
+                    if (deletingUser) return;
+                    if (!deleteReason.trim()) { setDeleteError('Please provide a reason for deletion.'); return; }
+                    setDeleteError('');
+                    const u = deleteConfirmUser;
+                    setDeletingUser(true);
+                    try {
+                      await handleDelete(u.id, deleteReason.trim(), u);
+                      setDeleteConfirmUser(null);
+                      setDeleteReason('');
+                    } catch (e) {
+                      setDeleteError(e.message || 'Deletion failed');
+                    } finally {
+                      setDeletingUser(false);
+                    }
+                  }} disabled={deletingUser}>
+                  {deletingUser ? 'Deleting...' : 'Delete Permanently'}
+                </button>
+                <button className="btn btn-ghost" onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }}>
+                  Cancel
                 </button>
               </div>
             </div>
-            <div className="filters">
-              <input value={q} onChange={e => setQ(e.target.value)}
-                placeholder="Search by name, email, phone, or referral_code..." />
-              <select value={statusFilter} onChange={e => updateStatusFilter(e.target.value)}>
-                <option value="">All Users</option>
-                <option value="pending_registration">Pending Registration</option>
-                <option value="pending">Payment: Pending</option>
-                <option value="approved">Payment: Approved</option>
-                <option value="rejected">Payment: Rejected</option>
-                <option disabled>{'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}</option>
-                <option value="account_active">Account: Active</option>
-                <option value="account_inactive">Account: Inactive</option>
-              </select>
-            </div>
           </div>
+        )}
 
-          {selectedIds.size > 0 && (
-            <div className="bulk-bar">
-              <span className="bulk-count">{selectedIds.size} user{selectedIds.size > 1 ? 's' : ''} selected</span>
-              <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)}>
-                {'\u2715'} Delete Selected
-              </button>
-              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>
-                Clear Selection
-              </button>
-            </div>
-          )}
+        {selectedUser && (
+          <UserDetailModal
+            user={selectedUser}
+            onClose={() => { setSelectedUser(null); }}
+            onDelete={handleDelete}
+            onDeleteReferral={handleDeleteReferral}
+            onActivate={(userId) => {
+              setUsers(prev => prev.map(u => u.id === userId ? { ...u, account_status: 'active' } : u));
+            }}
+          />
+        )}
 
-          <div className="card">
-            <div className="card-header">
-              <h2 className="card-title">{'\u{1F465}'} All Users ({filteredUsers.length})</h2>
-            </div>
-
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px' }}>
-                      <input type="checkbox"
-                        checked={isAllSelected}
-                        onChange={handleSelectAll}
-                        style={{ cursor: 'pointer', width: '18px', height: '18px' }} />
-                    </th>
-                    <th>Name</th>
-                    <th>Phone</th>
-                    <th>Payment</th>
-                    <th>Account</th>
-                    <th>Referral</th>
-                    <th>Topup</th>
-                    <th>Referrals</th>
-                    <th>Joined</th>
-                    <th>Approved</th>
-                    <th>Last Active</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((u) => {
-                    return (
-                    <React.Fragment key={u.id}>
-                      <tr className={selectedIds.has(u.id) ? 'row-selected' : ''}>
-                        <td>
-                          <input type="checkbox"
-                            checked={selectedIds.has(u.id)}
-                            onChange={() => handleSelectOne(u.id)}
-                            style={{ cursor: 'pointer', width: '18px', height: '18px' }} />
-                        </td>
-                        <td data-label="Name">
-                          <div className="font-semibold">{u.name}</div>
-                          <div className="text-xs text-muted">{u.email}</div>
-                          <div className="font-mono text-xs text-accent">{u.referral_code || '\u2014'}</div>
-                        </td>
-                        <td data-label="Phone">{u.phone || '\u2014'}</td>
-                        <td data-label="Payment">
-                          <span className={`badge ${u.payment_status === 'approved' || u.payment_status === 'success' ? 'badge-paid' : u.payment_status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-                            {u.payment_status ? u.payment_status.charAt(0).toUpperCase() + u.payment_status.slice(1) : 'Pending'}
-                          </span>
-                        </td>
-                        <td data-label="Account">
-                          <span className={`status-badge status-${u.account_status || 'inactive'}`}>
-                            {(u.account_status || 'inactive').charAt(0).toUpperCase() + (u.account_status || 'inactive').slice(1)}
-                          </span>
-                        </td>
-                        <td data-label="Referral">
-                          <span className={`badge ${u.referral_active === false ? 'badge-rejected' : 'badge-paid'}`}>
-                            {u.referral_active === false ? 'INACTIVE' : 'ACTIVE'}
-                          </span>
-                        </td>
-                        <td data-label="Topup">
-                          {u.sponsor_topup_completed ? (
-                            <span className="badge badge-paid badge-xs">Done</span>
-                          ) : u.topup_referral_qualified ? (
-                            <span className="badge badge-pending badge-xs">Qualified</span>
-                          ) : (
-                            <span className="muted badge-xs">\u2014</span>
-                          )}
-                        </td>
-                        <td data-label="Referrals">
-                          <div>
-                            <div className="font-semibold" style={{ fontSize: '0.9rem' }}>{u.total_referral_count || 0}</div>
-                            <button className="btn btn-ghost btn-xs"
-                              onClick={(e) => { e.stopPropagation(); handleToggleUserExpand(u.id); }}>
-                              {expandedUserId === u.id ? 'Hide' : `View${u.payment_status === 'approved' ? ` (${referralCounts[u.id] || 0})` : ''}`}
-                            </button>
-                          </div>
-                        </td>
-                        <td data-label="Joined" className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
-                          {u.joinedDate ? new Date(u.joinedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u2014'}
-                        </td>
-                        <td data-label="Approved" className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
-                          {u.approvedDate ? new Date(u.approvedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u2014'}
-                        </td>
-                        <td data-label="Last Active" className="text-xs" style={{ whiteSpace: 'nowrap' }}>
-                          {u.lastActiveAt ? (
-                            <span className={`last-active-indicator ${getLastActiveStatus(u.lastActiveAt)}`}>
-                              {new Date(u.lastActiveAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          ) : <span className="text-muted">\u2014</span>}
-                        </td>
-                        <td data-label="Actions">
-                          <div className="flex-actions" onClick={(e) => e.stopPropagation()}>
-                            {(u.account_status === 'suspended' || u.account_status === 'inactive' || u.account_status === 'blocked') && (
-                              <button className="btn btn-success btn-xs"
-                                onClick={async () => {
-                                  try {
-                                    const res = await fetch(`${API_BASE}/updateUserStatus`, {
-                                      method: 'POST',
-                                      headers: authHeaders(),
-                                      body: JSON.stringify({ userId: u.id, status: 'active', reason: 'Admin activated' }),
-                                    });
-                                    if (!res.ok) throw new Error((await res.json()).error || 'Activation failed');
-                                    toast('User activated');
-                                  } catch (err) {
-                                    toast(err.message, 'error');
-                                  }
-                                }}>Activate</button>
-                            )}
-                            {u.account_status === 'active' && (
-                              <button className="btn btn-warning btn-xs"
-                                onClick={async () => {
-                                  try {
-                                    const res = await fetch(`${API_BASE}/updateUserStatus`, {
-                                      method: 'POST',
-                                      headers: authHeaders(),
-                                      body: JSON.stringify({ userId: u.id, status: 'suspended', reason: 'Admin suspended' }),
-                                    });
-                                    if (!res.ok) throw new Error((await res.json()).error || 'Suspend failed');
-                                    toast('User suspended');
-                                  } catch (err) {
-                                    toast(err.message, 'error');
-                                  }
-                                }}>Suspend</button>
-                            )}
-                            <button className="btn btn-primary btn-xs" onClick={() => setSelectedUser(u)}>View</button>
-                            <button className="btn btn-danger btn-xs" onClick={() => setDeleteConfirmUser(u)}>Del</button>
-                            {(u.referral_active === false) ? (
-                              <button className="btn btn-success btn-xs" onClick={() => handleReferralAction(u.id, 'activate')}>Activate Ref</button>
-                            ) : (
-                              <button className="btn btn-warning btn-xs" onClick={() => handleReferralAction(u.id, 'deactivate')}>Deact. Ref</button>
-                            )}
-                            <button className="btn btn-ghost btn-xs" onClick={() => handleReferralAction(u.id, 'reset')}>Reset Ref</button>
-                          </div>
-                        </td>
-                      </tr>
-                      {expandedUserId === u.id && (
-                        <tr>
-                          <td colSpan={13} className="expandable-row">
-                            {loadingReferrals ? (
-                              <div className="muted">Loading referrals...</div>
-                            ) : expandedReferrals.length > 0 ? (
-                              <>
-                                <div className="font-semibold mb-sm text-sm text-muted">
-                                  Referred by {u.name}:
-                                </div>
-                                <div className="flex-col gap-sm">
-                                  {expandedReferrals.map((ref) => (
-                                    <div key={ref.id} className="referral-card-row">
-                                      <div>
-                                        <div className="font-semibold text-sm">{ref.name}</div>
-                                        <div className="text-xs text-muted">{ref.phone || '\u2014'}</div>
-                                        <div className="badge-xs" style={{ marginTop: '0.15rem' }}>
-                                          {ref.referred_by_status === 'approved' ? (
-                                            <span className="badge badge-paid badge-xs">Approved</span>
-                                          ) : ref.referred_by_status === 'pending' || !ref.referred_by_status ? (
-                                            <span className="badge badge-pending badge-xs">Pending</span>
-                                          ) : (
-                                            <span className="badge badge-rejected badge-xs">{ref.referred_by_status}</span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </>
-                            ) : (
-                              <div className="muted text-sm">No referrals yet.</div>
-                            )}
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                    );
-                  })}
-                  {filteredUsers.length === 0 && (
-                    <tr><td colSpan={13}><div className="empty-state"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
+        {bulkDeleteConfirm && (
+          <div className="modal-overlay" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{'\u26A0\uFE0F'} Bulk Delete Users</h2>
+                <button onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} className="modal-close">{'\u2715'}</button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-error">
+                  <strong>{'\u26A0\uFE0F'} Danger:</strong> You are about to permanently delete <strong>{selectedIds.size} user{selectedIds.size > 1 ? 's' : ''}</strong>. All associated data for each user will be permanently removed. This action CANNOT be undone!
+                </div>
+                <div className="field">
+                  <label>Reason for deletion *</label>
+                  <textarea className="input"
+                    placeholder="Why are you deleting these users?"
+                    value={bulkDeleteReason}
+                    onChange={e => setBulkDeleteReason(e.target.value)}
+                    rows={3} />
+                </div>
+                <div className="field">
+                  <label>Type <strong>DELETE</strong> to confirm *</label>
+                  <input className={`input ${bulkDeleteText && bulkDeleteText !== 'DELETE' ? 'input-error' : bulkDeleteText === 'DELETE' ? '' : ''}`}
+                    placeholder="Type DELETE here"
+                    value={bulkDeleteText}
+                    onChange={e => setBulkDeleteText(e.target.value)} />
+                  {bulkDeleteText && bulkDeleteText !== 'DELETE' && (
+                    <span className="field-error">Type exactly "DELETE" to confirm</span>
                   )}
-                </tbody>
-              </table>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className={`btn btn-danger${bulkDeleting ? ' btn-loading' : ''}`}
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting || bulkDeleteText !== 'DELETE' || !bulkDeleteReason.trim()}>
+                  {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} User${selectedIds.size > 1 ? 's' : ''}`}
+                </button>
+                <button className="btn btn-ghost" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} disabled={bulkDeleting}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-
-          {deleteSuccessMsg && (
-            <div className="toast toast-success" style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999 }}>
-              {'\u2713'} {deleteSuccessMsg}
-            </div>
-          )}
-
-          {deleteConfirmUser && (
-            <div className="modal-overlay" onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }}>
-              <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h2>Confirm Permanent Deletion</h2>
-                  <button onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }} className="btn btn-ghost btn-sm">{'\u2715'}</button>
-                </div>
-                <div className="modal-body">
-                  <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
-                    <strong>{'\u26A0\uFE0F'} Warning:</strong> Are you sure you want to permanently delete <strong>{deleteConfirmUser.name}</strong> and all associated data? This includes all topups, transactions, payments, screenshots, messages, chat history, notifications, referral records, sponsor data, and uploaded files. This action CANNOT be undone!
-                  </div>
-                  <textarea className="input w-full mb-sm"
-                    placeholder="Reason for deletion (required)"
-                    value={deleteReason}
-                    onChange={e => { setDeleteReason(e.target.value); setDeleteError(''); }}
-                    rows={2} style={{ resize: 'vertical' }} />
-                  {deleteError && <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>{deleteError}</div>}
-                </div>
-                <div className="modal-footer">
-                  <button className={`btn btn-danger${deletingUser ? ' btn-loading' : ''}`}
-                    onClick={async () => {
-                      if (deletingUser) return;
-                      if (!deleteReason.trim()) { setDeleteError('Please provide a reason for deletion.'); return; }
-                      setDeleteError('');
-                      const u = deleteConfirmUser;
-                      setDeletingUser(true);
-                      try {
-                        await handleDelete(u.id, deleteReason.trim(), u);
-                        setDeleteConfirmUser(null);
-                        setDeleteReason('');
-                      } catch (e) {
-                        setDeleteError(e.message || 'Deletion failed');
-                      } finally {
-                        setDeletingUser(false);
-                      }
-                    }} disabled={deletingUser}>
-                    {deletingUser ? 'Deleting...' : 'Delete Permanently'}
-                  </button>
-                  <button className="btn btn-ghost" onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {selectedUser && (
-            <UserDetailModal
-              user={selectedUser}
-              onClose={() => { setSelectedUser(null); }}
-              onDelete={handleDelete}
-              onDeleteReferral={handleDeleteReferral}
-              onActivate={(userId) => {
-                setUsers(prev => prev.map(u => u.id === userId ? { ...u, account_status: 'active' } : u));
-              }}
-            />
-          )}
-
-          {bulkDeleteConfirm && (
-            <div className="modal-overlay" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }}>
-              <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h2>{'\u26A0\uFE0F'} Bulk Delete Users</h2>
-                  <button onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} className="btn btn-ghost btn-sm">{'\u2715'}</button>
-                </div>
-                <div className="modal-body">
-                  <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
-                    <strong>{'\u26A0\uFE0F'} Danger:</strong> You are about to permanently delete <strong>{selectedIds.size} user{selectedIds.size > 1 ? 's' : ''}</strong>. All associated data for each user will be permanently removed. This action CANNOT be undone!
-                  </div>
-                  <div className="field" style={{ marginBottom: '1rem' }}>
-                    <label>Reason for deletion *</label>
-                    <textarea className="input"
-                      placeholder="Why are you deleting these users?"
-                      value={bulkDeleteReason}
-                      onChange={e => setBulkDeleteReason(e.target.value)}
-                      rows={3} />
-                  </div>
-                  <div className="field" style={{ marginBottom: '1rem' }}>
-                    <label>Type <strong>DELETE</strong> to confirm *</label>
-                    <input className={`input ${bulkDeleteText && bulkDeleteText !== 'DELETE' ? 'input-error' : bulkDeleteText === 'DELETE' ? 'input-valid' : ''}`}
-                      placeholder="Type DELETE here"
-                      value={bulkDeleteText}
-                      onChange={e => setBulkDeleteText(e.target.value)} />
-                    {bulkDeleteText && bulkDeleteText !== 'DELETE' && (
-                      <span className="field-error">Type exactly "DELETE" to confirm</span>
-                    )}
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button className={`btn btn-danger${bulkDeleting ? ' btn-loading' : ''}`}
-                    onClick={handleBulkDelete}
-                    disabled={bulkDeleting || bulkDeleteText !== 'DELETE' || !bulkDeleteReason.trim()}>
-                    {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} User${selectedIds.size > 1 ? 's' : ''}`}
-                  </button>
-                  <button className="btn btn-ghost" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} disabled={bulkDeleting}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </main>
     </div>
   );
