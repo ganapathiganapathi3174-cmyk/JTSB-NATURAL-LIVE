@@ -208,6 +208,13 @@ export default function FirebaseAdminDashboardPage() {
     const approvedUsers = users.filter(u => u.payment_status === 'approved' || u.payment_status === 'success' || u.membershipStatus === 'active');
     const regRevenue = approvedUsers.length * REGISTRATION_FEE;
     const topupRevenue = topups.filter(t => t.status === 'approved').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const ALLOWED_PACKAGES = [120, 500, 1000];
+    const totalPackagePaymentAmount = approvedUsers.reduce((sum, u) => {
+      const amt = Number(u.user_entered_amount);
+      if (amt && ALLOWED_PACKAGES.includes(amt)) return sum + amt;
+      if (!amt || amt === 0) return sum + 120;
+      return sum;
+    }, 0);
     const todayUserCount = users.filter(u => u.created_at && u.created_at.startsWith(todayStr)).length;
     const todayTopupCount = topups.filter(t => t.created_at && t.created_at.startsWith(todayStr)).length;
     const todayApprovedPayments = users.filter(u => (u.payment_status === 'approved' || u.payment_status === 'success') && u.created_at && u.created_at.startsWith(todayStr)).length;
@@ -223,6 +230,7 @@ export default function FirebaseAdminDashboardPage() {
       pendingTopups: topups.filter(t => t.status === 'pending').length,
       totalTopupAmount: topups.reduce((sum, t) => sum + (Number(t.amount) || 0), 0),
       totalRevenue: regRevenue + topupRevenue,
+      totalPackagePaymentAmount,
       eligibleSponsors: users.filter(u => u.topup_referral_qualified && !u.sponsor_topup_completed).length,
       awaitingCredit: users.filter(u => u.sponsor_awaiting_credit && !u.sponsor_credited).length,
       totalCredited: users.reduce((sum, u) => sum + (Number(u.sponsor_credited_amount) || 0), 0),
@@ -425,90 +433,26 @@ export default function FirebaseAdminDashboardPage() {
           </div>
         </div>
 
-        <div className="stats-grid">
-          <div className="stat-card accent-primary">
-            <div className="stat-bg-icon">{'\u{1F465}'}</div>
-            <div className="stat-value">{stats.totalUsers}</div>
-            <div className="stat-label">Total Users</div>
-            <div className="stat-sub">{'\u{1F4C8}'} Registered</div>
+        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+          <div className="card card-hover" style={{ padding: '1.5rem' }}>
+            <div className="flex items-center gap-sm mb-sm">
+              <div style={{ fontSize: '1.5rem', opacity: 0.6 }}>{'\u{1F4B0}'}</div>
+              <span className="text-sm text-muted font-medium">Total Payment Amount</span>
+            </div>
+            <div className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>
+              {'\u20B9'}{stats.totalPackagePaymentAmount.toLocaleString('en-IN')}
+            </div>
+            <div className="text-xs text-muted mt-xs">{'\u20B9'}120 + {'\u20B9'}500 + {'\u20B9'}1,000 packages</div>
           </div>
-          <div className={`stat-card ${sseCounts.pending_payments > 0 ? 'accent-warning' : 'accent-success'}`}>
-            <div className="stat-bg-icon">{'\u{1F4E8}'}</div>
-            <div className="stat-value">{sseConnected ? sseCounts.pending_payments : stats.pendingTopups}</div>
-            <div className="stat-label">{sseConnected ? 'Pending Payments (Live)' : 'Pending Payments'}</div>
-            <div className="stat-sub">{sseConnected ? '\u25CF Real-time SSE' : '\u{1F504}'} Awaiting processing</div>
-          </div>
-          <div className="stat-card accent-success">
-            <div className="stat-bg-icon">{'\u2705'}</div>
-            <div className="stat-value">{stats.successPayments}</div>
-            <div className="stat-label">Paid Users</div>
-            <div className="stat-sub">{'\u{1F4B0}'} Successfully registered</div>
-          </div>
-          <div className="stat-card accent-primary">
-            <div className="stat-bg-icon">{'\u{1F4B8}'}</div>
-            <div className="stat-value">₹{stats.totalTopupAmount.toFixed(2)}</div>
-            <div className="stat-label">Total Topup Amount</div>
-            <div className="stat-sub">{'\u{1F4C8}'} All time</div>
-          </div>
-          <div className="stat-card accent-success">
-            <div className="stat-bg-icon">{'\u{1F4B5}'}</div>
-            <div className="stat-value">₹{stats.totalRevenue.toFixed(2)}</div>
-            <div className="stat-label">Total Revenue</div>
-            <div className="stat-sub">{'\u{1F4C8}'} Reg + Topups</div>
-          </div>
-          <div className="stat-card accent-warning">
-            <div className="stat-bg-icon">{'\u{1F3C6}'}</div>
-            <div className="stat-value">{stats.eligibleSponsors}</div>
-            <div className="stat-label">Eligible Sponsors</div>
-            <div className="stat-sub">{'\u{1F504}'} Pending topup</div>
-          </div>
-          <div className="stat-card accent-success">
-            <div className="stat-bg-icon">{'\u{1F4B5}'}</div>
-            <div className="stat-value">₹{stats.totalCredited.toFixed(2)}</div>
-            <div className="stat-label">Total Credited</div>
-            <div className="stat-sub">{'\u2705'} Completed</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-bg-icon">{'\u{1F517}'}</div>
-            <div className="stat-value">{stats.totalReferrals}</div>
-            <div className="stat-label">Total Referrals</div>
-            <div className="stat-sub">{'\u{1F4C8}'} All time</div>
-          </div>
-          <div className="stat-card accent-success">
-            <div className="stat-bg-icon">{'\u{1F465}'}</div>
-            <div className="stat-value">{stats.activeUsers}</div>
-            <div className="stat-label">Active Users</div>
-            <div className="stat-sub">{'\u2705'} Account active</div>
-          </div>
-          <div className="stat-card accent-warning">
-            <div className="stat-bg-icon">{'\u23F3'}</div>
-            <div className="stat-value">{stats.inactiveUsers}</div>
-            <div className="stat-label">Inactive Users</div>
-            <div className="stat-sub">{'\u{1F504}'} Requires action</div>
-          </div>
-          <div className="stat-card accent-danger">
-            <div className="stat-bg-icon">{'\u{1F6AB}'}</div>
-            <div className="stat-value">{stats.suspendedUsers}</div>
-            <div className="stat-label">Suspended</div>
-            <div className="stat-sub">{'\u26A0\uFE0F'} Requires review</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-bg-icon">{'\u{1F464}'}</div>
-            <div className="stat-value">{stats.membershipActive}</div>
-            <div className="stat-label">Membership Active</div>
-            <div className="stat-sub">{'\u{1F4B0}'} Paid & active</div>
-          </div>
-          <div className="stat-card accent-warning">
-            <div className="stat-bg-icon">{'\u{1F504}'}</div>
-            <div className="stat-value">{stats.sponsorsAwaitingRenewal}</div>
-            <div className="stat-label">Sponsor Renewal</div>
-            <div className="stat-sub">{'\u{1F3C6}'} Awaiting renewal</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-bg-icon">{'\u{1F50D}'}</div>
-            <div className="stat-value">{stats.usersNeedingReview}</div>
-            <div className="stat-label">Needs Review</div>
-            <div className="stat-sub">{'\u{1F4CB}'} Pending admin review</div>
+          <div className="card card-hover" style={{ padding: '1.5rem' }}>
+            <div className="flex items-center gap-sm mb-sm">
+              <div style={{ fontSize: '1.5rem', opacity: 0.6 }}>{'\u{1F4B3}'}</div>
+              <span className="text-sm text-muted font-medium">Total Topup Amount</span>
+            </div>
+            <div className="text-2xl font-bold" style={{ color: 'var(--success)' }}>
+              {'\u20B9'}{stats.totalTopupAmount.toLocaleString('en-IN')}
+            </div>
+            <div className="text-xs text-muted mt-xs">Topup transactions only</div>
           </div>
         </div>
 
