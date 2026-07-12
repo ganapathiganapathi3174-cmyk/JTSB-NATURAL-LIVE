@@ -263,25 +263,29 @@ export default function FirebaseAdminUPIPaymentsPage() {
     <div className="admin-layout">
       <AdminSidebar />
       <main className="admin-main">
-        <div className="admin-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1>UPI Payment Monitor</h1>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            {processing && <span style={{ fontSize: '0.85rem', color: '#f59e0b' }}>⏳ Processing...</span>}
-            {processingResult && processingResult.processed > 0 && (
-              <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-                +{processingResult.approved} approved / {processingResult.rejected} rejected
-                {processingResult.manualReview > 0 && (
-                  <> / <span style={{ color: '#f59e0b' }}>{processingResult.manualReview} manual review</span></>
-                )}
-              </span>
-            )}
-            {deleteMsg && <span style={{ color: 'var(--success, #16a34a)', fontSize: '0.85rem' }}>{deleteMsg}</span>}
-            <button onClick={handleExport} className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>Export CSV</button>
-            <button onClick={fetchData} className="btn btn-primary" style={{ fontSize: '0.85rem' }}>
-              {loading ? '...' : 'Refresh'}
-            </button>
+        <div className="admin-content-inner">
+          <div className="admin-page-header">
+            <h1 className="admin-page-title">
+              <span className="admin-page-title-icon">{'\u{1F4B5}'}</span>
+              UPI Payment Monitor
+            </h1>
+            <div className="admin-page-actions">
+              {processing && <span className="badge badge-warning">⏳ Processing...</span>}
+              {processingResult && processingResult.processed > 0 && (
+                <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+                  +{processingResult.approved} approved / {processingResult.rejected} rejected
+                  {processingResult.manualReview > 0 && (
+                    <> / <span style={{ color: '#f59e0b' }}>{processingResult.manualReview} manual review</span></>
+                  )}
+                </span>
+              )}
+              {deleteMsg && <span style={{ color: 'var(--success, #16a34a)', fontSize: '0.85rem' }}>{deleteMsg}</span>}
+              <button onClick={handleExport} className="btn-modern btn-modern-ghost btn-modern-sm">Export CSV</button>
+              <button onClick={fetchData} className="btn-modern btn-modern-primary btn-modern-sm">
+                {loading ? '...' : 'Refresh'}
+              </button>
+            </div>
           </div>
-        </div>
 
         {error && <div className="error-banner">{error}</div>}
 
@@ -592,6 +596,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
             </div>
           </div>
         )}
+        </div>
       </main>
     </div>
   );
