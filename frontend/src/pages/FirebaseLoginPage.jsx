@@ -157,7 +157,7 @@ export default function FirebaseLoginPage() {
                 <input type={showPassword ? 'text' : 'password'} value={newPassword} minLength={6}
                   onChange={e => setNewPassword(e.target.value)} required placeholder="New Password" />
               </div>
-              <button type="submit" className={`btn-primary${loading ? ' btn-loading' : ''} w-full`} disabled={loading}>
+              <button type="submit" className={`btn-primary btn-lg${loading ? ' btn-loading' : ''} w-full`} disabled={loading}>
                 {loading ? 'Setting...' : 'Set Password & Login'}
               </button>
             </form>
@@ -184,7 +184,7 @@ export default function FirebaseLoginPage() {
                   </button>
                 </div>
               </div>
-              <button className={`btn-primary${loading ? ' btn-loading' : ''} w-full`} type="submit" disabled={loading}>
+              <button className={`btn-primary btn-lg${loading ? ' btn-loading' : ''} w-full`} type="submit" disabled={loading}>
                 {loading ? 'Logging in...' : 'Sign In'}
               </button>
             </form>

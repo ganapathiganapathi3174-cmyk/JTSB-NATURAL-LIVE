@@ -75,7 +75,7 @@ export default function FirebaseAdminLoginPage() {
             />
           </div>
           <div className="flex flex-center">
-            <button className={`btn-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading}>
+            <button className={`btn-primary btn-lg${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading}>
               {loading ? 'Logging in...' : 'Log In'}
             </button>
           </div>

@@ -293,8 +293,8 @@ export default function FirebaseRegisterPage() {
             <div className="field mb-lg">
               <input value={referralCode} onChange={e => setReferralCode(e.target.value.toUpperCase())} placeholder="Referral Code (optional)" />
             </div>
-            <button className={`btn-primary w-full${loading ? ' btn-loading' : ''}`} type="submit" disabled={!canSubmit || emailExists || phoneExists}>
-              {loading ? 'Processing...' : 'Proceed to Payment →'}
+            <button className={`btn-primary btn-lg w-full${loading ? ' btn-loading' : ''}`} type="submit" disabled={!canSubmit || emailExists || phoneExists}>
+              {loading ? 'Processing...' : 'Proceed to Payment \u2192'}
             </button>
           </form>
         )}
@@ -334,7 +334,7 @@ export default function FirebaseRegisterPage() {
             <p className="text-muted text-sm" style={{ marginTop: '0.75rem', lineHeight: 1.6 }}>
               Your payment is being verified. You will be able to login once your account is approved.
             </p>
-            <Link to="/fb/login" className="btn-primary mt-lg" style={{ display: 'inline-flex' }}>
+            <Link to="/fb/login" className="btn-primary btn-lg mt-lg" style={{ display: 'inline-flex' }}>
               Go to Login
             </Link>
           </div>
