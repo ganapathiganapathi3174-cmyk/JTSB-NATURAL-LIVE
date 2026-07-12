@@ -50,8 +50,10 @@ export default function FirebaseAdminLoginPage() {
   return (
     <div className="flex flex-center" style={{ minHeight: '100vh' }}>
       <div className="glass-card" style={{ maxWidth: 400, width: '100%' }}>
-        <h1 className="text-xl font-bold mb-xs">Admin Login</h1>
-        <p className="text-muted text-sm mb-md">Restricted access</p>
+        <div className="text-center mb-md">
+          <h1 className="text-xl font-bold mb-xs">StarlightAscent</h1>
+          <p className="text-muted text-sm">Admin Login</p>
+        </div>
         {error && <div className="alert-error mb-md">{error}</div>}
         <form onSubmit={handleSubmit}>
           <div className="field mb-md">
@@ -72,9 +74,11 @@ export default function FirebaseAdminLoginPage() {
               onChange={e => setPassword(e.target.value)}
             />
           </div>
-          <button className={`btn-primary w-full${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading}>
-            {loading ? 'Logging in...' : 'Log In'}
-          </button>
+          <div className="flex flex-center">
+            <button className={`btn-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading}>
+              {loading ? 'Logging in...' : 'Log In'}
+            </button>
+          </div>
         </form>
         <p className="text-muted text-sm mt-lg text-center">
           <a href="/fb/login" className="font-semibold">User Login</a>

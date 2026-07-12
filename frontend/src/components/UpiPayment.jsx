@@ -3,7 +3,7 @@ import QrCodeDisplay from './QrCodeDisplay.jsx';
 
 const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 const ADMIN_UPI = 'jayarajj126-3@okicici';
-const MERCHANT_NAME = 'JTSB Natural';
+const MERCHANT_NAME = 'StarlightAscent';
 const MOBILE_NUMBER = '9655897523';
 
 const PROGRESS_STEPS = [

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useMemo } from 'react';
+const TOKEN_KEY = 'starlightascent_token';
 
-const TOKEN_KEY = 'jtsb_token';
-const USER_KEY = 'jtsb_user';
+const USER_KEY = 'starlightascent_user';
 
 const AuthContext = createContext(null);
 

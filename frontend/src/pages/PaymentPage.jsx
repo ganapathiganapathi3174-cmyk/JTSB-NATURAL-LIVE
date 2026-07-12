@@ -49,7 +49,7 @@ export default function PaymentPage() {
     <div className="flex flex-center" style={{ minHeight: '100vh' }}>
       <div className="text-center mb-lg animate-fade-in-up">
         <div className="text-lg font-bold mb-xs">
-          <span className="text-gradient">JTSB Natural</span>
+          <span className="text-gradient">StarlightAscent</span>
         </div>
         <p className="text-muted text-sm">Premium FinTech Platform</p>
       </div>

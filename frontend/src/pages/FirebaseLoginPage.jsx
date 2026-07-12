@@ -139,7 +139,7 @@ export default function FirebaseLoginPage() {
       <div className="glass-card" style={{ maxWidth: 420, width: '100%' }}>
         <div className="text-center mb-lg">
           <div className="text-xl font-bold mb-xs">
-            <span className="text-gradient">JTSB Natural</span>
+            <span className="text-gradient">StarlightAscent</span>
           </div>
           <p className="text-muted text-sm">Premium FinTech Platform</p>
         </div>
