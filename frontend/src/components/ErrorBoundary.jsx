@@ -28,7 +28,7 @@ export default class ErrorBoundary extends Component {
           )}
           <button
             onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
-            className="btn-modern btn-modern-primary"
+            className="btn btn-primary"
           >
             Refresh Page
           </button>

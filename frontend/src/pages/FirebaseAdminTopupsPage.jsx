@@ -32,13 +32,13 @@ function DeleteConfirmModal({ topup, onConfirm, onClose, loading, errorMsg }) {
   const [reason, setReason] = useState('');
   if (!topup) return null;
   return (
-    <div className="modal-modern-overlay" onClick={onClose}>
-      <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-        <div className="modal-modern-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+        <div className="modal-header">
           <h2>Delete Topup</h2>
-          <button onClick={onClose} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+          <button onClick={onClose} className="btn btn-ghost btn-sm">{'\u2715'}</button>
         </div>
-        <div className="modal-modern-body">
+        <div className="modal-body">
           <div className="alert alert-error">
             <strong>{'\u26A0\uFE0F'} Warning:</strong> This will permanently delete this topup record from the database.
           </div>
@@ -52,11 +52,11 @@ function DeleteConfirmModal({ topup, onConfirm, onClose, loading, errorMsg }) {
           </div>
           {errorMsg && <div className="alert alert-error" style={{ marginTop: '0.5rem' }}>{errorMsg}</div>}
         </div>
-        <div className="modal-modern-footer">
-          <button className={`btn-modern btn-modern-danger${loading ? ' btn-loading' : ''}`} onClick={() => onConfirm(reason)} disabled={loading || !reason.trim()}>
+        <div className="modal-footer">
+          <button className={`btn btn-danger${loading ? ' btn-loading' : ''}`} onClick={() => onConfirm(reason)} disabled={loading || !reason.trim()}>
             {loading ? 'Deleting...' : 'Delete Topup'}
           </button>
-          <button className="btn-modern btn-modern-ghost" onClick={onClose} disabled={loading}>Cancel</button>
+          <button className="btn btn-ghost" onClick={onClose} disabled={loading}>Cancel</button>
         </div>
       </div>
     </div>
@@ -66,13 +66,13 @@ function DeleteConfirmModal({ topup, onConfirm, onClose, loading, errorMsg }) {
 function RestoreConfirmModal({ topup, onConfirm, onClose, loading }) {
   if (!topup) return null;
   return (
-    <div className="modal-modern-overlay" onClick={onClose}>
-      <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-        <div className="modal-modern-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+        <div className="modal-header">
           <h2>Restore Topup</h2>
-          <button onClick={onClose} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+          <button onClick={onClose} className="btn btn-ghost btn-sm">{'\u2715'}</button>
         </div>
-        <div className="modal-modern-body">
+        <div className="modal-body">
           <div className="alert alert-success">
             This will restore the topup to active status. It will reappear in dashboards and revenue calculations.
           </div>
@@ -83,11 +83,11 @@ function RestoreConfirmModal({ topup, onConfirm, onClose, loading }) {
             {topup.deletedAt && <div><span className="muted text-sm">Deleted At</span><div>{formatDateTime(topup.deletedAt)}</div></div>}
           </div>
         </div>
-        <div className="modal-modern-footer">
-          <button className={`btn-modern btn-modern-primary${loading ? ' btn-loading' : ''}`} onClick={onConfirm} disabled={loading}>
+        <div className="modal-footer">
+          <button className={`btn btn-primary${loading ? ' btn-loading' : ''}`} onClick={onConfirm} disabled={loading}>
             {loading ? 'Restoring...' : 'Restore Topup'}
           </button>
-          <button className="btn-modern btn-modern-ghost" onClick={onClose} disabled={loading}>Cancel</button>
+          <button className="btn btn-ghost" onClick={onClose} disabled={loading}>Cancel</button>
         </div>
       </div>
     </div>
@@ -107,13 +107,13 @@ function AuditLogModal({ topup, onClose }) {
   if (!topup) return null;
 
   return (
-    <div className="modal-modern-overlay" onClick={onClose}>
-      <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
-        <div className="modal-modern-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+        <div className="modal-header">
           <h2>Audit Log — {topup.userName}</h2>
-          <button onClick={onClose} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+          <button onClick={onClose} className="btn btn-ghost btn-sm">{'\u2715'}</button>
         </div>
-        <div className="modal-modern-body">
+        <div className="modal-body">
           {loading ? (
             <div className="muted" style={{ textAlign: 'center', padding: '1rem' }}>Loading audit trail...</div>
           ) : logs.length === 0 ? (
@@ -136,8 +136,8 @@ function AuditLogModal({ topup, onClose }) {
             </div>
           )}
         </div>
-        <div className="modal-modern-footer">
-          <button className="btn-modern btn-modern-ghost" onClick={onClose}>Close</button>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
@@ -275,17 +275,17 @@ export default function FirebaseAdminTopupsPage() {
   }
 
   return (
-    <div className="admin-layout">
+    <div className="layout-page">
       <AdminSidebar pendingCounts={{ pendingPayments: 0, pendingTopups: stats.pending }} userName={getAdminName()} />
 
-      <main className="admin-content">
-        <div className="admin-content-inner">
-          <div className="admin-page-header">
-            <h1 className="admin-page-title">
+      <main>
+        <div className="layout-inner">
+          <div className="page-header">
+            <h1 className="page-title">
               <span className="admin-page-title-icon">{'\u{1F4B0}'}</span>
               Topups
             </h1>
-            <div className="admin-page-actions">
+            <div className="page-actions">
               <span className="badge badge-pending text-xs">{stats.pending} pending</span>
               {stats.deleted > 0 && (
                 <span className="badge badge-rejected text-xs" style={{ marginLeft: '0.5rem' }}>{stats.deleted} deleted</span>
@@ -293,34 +293,34 @@ export default function FirebaseAdminTopupsPage() {
             </div>
           </div>
 
-          <div className="stats-grid-modern">
-            <div className="stat-card-modern success">
+          <div className="stats-grid">
+            <div className="stat-card success">
               <div className="stat-bg-icon">{'\u2705'}</div>
               <div className="stat-value">{stats.approved}</div>
               <div className="stat-label">Approved</div>
             </div>
-            <div className="stat-card-modern warning">
+            <div className="stat-card warning">
               <div className="stat-bg-icon">{'\u23F3'}</div>
               <div className="stat-value">{stats.pending}</div>
               <div className="stat-label">Pending</div>
             </div>
-            <div className="stat-card-modern danger">
+            <div className="stat-card danger">
               <div className="stat-bg-icon">{'\u2715'}</div>
               <div className="stat-value">{stats.rejected}</div>
               <div className="stat-label">Rejected</div>
             </div>
-            <div className="stat-card-modern" style={{ '--accent-soft': 'transparent' }}>
+            <div className="stat-card" style={{ '--accent-soft': 'transparent' }}>
               <div className="stat-bg-icon">{'\u{1F5D1}'}</div>
               <div className="stat-value">{stats.deleted}</div>
               <div className="stat-label">Deleted</div>
             </div>
           </div>
 
-          <div className="card-modern mb-md">
-            <div className="card-modern-header">
-              <h2 className="card-modern-title">{'\u{1F50D}'} Search & Filter</h2>
+          <div className="card mb-md">
+            <div className="card-header">
+              <h2 className="card-title">{'\u{1F50D}'} Search & Filter</h2>
             </div>
-            <div className="search-bar-modern">
+            <div className="filters">
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name or email..." />
               <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                 <option value="">All Status</option>
@@ -336,15 +336,15 @@ export default function FirebaseAdminTopupsPage() {
             </div>
           </div>
 
-          <div className="card-modern">
-            <div className="card-modern-header">
-              <h2 className="card-modern-title">{'\u{1F4CB}'} Topup History ({filteredTopups.length})</h2>
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">{'\u{1F4CB}'} Topup History ({filteredTopups.length})</h2>
             </div>
             <p className="muted text-sm mb-md">
               Topups are auto-approved. Deleted topups use soft delete — records are never permanently removed.
             </p>
 
-            <div className="table-wrap-modern">
+            <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -384,13 +384,13 @@ export default function FirebaseAdminTopupsPage() {
                       <td data-label="Transaction ID" className="font-mono text-sm">{t.transactionId || '—'}</td>
                       <td data-label="Actions">
                         <div className="flex-actions" style={{ gap: '0.25rem' }}>
-                          <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => handleReview(t)}>Details</button>
+                          <button className="btn btn-primary btn-xs" onClick={() => handleReview(t)}>Details</button>
                           {t.deleted ? (
-                            <button className="btn-modern btn-modern-xs" style={{ background: 'var(--success)', color: '#fff' }} onClick={() => setRestoreTarget(t)}>Restore</button>
+                            <button className="btn btn-xs" style={{ background: 'var(--success)', color: '#fff' }} onClick={() => setRestoreTarget(t)}>Restore</button>
                           ) : (
-                            <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => setDeleteTarget(t)}>Delete</button>
+                            <button className="btn btn-danger btn-xs" onClick={() => setDeleteTarget(t)}>Delete</button>
                           )}
-                          <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={() => setAuditTarget(t)} title="Audit Log">Audit</button>
+                          <button className="btn btn-ghost btn-xs" onClick={() => setAuditTarget(t)} title="Audit Log">Audit</button>
                         </div>
                       </td>
                     </tr>
@@ -445,13 +445,13 @@ function TopupDetailModal({ topup, onClose }) {
   if (!topup) return null;
 
   return (
-    <div className="modal-modern-overlay" onClick={onClose}>
-      <div className="modal-modern" onClick={e => e.stopPropagation()}>
-        <div className="modal-modern-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
           <h2>Topup Details</h2>
-          <button onClick={onClose} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+          <button onClick={onClose} className="btn btn-ghost btn-sm">{'\u2715'}</button>
         </div>
-        <div className="modal-modern-body">
+        <div className="modal-body">
           <div className="detail-grid-sm">
             <div>
               <div className="muted text-sm">User</div>
@@ -510,8 +510,8 @@ function TopupDetailModal({ topup, onClose }) {
             )}
           </div>
         </div>
-        <div className="modal-modern-footer">
-          <button className="btn-modern btn-modern-ghost" onClick={onClose}>Close</button>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

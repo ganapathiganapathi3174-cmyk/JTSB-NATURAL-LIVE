@@ -365,4 +365,3 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
     </div>
   );
 }
-

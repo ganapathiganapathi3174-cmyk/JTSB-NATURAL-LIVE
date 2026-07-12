@@ -89,7 +89,6 @@ export default function AdminChat() {
   const prevMsgCount = useRef(0);
   const typingTimer = useRef(null);
 
-  // Auth + subscriptions
   useEffect(() => {
     if (!localStorage.getItem('fb_admin_token')) { navigate('/fb-admin', { replace: true }); return; }
     const handleResize = () => setMobileView(window.innerWidth < 768);
@@ -104,14 +103,12 @@ export default function AdminChat() {
     };
   }, [navigate]);
 
-  // Unread counts per conversation
   useEffect(() => {
     conversations.forEach(c => {
       FirebaseChat.getUnreadCount(c.userId).then(count => setUnreadMap(prev => ({ ...prev, [c.userId]: count })));
     });
   }, [conversations]);
 
-  // Auto scroll to bottom on new messages
   useEffect(() => {
     if (messages.length > prevMsgCount.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -120,7 +117,6 @@ export default function AdminChat() {
     prevMsgCount.current = messages.length;
   }, [messages]);
 
-  // Scroll listener for "scroll to bottom" button
   useEffect(() => {
     const el = chatMessagesRef.current;
     if (!el) return;
@@ -131,7 +127,6 @@ export default function AdminChat() {
     return () => el.removeEventListener('scroll', handle);
   }, [messages]);
 
-  // Typing indicator: show "typing..." if user's last message was < 5s ago
   useEffect(() => {
     if (!messages.length || !selectedUser) { setTypingText(''); return; }
     const last = [...messages].reverse().find(m => m.senderId !== 'admin');
@@ -225,10 +220,8 @@ export default function AdminChat() {
     return { ...c, user: user || { id: c.userId, name: c.userName || 'Unknown', email: c.userEmail || '' } };
   });
 
-  // Count total unread for sidebar badge
   const totalUnread = useMemo(() => Object.values(unreadMap).reduce((a, b) => a + b, 0), [unreadMap]);
 
-  // Filter messages by search
   const filteredMsgs = useMemo(() => {
     if (!msgSearchQuery.trim()) return messages;
     const q = msgSearchQuery.toLowerCase();
@@ -253,12 +246,12 @@ export default function AdminChat() {
   return (
     <div className="fb-admin-layout">
       <AdminSidebar userName={adminName} pendingCounts={{}} />
-      <main className="admin-main-content chat-admin-main">
+      <main className="admin-main-content chat-main">
         <div className="chat-layout">
           <aside className={`chat-sidebar${!showSidebar ? ' chat-sidebar-hidden' : ''}`}>
             <div className="chat-sidebar-header">
-              <h3>Messages {totalUnread > 0 && <span className="chat-unread-badge" style={{ position: 'relative', top: '-1px', marginLeft: '0.35rem', fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>{totalUnread > 9 ? '9+' : totalUnread}</span>}</h3>
-              <button className="chat-cleanup-btn" onClick={handleCleanup} title="Remove chats of deleted users" disabled={cleaning}>
+              <h3>Messages {totalUnread > 0 && <span className="chat-unread" style={{ position: 'relative', top: '-1px', marginLeft: '0.35rem', fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>{totalUnread > 9 ? '9+' : totalUnread}</span>}</h3>
+              <button className="btn-icon btn-ghost" onClick={handleCleanup} title="Remove chats of deleted users" disabled={cleaning}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                 </svg>
@@ -270,11 +263,11 @@ export default function AdminChat() {
               </svg>
               <input className="chat-search-input" placeholder="Search users..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
-            <div className="chat-user-list">
+            <div className="chat-sidebar-list">
               {searchQuery.trim() ? (
                 filteredUsers.map(u => (
                   <div key={u.id} className={`chat-user-item${selectedUser?.id === u.id ? ' active' : ''}`} onClick={() => { selectUser(u); setSearchQuery(''); }}>
-                    <div className="chat-user-avatar">{u.name?.[0]?.toUpperCase() || '?'}</div>
+                    <div className="chat-avatar">{u.name?.[0]?.toUpperCase() || '?'}</div>
                     <div className="chat-user-info">
                       <div className="chat-user-name">{u.name || 'Unknown'}</div>
                       <div className="chat-user-email">{u.email || ''}</div>
@@ -284,12 +277,12 @@ export default function AdminChat() {
               ) : (
                 convoUsers.map(c => (
                   <div key={c.userId} className={`chat-user-item${selectedUser?.id === c.userId ? ' active' : ''}`} onClick={() => { const u = allUsers.find(x => x.id === c.userId); if (u) selectUser(u); }}>
-                    <div className="chat-user-avatar">{c.userName?.[0]?.toUpperCase() || '?'}</div>
+                    <div className="chat-avatar">{c.userName?.[0]?.toUpperCase() || '?'}</div>
                     <div className="chat-user-info">
                       <div className="chat-user-name">{c.userName || 'Unknown'}</div>
                       <div className="chat-user-preview">{c.lastSenderId === 'admin' ? 'You: ' : ''}{c.lastMessage?.replace('[img]', '')?.substring(0, 50) || ''}</div>
                     </div>
-                    {unreadMap[c.userId] > 0 && <span className="chat-unread-badge">{unreadMap[c.userId] > 9 ? '9+' : unreadMap[c.userId]}</span>}
+                    {unreadMap[c.userId] > 0 && <span className="chat-unread">{unreadMap[c.userId] > 9 ? '9+' : unreadMap[c.userId]}</span>}
                   </div>
                 ))
               )}
@@ -324,7 +317,7 @@ export default function AdminChat() {
                 <div className="chat-search-box" style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                   <input className="chat-search-input" placeholder="Search in conversation..." value={msgSearchQuery} onChange={e => setMsgSearchQuery(e.target.value)} style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem' }} />
-                  {msgSearchQuery && <button className="chat-cleanup-btn" onClick={() => setMsgSearchQuery('')} title="Clear search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>}
+                  {msgSearchQuery && <button className="btn-icon btn-ghost" onClick={() => setMsgSearchQuery('')} title="Clear search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>}
                 </div>
 
                 <div className="chat-messages" ref={chatMessagesRef}>
@@ -338,7 +331,7 @@ export default function AdminChat() {
                 </div>
 
                 {showScrollBtn && (
-                  <button className="chat-scroll-bottom" onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })} title="Scroll to bottom">
+                  <button className="btn-primary btn-icon" onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })} title="Scroll to bottom">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
                   </button>
                 )}

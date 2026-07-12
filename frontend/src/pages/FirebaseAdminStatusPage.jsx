@@ -28,17 +28,17 @@ function Toast({ message, type, onClose }) {
 
 function ConfirmModal({ message, onConfirm, onCancel }) {
   return (
-    <div className="modal-modern-overlay" onClick={onCancel}>
-      <div className="modal-modern" onClick={e => e.stopPropagation()}>
-        <div className="modal-modern-header">
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
           <h2>Confirm Status Change</h2>
         </div>
-        <div className="modal-modern-body">
+        <div className="modal-body">
           <p className="text-muted" style={{ lineHeight: 1.5, margin: 0 }}>{message}</p>
         </div>
-        <div className="modal-modern-footer" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn-modern btn-modern-ghost" onClick={onCancel}>Cancel</button>
-          <button className="btn-modern btn-modern-primary" onClick={onConfirm}>Confirm</button>
+        <div className="modal-footer" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" onClick={onConfirm}>Confirm</button>
         </div>
       </div>
     </div>
@@ -281,25 +281,25 @@ export default function FirebaseAdminStatusPage() {
   }
 
   return (
-    <div className="admin-layout">
+    <div className="layout-page">
       <AdminSidebar userName={getAdminName()} />
 
-      <main className="admin-content">
-        <div className="admin-content-inner">
-          <div className="admin-page-header">
-            <h1 className="admin-page-title">
+      <main>
+        <div className="layout-inner">
+          <div className="page-header">
+            <h1 className="page-title">
               <span className="admin-page-title-icon">{'\u{1F4CB}'}</span>
               Status Board
             </h1>
-            <div className="admin-page-actions">
+            <div className="page-actions">
               <span className="muted text-sm">
                 Showing {filteredCount} of {totalCount} users
               </span>
             </div>
           </div>
 
-          <div className="card-modern mb-md">
-            <div className="search-bar-modern" style={{ justifyContent: 'space-between' }}>
+          <div className="card mb-md">
+            <div className="filters" style={{ justifyContent: 'space-between' }}>
               <input
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}

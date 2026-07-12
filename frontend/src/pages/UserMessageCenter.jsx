@@ -89,12 +89,12 @@ export default function UserMessageCenter() {
   return (
     <div className="msg-center" style={{ maxWidth: '720px', margin: '0 auto', padding: '1rem' }}>
       <div className="msg-center-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-        <button className="btn-modern btn-modern-ghost btn-modern-sm" onClick={() => navigate('/fb/dashboard')}>
+        <button className="btn-ghost btn-sm" onClick={() => navigate('/fb/dashboard')}>
           {'\u2190'} Dashboard
         </button>
         <h1 className="msg-center-title" style={{ fontSize: '1.25rem', margin: 0 }}>Inbox</h1>
         {unreadCount > 0 && (
-          <button className="btn-modern btn-modern-ghost btn-modern-sm" onClick={handleMarkAllRead}>
+          <button className="btn-ghost btn-sm" onClick={handleMarkAllRead}>
             Mark All Read ({unreadCount})
           </button>
         )}

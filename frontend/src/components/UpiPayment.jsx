@@ -318,7 +318,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
           </div>
         )}
 
-        <div className="surface-card" style={{ padding: '1.25rem', marginBottom: '1rem', textAlign: 'center' }}>
+        <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem', textAlign: 'center' }}>
           <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>Pay <span className="text-gradient">₹{selectedAmount}</span></h3>
           <p className="text-muted text-sm mb-md">Scan QR or tap an app to pay</p>
 
@@ -362,18 +362,18 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
           </div>
         )}
 
-        <div className="surface-card mb-md" style={{ padding: '1.25rem' }}>
+        <div className="card mb-md" style={{ padding: '1.25rem' }}>
           <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', textAlign: 'center' }}>Upload Bank SMS Screenshot</h3>
           <p className="text-muted text-sm text-center" style={{ marginBottom: '1rem', lineHeight: 1.6 }}>
             Paid <strong>₹{selectedAmount}</strong> to <strong style={{ userSelect: 'all' }}>{ADMIN_UPI}</strong>? Upload your bank SMS screenshot below to verify.
           </p>
 
-          <div className="surface-card mb-md">
+          <div className="card mb-md">
             <div className="text-sm font-semibold mb-sm">Selected Amount</div>
             <div className="text-xl font-bold text-gradient">₹{selectedAmount}</div>
           </div>
 
-          <div className="surface-card mb-md">
+          <div className="card mb-md">
             <div className="text-sm font-semibold mb-sm">Order ID</div>
             <code style={{ userSelect: 'all' }}>{orderId}</code>
           </div>
@@ -427,7 +427,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
       <div className="grid-2-sm" style={{ display: 'grid', gap: '0.75rem' }}>
         {AMOUNT_OPTIONS.map((opt) => (
           <button key={opt.amount} type="button" disabled={creatingOrder} onClick={() => handleAmountSelect(opt.amount)}
-            className={`stat-card-glass text-center${creatingOrder && selectedAmount === opt.amount ? ' animate-pulse-soft' : ''}`}
+            className={`card text-center${creatingOrder && selectedAmount === opt.amount ? ' animate-pulse-soft' : ''}`}
             style={{ padding: '1.25rem 0.75rem', cursor: creatingOrder ? 'default' : 'pointer', border: selectedAmount === opt.amount ? '2px solid var(--accent)' : '2px solid transparent', opacity: creatingOrder && selectedAmount === opt.amount ? 0.6 : 1 }}>
             <div className="text-xl font-bold text-gradient" style={{ marginBottom: '0.15rem' }}>₹{opt.amount}</div>
             <div className="text-sm text-muted">{opt.label}</div>

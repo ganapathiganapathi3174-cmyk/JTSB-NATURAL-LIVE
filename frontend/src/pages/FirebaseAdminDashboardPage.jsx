@@ -30,7 +30,7 @@ function AddUserModal({ onClose, onAdded }) {
 
     try {
       const tempPassword = password || Math.random().toString(36).slice(-8);
-      
+
       const user = await FirebaseUser.createWithPassword({
         name: name.trim(),
         email: email.trim().toLowerCase(),
@@ -85,7 +85,7 @@ function AddUserModal({ onClose, onAdded }) {
               <label>Temporary Password (optional)</label>
               <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave empty for auto-generated" />
             </div>
-            <button className={`btn-modern btn-modern-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading} style={{ width: '100%' }}>
+            <button className={`btn-primary${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading} style={{ width: '100%' }}>
               {loading ? 'Creating...' : 'Create User'}
             </button>
           </form>
@@ -408,156 +408,153 @@ export default function FirebaseAdminDashboardPage() {
   }), [stats]);
 
   return (
-    <div className="admin-layout">
+    <div className="layout-page">
       <AdminSidebar pendingCounts={pendingCounts} userName={getAdminName()} />
 
-      <main className="admin-content">
-        <div className="admin-content-inner">
-          <div className="admin-page-header">
-            <h1 className="admin-page-title">
-              <span className="admin-page-title-icon">{'\u{1F4CA}'}</span>
-              Dashboard Overview
-            </h1>
-            <div className="admin-page-actions">
-              <button className="btn-modern btn-modern-primary" onClick={() => setShowAddUser(true)}>
-                + Add User
-              </button>
-              <span className={`badge ${sseConnected ? 'badge-paid' : 'badge-rejected'} badge-xs`} style={{ marginLeft: '0.5rem', fontSize: '0.7rem' }}>
-                {sseConnected ? '\u25CF Live' : '\u25CB Disconnected'}
-              </span>
-            </div>
+      <main className="layout-inner">
+        <div className="page-header">
+          <h1 className="page-title">
+            Dashboard Overview
+          </h1>
+          <div className="page-actions">
+            <button className="btn-primary" onClick={() => setShowAddUser(true)}>
+              + Add User
+            </button>
+            <span className={`sse-indicator ${sseConnected ? 'online' : 'offline'}`}>
+              <span className="sse-dot" /> {sseConnected ? 'Live' : 'Disconnected'}
+            </span>
           </div>
+        </div>
 
-          <div className="stats-grid-modern">
-            <div className="stat-card-modern accent">
-              <div className="stat-bg-icon">{'\u{1F465}'}</div>
-              <div className="stat-value">{stats.totalUsers}</div>
-              <div className="stat-label">Total Users</div>
-              <div className="stat-sub">{'\u{1F4C8}'} Registered</div>
-            </div>
-            <div className={`stat-card-modern ${sseCounts.pending_payments > 0 ? 'warning' : 'success'}`}>
-              <div className="stat-bg-icon">{'\u{1F4E8}'}</div>
-              <div className="stat-value">{sseConnected ? sseCounts.pending_payments : stats.pendingTopups}</div>
-              <div className="stat-label">{sseConnected ? 'Pending Payments (Live)' : 'Pending Payments'}</div>
-              <div className="stat-sub">{sseConnected ? '\u25CF Real-time SSE' : '\u{1F504}'} Awaiting processing</div>
-            </div>
-            <div className="stat-card-modern success">
-              <div className="stat-bg-icon">{'\u2705'}</div>
-              <div className="stat-value">{stats.successPayments}</div>
-              <div className="stat-label">Paid Users</div>
-              <div className="stat-sub">{'\u{1F4B0}'} Successfully registered</div>
-            </div>
-            <div className="stat-card-modern accent">
-              <div className="stat-bg-icon">{'\u{1F4B8}'}</div>
-              <div className="stat-value">₹{stats.totalTopupAmount.toFixed(2)}</div>
-              <div className="stat-label">Total Topup Amount</div>
-              <div className="stat-sub">{'\u{1F4C8}'} All time</div>
-            </div>
-            <div className="stat-card-modern success">
-              <div className="stat-bg-icon">{'\u{1F4B5}'}</div>
-              <div className="stat-value">₹{stats.totalRevenue.toFixed(2)}</div>
-              <div className="stat-label">Total Revenue</div>
-              <div className="stat-sub">{'\u{1F4C8}'} Reg + Topups</div>
-            </div>
-            <div className="stat-card-modern warning">
-              <div className="stat-bg-icon">{'\u{1F3C6}'}</div>
-              <div className="stat-value">{stats.eligibleSponsors}</div>
-              <div className="stat-label">Eligible Sponsors</div>
-              <div className="stat-sub">{'\u{1F504}'} Pending topup</div>
-            </div>
-            <div className="stat-card-modern success">
-              <div className="stat-bg-icon">{'\u{1F4B5}'}</div>
-              <div className="stat-value">₹{stats.totalCredited.toFixed(2)}</div>
-              <div className="stat-label">Total Credited</div>
-              <div className="stat-sub">{'\u2705'} Completed</div>
-            </div>
-            <div className="stat-card-modern" style={{ '--accent-soft': 'transparent' }}>
-              <div className="stat-bg-icon">{'\u{1F517}'}</div>
-              <div className="stat-value">{stats.totalReferrals}</div>
-              <div className="stat-label">Total Referrals</div>
-              <div className="stat-sub">{'\u{1F4C8}'} All time</div>
-            </div>
-            <div className="stat-card-modern success">
-              <div className="stat-bg-icon">{'\u{1F465}'}</div>
-              <div className="stat-value">{stats.activeUsers}</div>
-              <div className="stat-label">Active Users</div>
-              <div className="stat-sub">{'\u2705'} Account active</div>
-            </div>
-            <div className="stat-card-modern warning">
-              <div className="stat-bg-icon">{'\u23F3'}</div>
-              <div className="stat-value">{stats.inactiveUsers}</div>
-              <div className="stat-label">Inactive Users</div>
-              <div className="stat-sub">{'\u{1F504}'} Requires action</div>
-            </div>
-            <div className="stat-card-modern danger">
-              <div className="stat-bg-icon">{'\u{1F6AB}'}</div>
-              <div className="stat-value">{stats.suspendedUsers}</div>
-              <div className="stat-label">Suspended</div>
-              <div className="stat-sub">{'\u26A0\uFE0F'} Requires review</div>
-            </div>
-            <div className="stat-card-modern" style={{ '--accent-soft': 'transparent' }}>
-              <div className="stat-bg-icon">{'\u{1F464}'}</div>
-              <div className="stat-value">{stats.membershipActive}</div>
-              <div className="stat-label">Membership Active</div>
-              <div className="stat-sub">{'\u{1F4B0}'} Paid & active</div>
-            </div>
-            <div className="stat-card-modern warning">
-              <div className="stat-bg-icon">{'\u{1F504}'}</div>
-              <div className="stat-value">{stats.sponsorsAwaitingRenewal}</div>
-              <div className="stat-label">Sponsor Renewal</div>
-              <div className="stat-sub">{'\u{1F3C6}'} Awaiting renewal</div>
-            </div>
-            <div className="stat-card-modern" style={{ '--accent-soft': 'transparent' }}>
-              <div className="stat-bg-icon">{'\u{1F50D}'}</div>
-              <div className="stat-value">{stats.usersNeedingReview}</div>
-              <div className="stat-label">Needs Review</div>
-              <div className="stat-sub">{'\u{1F4CB}'} Pending admin review</div>
-            </div>
+        <div className="stats-grid">
+          <div className="stat-card accent-primary">
+            <div className="stat-bg-icon">{'\u{1F465}'}</div>
+            <div className="stat-value">{stats.totalUsers}</div>
+            <div className="stat-label">Total Users</div>
+            <div className="stat-sub">{'\u{1F4C8}'} Registered</div>
           </div>
-
-          {sseTime && (
-            <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--muted, #64748b)', marginBottom: '0.5rem' }}>
-              {sseConnected ? '\u25CF' : '\u25CB'} Last updated: {new Date(sseTime).toLocaleString('en-IN')}
-            </div>
-          )}
-
-          <div className="stats-grid-modern" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-            <div className="stat-card-modern info" style={{ '--accent-soft': 'rgba(59, 130, 246, 0.06)' }}>
-              <div className="stat-bg-icon">{'\u{1F4C5}'}</div>
-              <div className="stat-value">{stats.todayRegistrations}</div>
-              <div className="stat-label">Today's Registrations</div>
-              <div className="stat-sub">{'\u{1F4C8}'} New users</div>
-            </div>
-            <div className="stat-card-modern success">
-              <div className="stat-bg-icon">{'\u{1F4B3}'}</div>
-              <div className="stat-value">{stats.todayPayments}</div>
-              <div className="stat-label">Today's Payments</div>
-              <div className="stat-sub">{'\u2705'} Approved</div>
-            </div>
-            <div className="stat-card-modern accent">
-              <div className="stat-bg-icon">{'\u{1F4B0}'}</div>
-              <div className="stat-value">₹{stats.todayRevenue.toFixed(2)}</div>
-              <div className="stat-label">Today's Revenue</div>
-              <div className="stat-sub">{'\u{1F4C8}'} Collected</div>
-            </div>
-            <div className="stat-card-modern warning">
-              <div className="stat-bg-icon">{'\u{1F517}'}</div>
-              <div className="stat-value">{stats.todayReferrals}</div>
-              <div className="stat-label">Today's Referrals</div>
-              <div className="stat-sub">{'\u{1F4C8}'} Generated</div>
-            </div>
-            <div className="stat-card-modern" style={{ '--accent-soft': 'rgba(139, 92, 246, 0.06)' }}>
-              <div className="stat-bg-icon">{'\u{1F4E4}'}</div>
-              <div className="stat-value">{stats.todayTopups}</div>
-              <div className="stat-label">Today's Topups</div>
-              <div className="stat-sub">{'\u{1F504}'} Submitted</div>
-            </div>
+          <div className={`stat-card ${sseCounts.pending_payments > 0 ? 'accent-warning' : 'accent-success'}`}>
+            <div className="stat-bg-icon">{'\u{1F4E8}'}</div>
+            <div className="stat-value">{sseConnected ? sseCounts.pending_payments : stats.pendingTopups}</div>
+            <div className="stat-label">{sseConnected ? 'Pending Payments (Live)' : 'Pending Payments'}</div>
+            <div className="stat-sub">{sseConnected ? '\u25CF Real-time SSE' : '\u{1F504}'} Awaiting processing</div>
           </div>
+          <div className="stat-card accent-success">
+            <div className="stat-bg-icon">{'\u2705'}</div>
+            <div className="stat-value">{stats.successPayments}</div>
+            <div className="stat-label">Paid Users</div>
+            <div className="stat-sub">{'\u{1F4B0}'} Successfully registered</div>
+          </div>
+          <div className="stat-card accent-primary">
+            <div className="stat-bg-icon">{'\u{1F4B8}'}</div>
+            <div className="stat-value">₹{stats.totalTopupAmount.toFixed(2)}</div>
+            <div className="stat-label">Total Topup Amount</div>
+            <div className="stat-sub">{'\u{1F4C8}'} All time</div>
+          </div>
+          <div className="stat-card accent-success">
+            <div className="stat-bg-icon">{'\u{1F4B5}'}</div>
+            <div className="stat-value">₹{stats.totalRevenue.toFixed(2)}</div>
+            <div className="stat-label">Total Revenue</div>
+            <div className="stat-sub">{'\u{1F4C8}'} Reg + Topups</div>
+          </div>
+          <div className="stat-card accent-warning">
+            <div className="stat-bg-icon">{'\u{1F3C6}'}</div>
+            <div className="stat-value">{stats.eligibleSponsors}</div>
+            <div className="stat-label">Eligible Sponsors</div>
+            <div className="stat-sub">{'\u{1F504}'} Pending topup</div>
+          </div>
+          <div className="stat-card accent-success">
+            <div className="stat-bg-icon">{'\u{1F4B5}'}</div>
+            <div className="stat-value">₹{stats.totalCredited.toFixed(2)}</div>
+            <div className="stat-label">Total Credited</div>
+            <div className="stat-sub">{'\u2705'} Completed</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-bg-icon">{'\u{1F517}'}</div>
+            <div className="stat-value">{stats.totalReferrals}</div>
+            <div className="stat-label">Total Referrals</div>
+            <div className="stat-sub">{'\u{1F4C8}'} All time</div>
+          </div>
+          <div className="stat-card accent-success">
+            <div className="stat-bg-icon">{'\u{1F465}'}</div>
+            <div className="stat-value">{stats.activeUsers}</div>
+            <div className="stat-label">Active Users</div>
+            <div className="stat-sub">{'\u2705'} Account active</div>
+          </div>
+          <div className="stat-card accent-warning">
+            <div className="stat-bg-icon">{'\u23F3'}</div>
+            <div className="stat-value">{stats.inactiveUsers}</div>
+            <div className="stat-label">Inactive Users</div>
+            <div className="stat-sub">{'\u{1F504}'} Requires action</div>
+          </div>
+          <div className="stat-card accent-danger">
+            <div className="stat-bg-icon">{'\u{1F6AB}'}</div>
+            <div className="stat-value">{stats.suspendedUsers}</div>
+            <div className="stat-label">Suspended</div>
+            <div className="stat-sub">{'\u26A0\uFE0F'} Requires review</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-bg-icon">{'\u{1F464}'}</div>
+            <div className="stat-value">{stats.membershipActive}</div>
+            <div className="stat-label">Membership Active</div>
+            <div className="stat-sub">{'\u{1F4B0}'} Paid & active</div>
+          </div>
+          <div className="stat-card accent-warning">
+            <div className="stat-bg-icon">{'\u{1F504}'}</div>
+            <div className="stat-value">{stats.sponsorsAwaitingRenewal}</div>
+            <div className="stat-label">Sponsor Renewal</div>
+            <div className="stat-sub">{'\u{1F3C6}'} Awaiting renewal</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-bg-icon">{'\u{1F50D}'}</div>
+            <div className="stat-value">{stats.usersNeedingReview}</div>
+            <div className="stat-label">Needs Review</div>
+            <div className="stat-sub">{'\u{1F4CB}'} Pending admin review</div>
+          </div>
+        </div>
 
-          <div className="card-modern card-section">
-            <div className="card-modern-header">
-              <h2 className="card-modern-title">{'\u{1F4CA}'} Priority Overview</h2>
-            </div>
+        {sseTime && (
+          <div className="sse-time">{sseConnected ? '\u25CF' : '\u25CB'} Last updated: {new Date(sseTime).toLocaleString('en-IN')}</div>
+        )}
+
+        <div className="stats-grid">
+          <div className="stat-card accent-info">
+            <div className="stat-bg-icon">{'\u{1F4C5}'}</div>
+            <div className="stat-value">{stats.todayRegistrations}</div>
+            <div className="stat-label">Today's Registrations</div>
+            <div className="stat-sub">{'\u{1F4C8}'} New users</div>
+          </div>
+          <div className="stat-card accent-success">
+            <div className="stat-bg-icon">{'\u{1F4B3}'}</div>
+            <div className="stat-value">{stats.todayPayments}</div>
+            <div className="stat-label">Today's Payments</div>
+            <div className="stat-sub">{'\u2705'} Approved</div>
+          </div>
+          <div className="stat-card accent-primary">
+            <div className="stat-bg-icon">{'\u{1F4B0}'}</div>
+            <div className="stat-value">₹{stats.todayRevenue.toFixed(2)}</div>
+            <div className="stat-label">Today's Revenue</div>
+            <div className="stat-sub">{'\u{1F4C8}'} Collected</div>
+          </div>
+          <div className="stat-card accent-warning">
+            <div className="stat-bg-icon">{'\u{1F517}'}</div>
+            <div className="stat-value">{stats.todayReferrals}</div>
+            <div className="stat-label">Today's Referrals</div>
+            <div className="stat-sub">{'\u{1F4C8}'} Generated</div>
+          </div>
+          <div className="stat-card accent-info">
+            <div className="stat-bg-icon">{'\u{1F4E4}'}</div>
+            <div className="stat-value">{stats.todayTopups}</div>
+            <div className="stat-label">Today's Topups</div>
+            <div className="stat-sub">{'\u{1F504}'} Submitted</div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">{'\u{1F4CA}'} Priority Overview</h2>
+          </div>
+          <div className="card-body">
             <div className="priority-grid">
               <Link to="/fb-admin/topups" className="priority-card priority-border-accent" style={{ textDecoration: 'none' }}>
                 <div className="card-icon">{'\u{1F4E4}'}</div>
@@ -578,12 +575,14 @@ export default function FirebaseAdminDashboardPage() {
               </Link>
             </div>
           </div>
+        </div>
 
-          <div className="stats-grid-modern" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div className="card-modern card-section" style={{ margin: 0 }}>
-              <div className="card-modern-header">
-                <h2 className="card-modern-title">{'\u26A1'} Quick Actions</h2>
-              </div>
+        <div className="stats-grid">
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">{'\u26A1'} Quick Actions</h2>
+            </div>
+            <div className="card-body">
               <div className="quick-actions-grid">
                 <button className="quick-action-btn" onClick={() => navigate('/fb-admin/upi-payments')}>
                   {'\u{1F504}'} Process Payments
@@ -605,114 +604,116 @@ export default function FirebaseAdminDashboardPage() {
                 </button>
               </div>
             </div>
-
-            <div className="card-modern card-section" style={{ margin: 0 }}>
-              <div className="card-modern-header">
-                <h2 className="card-modern-title">{'\u{1F4CA}'} System Health</h2>
-                <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={fetchHealth} disabled={healthLoading}>
-                  {healthLoading ? '...' : '\u{1F504}'}
-                </button>
-              </div>
-              <div>
-                {healthData ? (
-                  <>
-                    <div className="health-grid" style={{ marginBottom: '0.75rem' }}>
-                      {healthData.health && Object.entries(healthData.health).slice(0, 6).map(([key, val]) => (
-                        <div key={key} className="health-item">
-                          <span className={`health-dot ${val?.status === 'ok' ? 'online' : val?.status === 'degraded' ? 'degraded' : 'offline'}`} />
-                          <span className="health-label">{key.charAt(0).toUpperCase() + key.slice(1)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div>
-                      {healthData.metrics && (
-                        <>
-                          <div className="health-metric">
-                            <span className="health-metric-label">Uptime</span>
-                            <span className="health-metric-value">
-                              {healthData.metrics.uptime_seconds > 86400
-                                ? Math.floor(healthData.metrics.uptime_seconds / 86400) + 'd '
-                                : ''}
-                              {Math.floor((healthData.metrics.uptime_seconds % 86400) / 3600)}h {Math.floor((healthData.metrics.uptime_seconds % 3600) / 60)}m
-                            </span>
-                          </div>
-                          <div className="health-metric">
-                            <span className="health-metric-label">API Calls</span>
-                            <span className="health-metric-value">{healthData.metrics.api_calls?.total || 0}</span>
-                          </div>
-                          <div className="health-metric">
-                            <span className="health-metric-label">Auth Failure Rate</span>
-                            <span className={`health-metric-value ${(healthData.metrics.auth?.failure_rate || 0) > 10 ? 'danger' : 'success'}`}>
-                              {healthData.metrics.auth?.failure_rate || 0}%
-                            </span>
-                          </div>
-                          <div className="health-metric">
-                            <span className="health-metric-label">Payment Approval Rate</span>
-                            <span className={`health-metric-value ${(healthData.metrics.payments?.approval_rate || 0) > 50 ? 'success' : 'warning'}`}>
-                              {healthData.metrics.payments?.approval_rate || 0}%
-                            </span>
-                          </div>
-                          <div className="health-metric">
-                            <span className="health-metric-label">OCR Success Rate</span>
-                            <span className={`health-metric-value ${(healthData.metrics.ocr?.success_rate || 0) > 80 ? 'success' : (healthData.metrics.ocr?.success_rate || 0) > 50 ? 'warning' : 'danger'}`}>
-                              {healthData.metrics.ocr?.success_rate || 0}%
-                            </span>
-                          </div>
-                          <div className="health-metric">
-                            <span className="health-metric-label">DB Errors</span>
-                            <span className={`health-metric-value ${(healthData.metrics.database?.supabase_errors || 0) > 0 ? 'danger' : 'success'}`}>
-                              {healthData.metrics.database?.supabase_errors || 0}
-                            </span>
-                          </div>
-                          <div className="health-metric">
-                            <span className="health-metric-label">Queue Pending</span>
-                            <span className={`health-metric-value ${(healthData.queue?.pending || 0) > 0 ? 'warning' : 'success'}`}>
-                              {healthData.queue?.pending || 0}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: '1.5rem', color: '#9ca3af', fontSize: '0.85rem' }}>
-                    {healthLoading ? 'Loading...' : 'No health data'}
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
 
-          <div className="card-modern card-section">
-            <div className="card-modern-header">
-              <h2 className="card-modern-title">{'\u{1F4CA}'} Collection Analytics</h2>
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">{'\u{1F4CA}'} System Health</h2>
+              <button className="btn-ghost btn-sm" onClick={fetchHealth} disabled={healthLoading}>
+                {healthLoading ? '...' : '\u{1F504}'}
+              </button>
             </div>
-            <div className="stats-grid-modern">
-              <div className="stat-card-modern success">
+            <div className="card-body">
+              {healthData ? (
+                <>
+                  <div className="health-grid" style={{ marginBottom: '0.75rem' }}>
+                    {healthData.health && Object.entries(healthData.health).slice(0, 6).map(([key, val]) => (
+                      <div key={key} className="health-item">
+                        <span className={`health-dot ${val?.status === 'ok' ? 'online' : val?.status === 'degraded' ? 'degraded' : 'offline'}`} />
+                        <span className="health-label">{key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    {healthData.metrics && (
+                      <>
+                        <div className="health-metric">
+                          <span className="health-metric-label">Uptime</span>
+                          <span className="health-metric-value">
+                            {healthData.metrics.uptime_seconds > 86400
+                              ? Math.floor(healthData.metrics.uptime_seconds / 86400) + 'd '
+                              : ''}
+                            {Math.floor((healthData.metrics.uptime_seconds % 86400) / 3600)}h {Math.floor((healthData.metrics.uptime_seconds % 3600) / 60)}m
+                          </span>
+                        </div>
+                        <div className="health-metric">
+                          <span className="health-metric-label">API Calls</span>
+                          <span className="health-metric-value">{healthData.metrics.api_calls?.total || 0}</span>
+                        </div>
+                        <div className="health-metric">
+                          <span className="health-metric-label">Auth Failure Rate</span>
+                          <span className={`health-metric-value ${(healthData.metrics.auth?.failure_rate || 0) > 10 ? 'danger' : 'success'}`}>
+                            {healthData.metrics.auth?.failure_rate || 0}%
+                          </span>
+                        </div>
+                        <div className="health-metric">
+                          <span className="health-metric-label">Payment Approval Rate</span>
+                          <span className={`health-metric-value ${(healthData.metrics.payments?.approval_rate || 0) > 50 ? 'success' : 'warning'}`}>
+                            {healthData.metrics.payments?.approval_rate || 0}%
+                          </span>
+                        </div>
+                        <div className="health-metric">
+                          <span className="health-metric-label">OCR Success Rate</span>
+                          <span className={`health-metric-value ${(healthData.metrics.ocr?.success_rate || 0) > 80 ? 'success' : (healthData.metrics.ocr?.success_rate || 0) > 50 ? 'warning' : 'danger'}`}>
+                            {healthData.metrics.ocr?.success_rate || 0}%
+                          </span>
+                        </div>
+                        <div className="health-metric">
+                          <span className="health-metric-label">DB Errors</span>
+                          <span className={`health-metric-value ${(healthData.metrics.database?.supabase_errors || 0) > 0 ? 'danger' : 'success'}`}>
+                            {healthData.metrics.database?.supabase_errors || 0}
+                          </span>
+                        </div>
+                        <div className="health-metric">
+                          <span className="health-metric-label">Queue Pending</span>
+                          <span className={`health-metric-value ${(healthData.queue?.pending || 0) > 0 ? 'warning' : 'success'}`}>
+                            {healthData.queue?.pending || 0}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="empty-state">
+                  {healthLoading ? 'Loading...' : 'No health data'}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">{'\u{1F4CA}'} Collection Analytics</h2>
+          </div>
+          <div className="card-body">
+            <div className="stats-grid">
+              <div className="stat-card accent-success">
                 <div className="stat-bg-icon">{'\u{1F4B0}'}</div>
                 <div className="stat-value">₹{paymentAnalytics.totalCollectionAmount.toFixed(2)}</div>
                 <div className="stat-label">Total Collection Amount</div>
                 <div className="stat-sub">{'\u2705'} Approved entries</div>
               </div>
-              <div className="stat-card-modern accent">
+              <div className="stat-card accent-primary">
                 <div className="stat-bg-icon">{'\u{1F4CB}'}</div>
                 <div className="stat-value">{paymentAnalytics.totalApprovedPayments}</div>
                 <div className="stat-label">Total Approved Payments</div>
                 <div className="stat-sub">{'\u{1F4B3}'} Entries</div>
               </div>
-              <div className="stat-card-modern" style={{ '--accent-soft': 'var(--success-soft, rgba(34, 197, 94, 0.1))' }}>
+              <div className="stat-card accent-success">
                 <div className="stat-bg-icon">{'\u{1F4C5}'}</div>
                 <div className="stat-value">₹{paymentAnalytics.todayCollection.toFixed(2)}</div>
                 <div className="stat-label">Today's Collection</div>
                 <div className="stat-sub">{'\u{1F4C8}'} Daily total</div>
               </div>
-              <div className="stat-card-modern warning">
+              <div className="stat-card accent-warning">
                 <div className="stat-bg-icon">{'\u{1F4C6}'}</div>
                 <div className="stat-value">₹{paymentAnalytics.monthCollection.toFixed(2)}</div>
                 <div className="stat-label">This Month Collection</div>
                 <div className="stat-sub">{'\u{1F4C8}'} Monthly total</div>
               </div>
-              <div className="stat-card-modern" style={{ '--accent-soft': 'var(--info-soft, rgba(59, 130, 246, 0.1))' }}>
+              <div className="stat-card accent-info">
                 <div className="stat-bg-icon">{'\u{1F522}'}</div>
                 <div className="stat-value">₹{paymentAnalytics.averagePaymentValue.toFixed(2)}</div>
                 <div className="stat-label">Average Payment Value</div>
@@ -720,44 +721,44 @@ export default function FirebaseAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="stats-grid-modern" style={{ marginTop: '1rem' }}>
-              <div className="stat-card-modern" style={{ '--accent-soft': 'transparent', border: '1px solid var(--border, #e2e8f0)' }}>
+            <div className="stats-grid" style={{ marginTop: '1rem' }}>
+              <div className="stat-card">
                 <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.todayCollection.toFixed(2)}</div>
                 <div className="stat-label" style={{ fontSize: '0.7rem' }}>Daily Collection</div>
               </div>
-              <div className="stat-card-modern" style={{ '--accent-soft': 'transparent', border: '1px solid var(--border, #e2e8f0)' }}>
+              <div className="stat-card">
                 <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.weekCollection.toFixed(2)}</div>
                 <div className="stat-label" style={{ fontSize: '0.7rem' }}>Weekly Collection</div>
               </div>
-              <div className="stat-card-modern" style={{ '--accent-soft': 'transparent', border: '1px solid var(--border, #e2e8f0)' }}>
+              <div className="stat-card">
                 <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.monthCollection.toFixed(2)}</div>
                 <div className="stat-label" style={{ fontSize: '0.7rem' }}>Monthly Collection</div>
               </div>
-              <div className="stat-card-modern" style={{ '--accent-soft': 'transparent', border: '1px solid var(--border, #e2e8f0)' }}>
+              <div className="stat-card">
                 <div className="stat-value" style={{ fontSize: '1rem' }}>₹{paymentAnalytics.yearCollection.toFixed(2)}</div>
                 <div className="stat-label" style={{ fontSize: '0.7rem' }}>Yearly Collection</div>
               </div>
             </div>
 
             <div style={{ marginTop: '1.5rem' }}>
-              <div className="card-modern-header" style={{ padding: '0 0 0.75rem 0', borderBottom: '1px solid var(--border, #e2e8f0)', marginBottom: '0.75rem' }}>
+              <div className="card-header" style={{ padding: '0 0 0.75rem 0', borderBottom: '1px solid var(--border)', marginBottom: '0.75rem' }}>
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   {'\u{1F4CB}'} Payment Collection Records
-                  <span style={{ fontSize: '0.75rem', color: 'var(--muted, #64748b)', fontWeight: 400 }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 400 }}>
                     ({filteredEntries.length} entries)
                   </span>
                 </h3>
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                   {['Approved Only', 'Today', 'This Week', 'This Month'].map(f => (
                     <button key={f}
-                      className={`btn-modern btn-modern-xs ${analyticsFilter === f ? 'btn-modern-primary' : 'btn-modern-ghost'}`}
+                      className={`btn-sm ${analyticsFilter === f ? 'btn-primary' : 'btn-ghost'}`}
                       onClick={() => setAnalyticsFilter(f)}>
                       {f}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="table-wrap-modern table-section">
+              <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
@@ -771,7 +772,7 @@ export default function FirebaseAdminDashboardPage() {
                   </thead>
                   <tbody>
                     {filteredEntries.length === 0 ? (
-                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted, #64748b)', padding: '2rem' }}>No approved entries found</td></tr>
+                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: '2rem' }}>No approved entries found</td></tr>
                     ) : filteredEntries.slice(0, 100).map((e, i) => (
                       <tr key={e.transactionId + '-' + e.userId + '-' + i}>
                         <td data-label="User ID"><code style={{ fontSize: '0.75rem' }}>{e.userId ? e.userId.substring(0, 12) + '...' : '—'}</code></td>
@@ -785,7 +786,7 @@ export default function FirebaseAdminDashboardPage() {
                       </tr>
                     ))}
                     {filteredEntries.length > 100 && (
-                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted, #64748b)', padding: '0.5rem', fontSize: '0.8rem' }}>
+                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: '0.5rem', fontSize: '0.8rem' }}>
                         Showing 100 of {filteredEntries.length} entries
                       </td></tr>
                     )}
@@ -794,40 +795,42 @@ export default function FirebaseAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="stats-grid-modern" style={{ marginTop: '1rem', gap: '0.5rem' }}>
+            <div className="stats-grid" style={{ marginTop: '1rem', gap: '0.5rem' }}>
               <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--success-soft, rgba(34, 197, 94, 0.08))', borderRadius: '0.5rem' }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--muted, #64748b)', marginBottom: '0.15rem' }}>Payments</div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginBottom: '0.15rem' }}>Payments</div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--success)' }}>{paymentAnalytics.approvedPaymentsCount}</div>
               </div>
               <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--accent-soft, rgba(139, 92, 246, 0.08))', borderRadius: '0.5rem' }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--muted, #64748b)', marginBottom: '0.15rem' }}>Topups</div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginBottom: '0.15rem' }}>Topups</div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent)' }}>{paymentAnalytics.approvedTopupsCount}</div>
               </div>
               <div style={{ textAlign: 'center', padding: '0.5rem', background: 'var(--info-soft, rgba(59, 130, 246, 0.08))', borderRadius: '0.5rem' }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--muted, #64748b)', marginBottom: '0.15rem' }}>Collection Growth</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--info, #3b82f6)' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginBottom: '0.15rem' }}>Collection Growth</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--info)' }}>
                   {paymentAnalytics.totalCollectionAmount > 0
                     ? ((paymentAnalytics.monthCollection / paymentAnalytics.totalCollectionAmount) * 100).toFixed(1) + '%'
                     : '0%'}
                 </div>
               </div>
               <div style={{ textAlign: 'center', padding: '0.5rem', background: 'rgba(234, 179, 8, 0.08)', borderRadius: '0.5rem' }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--muted, #64748b)', marginBottom: '0.15rem' }}>Total Users Paid</div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginBottom: '0.15rem' }}>Total Users Paid</div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#eab308' }}>{paymentAnalytics.approvedPaymentsCount}</div>
               </div>
             </div>
           </div>
+        </div>
 
-          {showAddUser && (
-            <AddUserModal onClose={() => setShowAddUser(false)} onAdded={() => setShowAddUser(false)} />
-          )}
+        {showAddUser && (
+          <AddUserModal onClose={() => setShowAddUser(false)} onAdded={() => setShowAddUser(false)} />
+        )}
 
-          {eligibleSponsorsList.length > 0 && (
-            <div className="card-modern card-section">
-              <div className="card-modern-header">
-                <h2 className="card-modern-title">{'\u{1F3C6}'} Sponsor Status & Topup Eligibility ({eligibleSponsorsList.length})</h2>
-              </div>
-              <div className="table-wrap-modern table-section">
+        {eligibleSponsorsList.length > 0 && (
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">{'\u{1F3C6}'} Sponsor Status & Topup Eligibility ({eligibleSponsorsList.length})</h2>
+            </div>
+            <div className="card-body">
+              <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
@@ -892,14 +895,16 @@ export default function FirebaseAdminDashboardPage() {
                 </table>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {sponsorClaims.filter(c => c.status === 'pending').length > 0 && (
-            <div className="card-modern card-section" style={{ borderLeft: '3px solid var(--warning, #f59e0b)' }}>
-              <div className="card-modern-header">
-                <h2 className="card-modern-title">{'\u{1F3C6}'} Pending Sponsor Claims ({sponsorClaims.filter(c => c.status === 'pending').length})</h2>
-              </div>
-              <div className="table-wrap-modern table-section">
+        {sponsorClaims.filter(c => c.status === 'pending').length > 0 && (
+          <div className="card" style={{ borderLeft: '3px solid var(--warning, #f59e0b)' }}>
+            <div className="card-header">
+              <h2 className="card-title">{'\u{1F3C6}'} Pending Sponsor Claims ({sponsorClaims.filter(c => c.status === 'pending').length})</h2>
+            </div>
+            <div className="card-body">
+              <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
@@ -925,21 +930,21 @@ export default function FirebaseAdminDashboardPage() {
                           <td><span className="badge badge-pending badge-xs">Pending</span></td>
                           <td>
                             <div style={{ display: 'flex', gap: '0.35rem' }}>
-                              <button className="btn-modern btn-modern-primary btn-modern-xs"
+                              <button className="btn-primary btn-sm"
                                 onClick={() => {
                                   const enriched = { ...sponsor, inactiveReason: 'Sponsor Claim Pending Admin Approval', claimInfo: c };
                                   setApproveSponsorUser(enriched);
                                 }}>
                                 {'\u2713'} Approve
                               </button>
-                              <button className="btn-modern btn-modern-danger btn-modern-xs"
+                              <button className="btn-danger btn-sm"
                                 onClick={() => {
                                   const enriched = { ...sponsor, inactiveReason: 'Sponsor Claim Pending Admin Approval', claimInfo: c };
                                   setRejectSponsorUser(enriched);
                                 }}>
                                 {'\u2715'} Reject
                               </button>
-                              <button className="btn-modern btn-modern-ghost btn-modern-xs"
+                              <button className="btn-ghost btn-sm"
                                 onClick={() => {
                                   const enriched = { ...sponsor, inactiveReason: 'Sponsor Claim Pending Admin Approval', claimInfo: c };
                                   setShowClaimHistory(enriched);
@@ -955,14 +960,16 @@ export default function FirebaseAdminDashboardPage() {
                 </table>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {inactiveUsersList.length > 0 && (
-            <div className="card-modern card-section">
-              <div className="card-modern-header">
-                <h2 className="card-modern-title">{'\u26A0\uFE0F'} Inactive Users & Reasons ({inactiveUsersList.length})</h2>
-              </div>
-              <div className="table-wrap-modern table-section">
+        {inactiveUsersList.length > 0 && (
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">{'\u26A0\uFE0F'} Inactive Users & Reasons ({inactiveUsersList.length})</h2>
+            </div>
+            <div className="card-body">
+              <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
@@ -990,318 +997,160 @@ export default function FirebaseAdminDashboardPage() {
                         </td>
                         <td data-label="Refs">{u.referrals_count}</td>
                         <td data-label="Topup Refs">{u.topup_referrals_count}</td>
-                     <td data-label="Actions">
-                            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                              {(u.inactiveReason && (u.inactiveReason.includes('Referral Limit') || u.inactiveReason.includes('Sponsor Claim Pending'))) && (
-                                <button className="btn-modern btn-modern-primary btn-modern-xs"
-                                  onClick={() => setApproveSponsorUser(u)}>
-                                  {'\u2713'} Approve
-                                </button>
-                              )}
-                              {u.inactiveReason && u.inactiveReason.includes('Sponsor Claim Pending') && (
-                                <button className="btn-modern btn-modern-danger btn-modern-xs"
-                                  onClick={() => { setRejectSponsorUser(u); setRejectSponsorReason(''); }}>
-                                  {'\u2715'} Reject
-                                </button>
-                              )}
-                              <button className="btn-modern btn-modern-ghost btn-modern-xs"
-                                onClick={() => { setShowClaimHistory(u); }}>
-                                {'\u{1F4CB}'} Details
+                        <td data-label="Actions">
+                          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            {(u.inactiveReason && (u.inactiveReason.includes('Referral Limit') || u.inactiveReason.includes('Sponsor Claim Pending'))) && (
+                              <button className="btn-primary btn-sm"
+                                onClick={() => setApproveSponsorUser(u)}>
+                                {'\u2713'} Approve
                               </button>
-                              <button className="btn-modern btn-modern-danger btn-modern-xs"
-                                onClick={() => { setActionUser(u); setActionReason(''); }}>
-                                {'\u2715'} Delete
+                            )}
+                            {u.inactiveReason && u.inactiveReason.includes('Sponsor Claim Pending') && (
+                              <button className="btn-danger btn-sm"
+                                onClick={() => { setRejectSponsorUser(u); setRejectSponsorReason(''); }}>
+                                {'\u2715'} Reject
                               </button>
-                           </div>
-                         </td>
+                            )}
+                            <button className="btn-ghost btn-sm"
+                              onClick={() => { setShowClaimHistory(u); }}>
+                              {'\u{1F4CB}'} Details
+                            </button>
+                            <button className="btn-danger btn-sm"
+                              onClick={() => { setActionUser(u); setActionReason(''); }}>
+                              {'\u2715'} Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {actionUser && (
-            <div className="modal-modern-overlay" onClick={() => setActionUser(null)}>
-              <div className="modal-modern" onClick={e => e.stopPropagation()}>
-                <div className="modal-modern-header">
-                  <h2>Permanently Delete User</h2>
-                  <button onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
-                </div>
-                <div className="modal-modern-body">
-                  <div className="detail-grid card-section-sm">
-                    <div className="detail-row">
-                      <span className="detail-label">User</span>
-                      <span className="detail-value">{actionUser.name}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Email</span>
-                      <span className="detail-value">{actionUser.email}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Status</span>
-                      <div>
-                        <span className="badge badge-rejected badge-xs">Inactive</span>
-                        <span className={`badge ${actionUser.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-rejected'} badge-xs`} style={{ marginLeft: '0.25rem' }}>
-                          {actionUser.inactiveReason}
-                        </span>
-                      </div>
+        {actionUser && (
+          <div className="modal-overlay" onClick={() => setActionUser(null)}>
+            <div className="modal-glass" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Permanently Delete User</h2>
+                <button onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} className="btn-ghost btn-sm">{'\u2715'}</button>
+              </div>
+              <div className="modal-body">
+                <div className="detail-grid card-section-sm">
+                  <div className="detail-row">
+                    <span className="detail-label">User</span>
+                    <span className="detail-value">{actionUser.name}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Email</span>
+                    <span className="detail-value">{actionUser.email}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Status</span>
+                    <div>
+                      <span className="badge badge-rejected badge-xs">Inactive</span>
+                      <span className={`badge ${actionUser.inactiveReason === 'Own Topup Completed' ? 'badge-pending' : 'badge-rejected'} badge-xs`} style={{ marginLeft: '0.25rem' }}>
+                        {actionUser.inactiveReason}
+                      </span>
                     </div>
                   </div>
-
-                  <div className="alert alert-error" style={{ margin: '1rem 0' }}>
-                    <strong>⚠️ Permanent Data Loss Warning:</strong><br />
-                    This will permanently delete this user and ALL associated data including topups, transactions, payments, screenshots, messages, chat history, and notifications. This action CANNOT be undone!
-                  </div>
-
-                  <div className="field modal-field-mb">
-                    <label>Reason for deletion</label>
-                    <textarea
-                      className="input"
-                      placeholder="Why are you deleting this user?"
-                      value={actionReason}
-                      onChange={e => setActionReason(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-
-                  {actionMsg && (
-                    <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
-                      {actionMsg}
-                    </div>
-                  )}
                 </div>
-                <div className="modal-modern-footer">
-                  <button className={`btn-modern btn-modern-danger${actionLoading ? ' btn-loading' : ''}`}
-                    onClick={() => handleDeleteInactive(actionUser.id, actionReason)}
-                    disabled={actionLoading}>
-                    {actionLoading ? 'Deleting...' : '\u2715 Confirm Delete'}
-                  </button>
-                  <button className="btn-modern btn-modern-ghost" onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} disabled={actionLoading}>
-                    Cancel
-                  </button>
+
+                <div className="alert alert-error" style={{ margin: '1rem 0' }}>
+                  <strong>⚠️ Permanent Data Loss Warning:</strong><br />
+                  This will permanently delete this user and ALL associated data including topups, transactions, payments, screenshots, messages, chat history, and notifications. This action CANNOT be undone!
                 </div>
+
+                <div className="field modal-field-mb">
+                  <label>Reason for deletion</label>
+                  <textarea
+                    className="input"
+                    placeholder="Why are you deleting this user?"
+                    value={actionReason}
+                    onChange={e => setActionReason(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                {actionMsg && (
+                  <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
+                    {actionMsg}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className={`btn-danger${actionLoading ? ' btn-loading' : ''}`}
+                  onClick={() => handleDeleteInactive(actionUser.id, actionReason)}
+                  disabled={actionLoading}>
+                  {actionLoading ? 'Deleting...' : '\u2715 Confirm Delete'}
+                </button>
+                <button className="btn-ghost" onClick={() => { setActionUser(null); setActionMsg(''); setActionMessage(''); }} disabled={actionLoading}>
+                  Cancel
+                </button>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {approveSponsorUser && (
-            <div className="modal-modern-overlay" onClick={() => setApproveSponsorUser(null)}>
-              <div className="modal-modern" onClick={e => e.stopPropagation()}>
-                <div className="modal-modern-header">
-                  <h2>Approve Sponsor Claim</h2>
-                  <button onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
-                </div>
-                <div className="modal-modern-body">
-                  <div className="detail-grid card-section-sm">
-                    <div className="detail-row">
-                      <span className="detail-label">Sponsor Name</span>
-                      <span className="detail-value">{approveSponsorUser.name}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Sponsor ID</span>
-                      <span className="detail-value"><code>{approveSponsorUser.id ? approveSponsorUser.id.substring(0, 12) + '...' : '—'}</code></span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Referral Code</span>
-                      <span className="detail-value"><code>{approveSponsorUser.referral_code || '—'}</code></span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Inactive Reason</span>
-                      <span className="detail-value"><span className="badge badge-pending badge-xs">{approveSponsorUser.inactiveReason}</span></span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Current Status</span>
-                      <span className="detail-value"><span className="badge badge-rejected badge-xs">Inactive</span></span>
-                    </div>
-                  </div>
-
-                  {approveSponsorUser.claimInfo && (
-                    <div className="card-section-sm" style={{ marginTop: '1rem', borderTop: '1px solid var(--border, #e2e8f0)', paddingTop: '1rem' }}>
-                      <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Claim Details</h3>
-                      <div className="detail-grid">
-                        <div className="detail-row">
-                          <span className="detail-label">Claim Amount</span>
-                          <span className="detail-value font-bold" style={{ color: 'var(--success)' }}>₹{Number(approveSponsorUser.claimInfo.claim_amount || 0).toFixed(2)}</span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-label">Claim Date</span>
-                          <span className="detail-value">{approveSponsorUser.claimInfo.claim_date ? new Date(approveSponsorUser.claimInfo.claim_date).toLocaleString() : '—'}</span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-label">Referred Users Count</span>
-                          <span className="detail-value">{approveSponsorUser.claimInfo.items_count || 0}</span>
-                        </div>
-                      </div>
-
-                      {(approveSponsorUser.claimInfo.items || []).length > 0 && (
-                        <div style={{ marginTop: '0.75rem' }}>
-                          <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted, #64748b)' }}>Referred Users Generating Eligibility</h4>
-                          <div className="table-wrap-modern" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                            <table style={{ fontSize: '0.75rem' }}>
-                              <thead>
-                                <tr>
-                                  <th>User Name</th>
-                                  <th>Top-up Amount</th>
-                                  <th>Top-up Date</th>
-                                  <th>Transaction ID</th>
-                                  <th>Payment Method</th>
-                                  <th>Status</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {approveSponsorUser.claimInfo.items.map((item, idx) => (
-                                  <tr key={item.income_id || idx}>
-                                    <td>{item.referred_user_name || '—'}</td>
-                                    <td className="font-bold">₹{Number(item.topup_amount || 0).toFixed(2)}</td>
-                                    <td style={{ fontSize: '0.7rem' }}>{item.topup_date ? new Date(item.topup_date).toLocaleDateString() : '—'}</td>
-                                    <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.transaction_id || '—'}</td>
-                                    <td>{item.payment_method || 'UPI'}</td>
-                                    <td><span className="badge badge-paid badge-xs">{item.payment_status || 'approved'}</span></td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="alert alert-warning text-sm" style={{ marginTop: '1rem' }}>
-                    <strong>Approve:</strong> Credits <strong>₹{Number(approveSponsorUser.claimInfo?.claim_amount || 0).toFixed(2)}</strong> to sponsor's wallet and reactivates account. Referral history and wallet history remain unchanged.
-                  </div>
-
-                  {actionMsg && (
-                    <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
-                      {actionMsg}
-                    </div>
-                  )}
-                </div>
-                <div className="modal-modern-footer">
-                  <button className={`btn-modern btn-modern-primary${approveSponsorLoading ? ' btn-loading' : ''}`}
-                    onClick={() => handleApproveSponsor(approveSponsorUser.id)}
-                    disabled={approveSponsorLoading}>
-                    {approveSponsorLoading ? 'Approving...' : '\u2713 Approve & Credit ₹' + Number(approveSponsorUser.claimInfo?.claim_amount || 0).toFixed(2)}
-                  </button>
-                  <button className="btn-modern btn-modern-ghost" onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} disabled={approveSponsorLoading}>
-                    Cancel
-                  </button>
-                </div>
+        {approveSponsorUser && (
+          <div className="modal-overlay" onClick={() => setApproveSponsorUser(null)}>
+            <div className="modal-glass" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Approve Sponsor Claim</h2>
+                <button onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} className="btn-ghost btn-sm">{'\u2715'}</button>
               </div>
-            </div>
-          )}
-
-          {rejectSponsorUser && (
-            <div className="modal-modern-overlay" onClick={() => setRejectSponsorUser(null)}>
-              <div className="modal-modern" onClick={e => e.stopPropagation()}>
-                <div className="modal-modern-header">
-                  <h2>Reject Sponsor Claim</h2>
-                  <button onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
-                </div>
-                <div className="modal-modern-body">
-                  <div className="detail-grid card-section-sm">
-                    <div className="detail-row">
-                      <span className="detail-label">Sponsor Name</span>
-                      <span className="detail-value">{rejectSponsorUser.name}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Inactive Reason</span>
-                      <span className="detail-value"><span className="badge badge-pending badge-xs">{rejectSponsorUser.inactiveReason}</span></span>
-                    </div>
+              <div className="modal-body">
+                <div className="detail-grid card-section-sm">
+                  <div className="detail-row">
+                    <span className="detail-label">Sponsor Name</span>
+                    <span className="detail-value">{approveSponsorUser.name}</span>
                   </div>
-
-                  <div className="field modal-field-mb" style={{ marginTop: '1rem' }}>
-                    <label>Rejection Reason</label>
-                    <textarea
-                      className="input"
-                      placeholder="Why is this claim being rejected?"
-                      value={rejectSponsorReason}
-                      onChange={e => setRejectSponsorReason(e.target.value)}
-                      rows={3}
-                    />
+                  <div className="detail-row">
+                    <span className="detail-label">Sponsor ID</span>
+                    <span className="detail-value"><code>{approveSponsorUser.id ? approveSponsorUser.id.substring(0, 12) + '...' : '—'}</code></span>
                   </div>
-
-                  <div className="alert alert-warning text-sm">
-                    <strong>Note:</strong> Rejecting will reactivate the sponsor account without crediting the bonus. The income records will be restored to eligible status for future claims.
+                  <div className="detail-row">
+                    <span className="detail-label">Referral Code</span>
+                    <span className="detail-value"><code>{approveSponsorUser.referral_code || '—'}</code></span>
                   </div>
-
-                  {actionMsg && (
-                    <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
-                      {actionMsg}
-                    </div>
-                  )}
-                </div>
-                <div className="modal-modern-footer">
-                  <button className={`btn-modern btn-modern-danger${rejectSponsorLoading ? ' btn-loading' : ''}`}
-                    onClick={() => handleRejectSponsor(rejectSponsorUser.id)}
-                    disabled={rejectSponsorLoading}>
-                    {rejectSponsorLoading ? 'Rejecting...' : '\u2715 Reject Claim'}
-                  </button>
-                  <button className="btn-modern btn-modern-ghost" onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} disabled={rejectSponsorLoading}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {showClaimHistory && (
-            <div className="modal-modern-overlay" onClick={() => setShowClaimHistory(null)}>
-              <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
-                <div className="modal-modern-header">
-                  <h2>Claim History — {showClaimHistory.name}</h2>
-                  <button onClick={() => setShowClaimHistory(null)} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
-                </div>
-                <div className="modal-modern-body">
-                  <div className="detail-grid card-section-sm">
-                    <div className="detail-row">
-                      <span className="detail-label">Sponsor Name</span>
-                      <span className="detail-value">{showClaimHistory.name}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Sponsor ID</span>
-                      <span className="detail-value"><code>{showClaimHistory.id ? showClaimHistory.id.substring(0, 12) + '...' : '—'}</code></span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Referral Code</span>
-                      <span className="detail-value"><code>{showClaimHistory.referral_code || '—'}</code></span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Current Status</span>
-                      <span className="detail-value"><span className="badge badge-rejected badge-xs">Inactive</span></span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Inactive Reason</span>
-                      <span className="detail-value"><span className="badge badge-pending badge-xs">{showClaimHistory.inactiveReason}</span></span>
-                    </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Inactive Reason</span>
+                    <span className="detail-value"><span className="badge badge-pending badge-xs">{approveSponsorUser.inactiveReason}</span></span>
                   </div>
-                  {showClaimHistory.claimInfo && (
-                    <div style={{ marginTop: '1rem' }}>
-                      <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Claim Details</h3>
-                      <div className="detail-grid">
-                        <div className="detail-row">
-                          <span className="detail-label">Total Claim Amount</span>
-                          <span className="detail-value font-bold" style={{ color: 'var(--success)' }}>₹{Number(showClaimHistory.claimInfo.claim_amount || 0).toFixed(2)}</span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-label">Claim Date</span>
-                          <span className="detail-value">{showClaimHistory.claimInfo.claim_date ? new Date(showClaimHistory.claimInfo.claim_date).toLocaleString() : '—'}</span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-label">Referred Users</span>
-                          <span className="detail-value">{showClaimHistory.claimInfo.items_count || 0}</span>
-                        </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Current Status</span>
+                    <span className="detail-value"><span className="badge badge-rejected badge-xs">Inactive</span></span>
+                  </div>
+                </div>
+
+                {approveSponsorUser.claimInfo && (
+                  <div className="card-section-sm" style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Claim Details</h3>
+                    <div className="detail-grid">
+                      <div className="detail-row">
+                        <span className="detail-label">Claim Amount</span>
+                        <span className="detail-value font-bold" style={{ color: 'var(--success)' }}>₹{Number(approveSponsorUser.claimInfo.claim_amount || 0).toFixed(2)}</span>
                       </div>
-                      {(showClaimHistory.claimInfo.items || []).length > 0 && (
-                        <div style={{ marginTop: '0.75rem', maxHeight: '300px', overflowY: 'auto' }}>
-                          <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted)' }}>Referred Users & Top-up Details</h4>
-                          <div className="table-wrap-modern"><table style={{ fontSize: '0.75rem', width: '100%' }}>
+                      <div className="detail-row">
+                        <span className="detail-label">Claim Date</span>
+                        <span className="detail-value">{approveSponsorUser.claimInfo.claim_date ? new Date(approveSponsorUser.claimInfo.claim_date).toLocaleString() : '—'}</span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">Referred Users Count</span>
+                        <span className="detail-value">{approveSponsorUser.claimInfo.items_count || 0}</span>
+                      </div>
+                    </div>
+
+                    {(approveSponsorUser.claimInfo.items || []).length > 0 && (
+                      <div style={{ marginTop: '0.75rem' }}>
+                        <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted)' }}>Referred Users Generating Eligibility</h4>
+                        <div className="table-wrap" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                          <table style={{ fontSize: '0.75rem' }}>
                             <thead>
                               <tr>
                                 <th>User Name</th>
-                                <th>User ID</th>
                                 <th>Top-up Amount</th>
                                 <th>Top-up Date</th>
                                 <th>Transaction ID</th>
@@ -1310,10 +1159,9 @@ export default function FirebaseAdminDashboardPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {showClaimHistory.claimInfo.items.map((item, idx) => (
+                              {approveSponsorUser.claimInfo.items.map((item, idx) => (
                                 <tr key={item.income_id || idx}>
                                   <td>{item.referred_user_name || '—'}</td>
-                                  <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.referred_user_id ? item.referred_user_id.substring(0, 8) + '...' : '—'}</td>
                                   <td className="font-bold">₹{Number(item.topup_amount || 0).toFixed(2)}</td>
                                   <td style={{ fontSize: '0.7rem' }}>{item.topup_date ? new Date(item.topup_date).toLocaleDateString() : '—'}</td>
                                   <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.transaction_id || '—'}</td>
@@ -1325,17 +1173,176 @@ export default function FirebaseAdminDashboardPage() {
                           </table>
                         </div>
                       </div>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
+                )}
+
+                <div className="alert alert-warning text-sm" style={{ marginTop: '1rem' }}>
+                  <strong>Approve:</strong> Credits <strong>₹{Number(approveSponsorUser.claimInfo?.claim_amount || 0).toFixed(2)}</strong> to sponsor's wallet and reactivates account. Referral history and wallet history remain unchanged.
                 </div>
-                <div className="modal-modern-footer">
-                  <button className="btn-modern btn-modern-ghost" onClick={() => setShowClaimHistory(null)}>Close</button>
-                </div>
+
+                {actionMsg && (
+                  <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
+                    {actionMsg}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className={`btn-primary${approveSponsorLoading ? ' btn-loading' : ''}`}
+                  onClick={() => handleApproveSponsor(approveSponsorUser.id)}
+                  disabled={approveSponsorLoading}>
+                  {approveSponsorLoading ? 'Approving...' : '\u2713 Approve & Credit ₹' + Number(approveSponsorUser.claimInfo?.claim_amount || 0).toFixed(2)}
+                </button>
+                <button className="btn-ghost" onClick={() => { setApproveSponsorUser(null); setActionMsg(''); }} disabled={approveSponsorLoading}>
+                  Cancel
+                </button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {rejectSponsorUser && (
+          <div className="modal-overlay" onClick={() => setRejectSponsorUser(null)}>
+            <div className="modal-glass" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Reject Sponsor Claim</h2>
+                <button onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} className="btn-ghost btn-sm">{'\u2715'}</button>
+              </div>
+              <div className="modal-body">
+                <div className="detail-grid card-section-sm">
+                  <div className="detail-row">
+                    <span className="detail-label">Sponsor Name</span>
+                    <span className="detail-value">{rejectSponsorUser.name}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Inactive Reason</span>
+                    <span className="detail-value"><span className="badge badge-pending badge-xs">{rejectSponsorUser.inactiveReason}</span></span>
+                  </div>
+                </div>
+
+                <div className="field modal-field-mb" style={{ marginTop: '1rem' }}>
+                  <label>Rejection Reason</label>
+                  <textarea
+                    className="input"
+                    placeholder="Why is this claim being rejected?"
+                    value={rejectSponsorReason}
+                    onChange={e => setRejectSponsorReason(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="alert alert-warning text-sm">
+                  <strong>Note:</strong> Rejecting will reactivate the sponsor account without crediting the bonus. The income records will be restored to eligible status for future claims.
+                </div>
+
+                {actionMsg && (
+                  <div className={`alert ${actionMsg.includes('\u2713') ? 'alert-success' : 'alert-error'} modal-alert-mb`}>
+                    {actionMsg}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className={`btn-danger${rejectSponsorLoading ? ' btn-loading' : ''}`}
+                  onClick={() => handleRejectSponsor(rejectSponsorUser.id)}
+                  disabled={rejectSponsorLoading}>
+                  {rejectSponsorLoading ? 'Rejecting...' : '\u2715 Reject Claim'}
+                </button>
+                <button className="btn-ghost" onClick={() => { setRejectSponsorUser(null); setRejectSponsorReason(''); setActionMsg(''); }} disabled={rejectSponsorLoading}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showClaimHistory && (
+          <div className="modal-overlay" onClick={() => setShowClaimHistory(null)}>
+            <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
+              <div className="modal-header">
+                <h2>Claim History — {showClaimHistory.name}</h2>
+                <button onClick={() => setShowClaimHistory(null)} className="btn-ghost btn-sm">{'\u2715'}</button>
+              </div>
+              <div className="modal-body">
+                <div className="detail-grid card-section-sm">
+                  <div className="detail-row">
+                    <span className="detail-label">Sponsor Name</span>
+                    <span className="detail-value">{showClaimHistory.name}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Sponsor ID</span>
+                    <span className="detail-value"><code>{showClaimHistory.id ? showClaimHistory.id.substring(0, 12) + '...' : '—'}</code></span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Referral Code</span>
+                    <span className="detail-value"><code>{showClaimHistory.referral_code || '—'}</code></span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Current Status</span>
+                    <span className="detail-value"><span className="badge badge-rejected badge-xs">Inactive</span></span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Inactive Reason</span>
+                    <span className="detail-value"><span className="badge badge-pending badge-xs">{showClaimHistory.inactiveReason}</span></span>
+                  </div>
+                </div>
+                {showClaimHistory.claimInfo && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Claim Details</h3>
+                    <div className="detail-grid">
+                      <div className="detail-row">
+                        <span className="detail-label">Total Claim Amount</span>
+                        <span className="detail-value font-bold" style={{ color: 'var(--success)' }}>₹{Number(showClaimHistory.claimInfo.claim_amount || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">Claim Date</span>
+                        <span className="detail-value">{showClaimHistory.claimInfo.claim_date ? new Date(showClaimHistory.claimInfo.claim_date).toLocaleString() : '—'}</span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">Referred Users</span>
+                        <span className="detail-value">{showClaimHistory.claimInfo.items_count || 0}</span>
+                      </div>
+                    </div>
+                    {(showClaimHistory.claimInfo.items || []).length > 0 && (
+                      <div style={{ marginTop: '0.75rem', maxHeight: '300px', overflowY: 'auto' }}>
+                        <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--muted)' }}>Referred Users & Top-up Details</h4>
+                        <div className="table-wrap"><table style={{ fontSize: '0.75rem', width: '100%' }}>
+                          <thead>
+                            <tr>
+                              <th>User Name</th>
+                              <th>User ID</th>
+                              <th>Top-up Amount</th>
+                              <th>Top-up Date</th>
+                              <th>Transaction ID</th>
+                              <th>Payment Method</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {showClaimHistory.claimInfo.items.map((item, idx) => (
+                              <tr key={item.income_id || idx}>
+                                <td>{item.referred_user_name || '—'}</td>
+                                <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.referred_user_id ? item.referred_user_id.substring(0, 8) + '...' : '—'}</td>
+                                <td className="font-bold">₹{Number(item.topup_amount || 0).toFixed(2)}</td>
+                                <td style={{ fontSize: '0.7rem' }}>{item.topup_date ? new Date(item.topup_date).toLocaleDateString() : '—'}</td>
+                                <td className="font-mono" style={{ fontSize: '0.65rem' }}>{item.transaction_id || '—'}</td>
+                                <td>{item.payment_method || 'UPI'}</td>
+                                <td><span className="badge badge-paid badge-xs">{item.payment_status || 'approved'}</span></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn-ghost" onClick={() => setShowClaimHistory(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

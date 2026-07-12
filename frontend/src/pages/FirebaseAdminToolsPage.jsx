@@ -276,13 +276,13 @@ export default function FirebaseAdminToolsPage() {
   }
 
   return (
-    <div className="admin-layout">
+    <div className="layout-page">
       <AdminSidebar userName={getAdminName()} />
 
-      <main className="admin-content">
-        <div className="admin-content-inner">
-          <div className="admin-page-header">
-            <h1 className="admin-page-title">
+      <main>
+        <div className="layout-inner">
+          <div className="page-header">
+            <h1 className="page-title">
               <span className="admin-page-title-icon">{'\u2699\uFE0F'}</span>
               Admin Tools
             </h1>
@@ -302,18 +302,18 @@ export default function FirebaseAdminToolsPage() {
 
           {activeTab === 'bulk' && (
             <div className="tools-panel">
-              <div className="card-modern mb-md">
-                <div className="card-modern-header">
-                  <h2 className="card-modern-title">{'\u{1F4CB}'} Bulk Approve / Reject Payments</h2>
-                  <div className="admin-page-actions">
-                    <button className="btn-modern btn-modern-ghost btn-modern-sm" onClick={fetchPayments} disabled={loadingPayments}>
+              <div className="card mb-md">
+                <div className="card-header">
+                  <h2 className="card-title">{'\u{1F4CB}'} Bulk Approve / Reject Payments</h2>
+                  <div className="page-actions">
+                    <button className="btn btn-ghost btn-sm" onClick={fetchPayments} disabled={loadingPayments}>
                       {loadingPayments ? '...' : '\u{1F504}'}
                     </button>
                   </div>
                 </div>
 
                 <div className="tools-section">
-                  <div className="search-bar-modern" style={{ marginBottom: '1rem' }}>
+                  <div className="filters" style={{ marginBottom: '1rem' }}>
                     <select value={bulkAction} onChange={e => setBulkAction(e.target.value)}>
                       <option value="approve">Approve</option>
                       <option value="reject">Reject</option>
@@ -324,7 +324,7 @@ export default function FirebaseAdminToolsPage() {
                       onChange={e => setBulkReason(e.target.value)}
                     />
                     <button
-                      className={`btn-modern ${bulkAction === 'approve' ? 'btn-modern-success' : 'btn-modern-danger'}${bulkProcessing ? ' btn-loading' : ''}`}
+                      className={`btn ${bulkAction === 'approve' ? 'btn-success' : 'btn-danger'}${bulkProcessing ? ' btn-loading' : ''}`}
                       onClick={handleBulkAction}
                       disabled={bulkProcessing || selectedPayments.size === 0}
                     >
@@ -344,7 +344,7 @@ export default function FirebaseAdminToolsPage() {
                   )}
                 </div>
 
-                <div className="table-wrap-modern">
+                <div className="table-wrap">
                   <table>
                     <thead>
                       <tr>
@@ -362,7 +362,7 @@ export default function FirebaseAdminToolsPage() {
                     </thead>
                     <tbody>
                       {payments.length === 0 ? (
-                        <tr><td colSpan={8}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F4B3}'}</span><span className="empty-text">{loadingPayments ? 'Loading...' : 'No pending payments found'}</span></div></td></tr>
+                        <tr><td colSpan={8}><div className="empty-state"><span className="empty-icon">{'\u{1F4B3}'}</span><span className="empty-text">{loadingPayments ? 'Loading...' : 'No pending payments found'}</span></div></td></tr>
                       ) : payments.map(p => (
                         <tr key={p.id} className={selectedPayments.has(p.id) ? 'row-selected' : ''}>
                           <td>
@@ -387,45 +387,45 @@ export default function FirebaseAdminToolsPage() {
           {activeTab === 'payment-tools' && (
             <div className="tools-panel">
               <div className="tools-grid">
-                <div className="card-modern">
-                  <h2 className="card-modern-title" style={{ marginBottom: '1rem' }}>{'\u{1F50D}'} Re-run OCR</h2>
+                <div className="card">
+                  <h2 className="card-title" style={{ marginBottom: '1rem' }}>{'\u{1F50D}'} Re-run OCR</h2>
                   <p className="muted text-sm" style={{ marginBottom: '1rem' }}>Reset OCR state for a payment and re-extract text from the screenshot.</p>
-                  <div className="search-bar-modern">
+                  <div className="filters">
                     <input
                       placeholder="Enter Payment ID"
                       value={paymentId}
                       onChange={e => setPaymentId(e.target.value)}
                     />
-                    <button className={`btn-modern btn-modern-primary${rerunOcrLoading ? ' btn-loading' : ''}`} onClick={handleRerunOcr} disabled={rerunOcrLoading}>
+                    <button className={`btn btn-primary${rerunOcrLoading ? ' btn-loading' : ''}`} onClick={handleRerunOcr} disabled={rerunOcrLoading}>
                       {rerunOcrLoading ? 'Running...' : 'Re-run OCR'}
                     </button>
                   </div>
                 </div>
 
-                <div className="card-modern">
-                  <h2 className="card-modern-title" style={{ marginBottom: '1rem' }}>{'\u{1F504}'} Re-run Verification</h2>
+                <div className="card">
+                  <h2 className="card-title" style={{ marginBottom: '1rem' }}>{'\u{1F504}'} Re-run Verification</h2>
                   <p className="muted text-sm" style={{ marginBottom: '1rem' }}>Reset verification state and re-run the full verification pipeline.</p>
-                  <div className="search-bar-modern">
+                  <div className="filters">
                     <input
                       placeholder="Enter Payment ID"
                       value={paymentId}
                       onChange={e => setPaymentId(e.target.value)}
                     />
-                    <button className={`btn-modern btn-modern-warning${rerunVerLoading ? ' btn-loading' : ''}`} onClick={handleRerunVerification} disabled={rerunVerLoading}>
+                    <button className={`btn btn-warning${rerunVerLoading ? ' btn-loading' : ''}`} onClick={handleRerunVerification} disabled={rerunVerLoading}>
                       {rerunVerLoading ? 'Running...' : 'Re-run Verification'}
                     </button>
                   </div>
                 </div>
 
-                <div className="card-modern" style={{ gridColumn: '1 / -1' }}>
-                  <h2 className="card-modern-title" style={{ marginBottom: '1rem' }}>{'\u{1F50E}'} Single Payment Lookup</h2>
-                  <div className="search-bar-modern" style={{ marginBottom: '1rem' }}>
+                <div className="card" style={{ gridColumn: '1 / -1' }}>
+                  <h2 className="card-title" style={{ marginBottom: '1rem' }}>{'\u{1F50E}'} Single Payment Lookup</h2>
+                  <div className="filters" style={{ marginBottom: '1rem' }}>
                     <input
                       placeholder="Enter Payment ID"
                       value={paymentLookupId}
                       onChange={e => setPaymentLookupId(e.target.value)}
                     />
-                    <button className={`btn-modern btn-modern-primary${paymentLookupLoading ? ' btn-loading' : ''}`} onClick={handleLookupPayment} disabled={paymentLookupLoading}>
+                    <button className={`btn btn-primary${paymentLookupLoading ? ' btn-loading' : ''}`} onClick={handleLookupPayment} disabled={paymentLookupLoading}>
                       {paymentLookupLoading ? 'Looking up...' : 'Lookup'}
                     </button>
                   </div>
@@ -472,23 +472,23 @@ export default function FirebaseAdminToolsPage() {
 
           {activeTab === 'reports' && (
             <div className="tools-panel">
-              <div className="card-modern">
-                <div className="card-modern-header">
-                  <h2 className="card-modern-title">{'\u{1F4E5}'} Download Reports</h2>
+              <div className="card">
+                <div className="card-header">
+                  <h2 className="card-title">{'\u{1F4E5}'} Download Reports</h2>
                 </div>
                 <div className="tools-section">
                   <p className="muted text-sm" style={{ marginBottom: '1rem' }}>Generate and download payment reports in CSV format.</p>
                   <div className="tools-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-                    <button className={`report-btn${reportLoading === 'daily' ? ' loading' : ''}`} onClick={() => handleDownloadReport('daily')} disabled={reportLoading !== null}>
+                    <button className={`btn-ghost${reportLoading === 'daily' ? ' loading' : ''}`} onClick={() => handleDownloadReport('daily')} disabled={reportLoading !== null}>
                       {reportLoading === 'daily' ? 'Generating...' : '\u{1F4C5}'} Daily Report
                     </button>
-                    <button className={`report-btn${reportLoading === 'weekly' ? ' loading' : ''}`} onClick={() => handleDownloadReport('weekly')} disabled={reportLoading !== null}>
+                    <button className={`btn-ghost${reportLoading === 'weekly' ? ' loading' : ''}`} onClick={() => handleDownloadReport('weekly')} disabled={reportLoading !== null}>
                       {reportLoading === 'weekly' ? 'Generating...' : '\u{1F4C6}'} Weekly Report
                     </button>
-                    <button className={`report-btn${reportLoading === 'monthly' ? ' loading' : ''}`} onClick={() => handleDownloadReport('monthly')} disabled={reportLoading !== null}>
+                    <button className={`btn-ghost${reportLoading === 'monthly' ? ' loading' : ''}`} onClick={() => handleDownloadReport('monthly')} disabled={reportLoading !== null}>
                       {reportLoading === 'monthly' ? 'Generating...' : '\u{1F4C7}'} Monthly Report
                     </button>
-                    <button className={`report-btn${reportLoading === 'all' ? ' loading' : ''}`} onClick={() => handleDownloadReport('all')} disabled={reportLoading !== null}>
+                    <button className={`btn-ghost${reportLoading === 'all' ? ' loading' : ''}`} onClick={() => handleDownloadReport('all')} disabled={reportLoading !== null}>
                       {reportLoading === 'all' ? 'Generating...' : '\u{1F4CA}'} All Time Report
                     </button>
                   </div>
@@ -499,15 +499,15 @@ export default function FirebaseAdminToolsPage() {
 
           {activeTab === 'audit' && (
             <div className="tools-panel">
-              <div className="card-modern">
-                <div className="card-modern-header">
-                  <h2 className="card-modern-title">{'\u{1F4DD}'} Audit Log</h2>
-                  <button className="btn-modern btn-modern-ghost btn-modern-sm" onClick={fetchAuditLogs} disabled={auditLoading}>
+              <div className="card">
+                <div className="card-header">
+                  <h2 className="card-title">{'\u{1F4DD}'} Audit Log</h2>
+                  <button className="btn btn-ghost btn-sm" onClick={fetchAuditLogs} disabled={auditLoading}>
                     {auditLoading ? '...' : '\u{1F504}'} Refresh
                   </button>
                 </div>
 
-                <div className="search-bar-modern" style={{ marginBottom: '1rem' }}>
+                <div className="filters" style={{ marginBottom: '1rem' }}>
                   <select value={auditFilterAction} onChange={e => setAuditFilterAction(e.target.value)}>
                     <option value="">All Actions</option>
                     <option value="approve_registration_payment">Approve Registration</option>
@@ -519,12 +519,12 @@ export default function FirebaseAdminToolsPage() {
                   </select>
                   <input type="date" value={auditDateFrom} onChange={e => setAuditDateFrom(e.target.value)} placeholder="From date" />
                   <input type="date" value={auditDateTo} onChange={e => setAuditDateTo(e.target.value)} placeholder="To date" />
-                  <button className="btn-modern btn-modern-primary btn-modern-sm" onClick={fetchAuditLogs} disabled={auditLoading}>
+                  <button className="btn btn-primary btn-sm" onClick={fetchAuditLogs} disabled={auditLoading}>
                     Filter
                   </button>
                 </div>
 
-                <div className="table-wrap-modern">
+                <div className="table-wrap">
                   <table className="admin-table">
                     <thead>
                       <tr>
@@ -537,7 +537,7 @@ export default function FirebaseAdminToolsPage() {
                     </thead>
                     <tbody>
                       {auditLogs.length === 0 ? (
-                        <tr><td colSpan={5}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F4DD}'}</span><span className="empty-text">{auditLoading ? 'Loading...' : 'No audit logs found'}</span></div></td></tr>
+                        <tr><td colSpan={5}><div className="empty-state"><span className="empty-icon">{'\u{1F4DD}'}</span><span className="empty-text">{auditLoading ? 'Loading...' : 'No audit logs found'}</span></div></td></tr>
                       ) : auditLogs.map(log => (
                         <tr key={log.id || log._id}>
                           <td data-label="Action"><span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>{getActionLabel(log.action)}</span></td>

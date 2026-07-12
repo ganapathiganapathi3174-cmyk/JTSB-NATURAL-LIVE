@@ -173,13 +173,13 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
   if (!user) return null;
 
   return (
-    <div className="modal-modern-overlay" onClick={onClose}>
-      <div className="modal-modern" onClick={e => e.stopPropagation()}>
-        <div className="modal-modern-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
           <h2>User Details</h2>
-          <button onClick={onClose} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+          <button onClick={onClose} className="btn btn-ghost btn-sm">{'\u2715'}</button>
         </div>
-        <div className="modal-modern-body">
+        <div className="modal-body">
           <div className="detail-grid mb-md">
             <div className="detail-row">
               <span className="detail-label">Name</span>
@@ -221,7 +221,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
               <span className="detail-label">Referral Code</span>
               <div>
                 <code style={{ fontSize: '0.95rem' }}>{user.referral_code}</code>
-                <button className="btn-modern btn-modern-ghost btn-modern-xs ml-sm"
+                <button className="btn btn-ghost btn-xs ml-sm"
                   onClick={() => navigator.clipboard.writeText(user.referral_code)}>
                   Copy
                 </button>
@@ -269,7 +269,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
                       </div>
                     </div>
                     <div className="flex-actions">
-                      <button className="btn-modern btn-modern-danger btn-modern-xs"
+                      <button className="btn btn-danger btn-xs"
                         onClick={() => handleDeleteReferral(ref)}>
                         Remove
                       </button>
@@ -277,7 +277,7 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
                   </div>
                 ))}
                 {referrals.length > 0 && (
-                  <button className="btn-modern btn-modern-danger btn-modern-sm"
+                  <button className="btn btn-danger btn-sm"
                     style={{ marginTop: '0.25rem' }}
                     onClick={handleDeleteAllReferrals}>
                     Remove All Referrals
@@ -302,15 +302,15 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
 
           <div className="flex-row-wrap">
             {(user.account_status === 'inactive' || user.account_status === 'pending') && !showActivateConfirm && (
-              <button className="btn-modern btn-modern-warning" onClick={() => setShowActivateConfirm(true)}>
+              <button className="btn btn-warning" onClick={() => setShowActivateConfirm(true)}>
                 Activate User
               </button>
             )}
-            <button className={`btn-modern btn-modern-primary${resetting ? ' btn-loading' : ''}`}
+            <button className={`btn btn-primary${resetting ? ' btn-loading' : ''}`}
               onClick={handleResetPassword} disabled={resetting}>
               {resetting ? 'Resetting...' : 'Reset Password'}
             </button>
-            <button className={`btn-modern btn-modern-danger${deleting ? ' btn-loading' : ''}`}
+            <button className={`btn btn-danger${deleting ? ' btn-loading' : ''}`}
               onClick={handleDelete} disabled={deleting}>
               {deleting ? 'Deleting...' : 'Delete User'}
             </button>
@@ -329,10 +329,10 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
                 value={adminMessage} onChange={e => setAdminMessage(e.target.value)}
                 rows={2} style={{ resize: 'vertical' }} />
               <div className="flex-row">
-                <button className="btn-modern btn-modern-warning" onClick={handleActivateUser} disabled={activating}>
+                <button className="btn btn-warning" onClick={handleActivateUser} disabled={activating}>
                   {activating ? '\u23F3' : '\u2713'} Confirm Activation
                 </button>
-                <button className="btn-modern btn-modern-ghost" onClick={() => { setShowActivateConfirm(false); setActivateReason(''); setAdminMessage(''); }} disabled={activating}>
+                <button className="btn btn-ghost" onClick={() => { setShowActivateConfirm(false); setActivateReason(''); setAdminMessage(''); }} disabled={activating}>
                   Cancel
                 </button>
               </div>
@@ -352,13 +352,13 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
           )}
 
           {showDeleteConfirm && (
-            <div className="modal-modern-overlay" onClick={() => setShowDeleteConfirm(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000 }}>
-              <div className="modal-modern" onClick={e => e.stopPropagation()}>
-                <div className="modal-modern-header">
+            <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000 }}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
                   <h2>Confirm Permanent Deletion</h2>
-                  <button onClick={() => setShowDeleteConfirm(false)} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+                  <button onClick={() => setShowDeleteConfirm(false)} className="btn btn-ghost btn-sm">{'\u2715'}</button>
                 </div>
-                <div className="modal-modern-body">
+                <div className="modal-body">
                   <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
                     <strong>{'\u26A0\uFE0F'} Warning:</strong> Are you sure you want to permanently delete <strong>{user.name}</strong> and all associated data? This includes all topups, transactions, payments, screenshots, messages, chat history, notifications, referral records, sponsor data, and uploaded files. This action CANNOT be undone!
                   </div>
@@ -369,12 +369,12 @@ function UserDetailModal({ user, onClose, onDelete, onDeleteReferral, onActivate
                     rows={2} style={{ resize: 'vertical' }} />
                   {deleteError && <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>{deleteError}</div>}
                 </div>
-                <div className="modal-modern-footer">
-                  <button className={`btn-modern btn-modern-danger${deleting ? ' btn-loading' : ''}`}
+                <div className="modal-footer">
+                  <button className={`btn btn-danger${deleting ? ' btn-loading' : ''}`}
                     onClick={handleDeleteConfirmed} disabled={deleting}>
                     {deleting ? 'Deleting...' : 'Delete Permanently'}
                   </button>
-                  <button className="btn-modern btn-modern-ghost" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>
+                  <button className="btn btn-ghost" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>
                     Cancel
                   </button>
                 </div>
@@ -656,33 +656,33 @@ export default function FirebaseAdminUsersPage() {
   };
 
   return (
-    <div className="admin-layout">
+    <div className="layout-page">
       <AdminSidebar pendingCounts={pendingCounts} userName={getAdminName()} />
 
-      <main className="admin-content">
-        <div className="admin-content-inner">
-          <div className="admin-page-header">
-            <h1 className="admin-page-title">
+      <main>
+        <div className="layout-inner">
+          <div className="page-header">
+            <h1 className="page-title">
               <span className="admin-page-title-icon">{'\u{1F465}'}</span>
               User Management
             </h1>
-            <div className="admin-page-actions">
+            <div className="page-actions">
               <span className="muted text-sm">
                 {users.length} total &middot; {users.filter(u => u.payment_status === 'approved' || u.payment_status === 'success').length} paid &middot; {users.filter(u => u.account_status === 'active').length} active
               </span>
             </div>
           </div>
 
-          <div className="card-modern mb-md">
-            <div className="card-modern-header">
-              <h2 className="card-modern-title">{'\u{1F50D}'} Search & Filter</h2>
+          <div className="card mb-md">
+            <div className="card-header">
+              <h2 className="card-title">{'\u{1F50D}'} Search & Filter</h2>
               <div className="flex-row" style={{ gap: '0.5rem' }}>
-                <button className="btn-modern btn-modern-ghost btn-modern-sm" onClick={() => exportToCSV(filteredUsers, `users-${new Date().toISOString().split('T')[0]}.csv`)}>
+                <button className="btn btn-ghost btn-sm" onClick={() => exportToCSV(filteredUsers, `users-${new Date().toISOString().split('T')[0]}.csv`)}>
                   {'\u{1F4E5}'} Export CSV
                 </button>
               </div>
             </div>
-            <div className="search-bar-modern">
+            <div className="filters">
               <input value={q} onChange={e => setQ(e.target.value)}
                 placeholder="Search by name, email, phone, or referral_code..." />
               <select value={statusFilter} onChange={e => updateStatusFilter(e.target.value)}>
@@ -699,23 +699,23 @@ export default function FirebaseAdminUsersPage() {
           </div>
 
           {selectedIds.size > 0 && (
-            <div className="bulk-action-bar">
-              <span className="bulk-action-count">{selectedIds.size} user{selectedIds.size > 1 ? 's' : ''} selected</span>
-              <button className="btn-modern btn-modern-danger btn-modern-sm" onClick={() => setBulkDeleteConfirm(true)}>
+            <div className="bulk-bar">
+              <span className="bulk-count">{selectedIds.size} user{selectedIds.size > 1 ? 's' : ''} selected</span>
+              <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)}>
                 {'\u2715'} Delete Selected
               </button>
-              <button className="btn-modern btn-modern-ghost btn-modern-sm" onClick={() => setSelectedIds(new Set())}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>
                 Clear Selection
               </button>
             </div>
           )}
 
-          <div className="card-modern">
-            <div className="card-modern-header">
-              <h2 className="card-modern-title">{'\u{1F465}'} All Users ({filteredUsers.length})</h2>
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">{'\u{1F465}'} All Users ({filteredUsers.length})</h2>
             </div>
 
-            <div className="table-wrap-modern">
+            <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -782,7 +782,7 @@ export default function FirebaseAdminUsersPage() {
                         <td data-label="Referrals">
                           <div>
                             <div className="font-semibold" style={{ fontSize: '0.9rem' }}>{u.total_referral_count || 0}</div>
-                            <button className="btn-modern btn-modern-ghost btn-modern-xs"
+                            <button className="btn btn-ghost btn-xs"
                               onClick={(e) => { e.stopPropagation(); handleToggleUserExpand(u.id); }}>
                               {expandedUserId === u.id ? 'Hide' : `View${u.payment_status === 'approved' ? ` (${referralCounts[u.id] || 0})` : ''}`}
                             </button>
@@ -804,7 +804,7 @@ export default function FirebaseAdminUsersPage() {
                         <td data-label="Actions">
                           <div className="flex-actions" onClick={(e) => e.stopPropagation()}>
                             {(u.account_status === 'suspended' || u.account_status === 'inactive' || u.account_status === 'blocked') && (
-                              <button className="btn-modern btn-modern-success btn-modern-xs"
+                              <button className="btn btn-success btn-xs"
                                 onClick={async () => {
                                   try {
                                     const res = await fetch(`${API_BASE}/updateUserStatus`, {
@@ -820,7 +820,7 @@ export default function FirebaseAdminUsersPage() {
                                 }}>Activate</button>
                             )}
                             {u.account_status === 'active' && (
-                              <button className="btn-modern btn-modern-warning btn-modern-xs"
+                              <button className="btn btn-warning btn-xs"
                                 onClick={async () => {
                                   try {
                                     const res = await fetch(`${API_BASE}/updateUserStatus`, {
@@ -835,14 +835,14 @@ export default function FirebaseAdminUsersPage() {
                                   }
                                 }}>Suspend</button>
                             )}
-                            <button className="btn-modern btn-modern-primary btn-modern-xs" onClick={() => setSelectedUser(u)}>View</button>
-                            <button className="btn-modern btn-modern-danger btn-modern-xs" onClick={() => setDeleteConfirmUser(u)}>Del</button>
+                            <button className="btn btn-primary btn-xs" onClick={() => setSelectedUser(u)}>View</button>
+                            <button className="btn btn-danger btn-xs" onClick={() => setDeleteConfirmUser(u)}>Del</button>
                             {(u.referral_active === false) ? (
-                              <button className="btn-modern btn-modern-success btn-modern-xs" onClick={() => handleReferralAction(u.id, 'activate')}>Activate Ref</button>
+                              <button className="btn btn-success btn-xs" onClick={() => handleReferralAction(u.id, 'activate')}>Activate Ref</button>
                             ) : (
-                              <button className="btn-modern btn-modern-warning btn-modern-xs" onClick={() => handleReferralAction(u.id, 'deactivate')}>Deact. Ref</button>
+                              <button className="btn btn-warning btn-xs" onClick={() => handleReferralAction(u.id, 'deactivate')}>Deact. Ref</button>
                             )}
-                            <button className="btn-modern btn-modern-ghost btn-modern-xs" onClick={() => handleReferralAction(u.id, 'reset')}>Reset Ref</button>
+                            <button className="btn btn-ghost btn-xs" onClick={() => handleReferralAction(u.id, 'reset')}>Reset Ref</button>
                           </div>
                         </td>
                       </tr>
@@ -886,7 +886,7 @@ export default function FirebaseAdminUsersPage() {
                     );
                   })}
                   {filteredUsers.length === 0 && (
-                    <tr><td colSpan={13}><div className="empty-state-modern"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
+                    <tr><td colSpan={13}><div className="empty-state"><span className="empty-icon">{'\u{1F465}'}</span><span className="empty-text">No users found.</span></div></td></tr>
                   )}
                 </tbody>
               </table>
@@ -900,13 +900,13 @@ export default function FirebaseAdminUsersPage() {
           )}
 
           {deleteConfirmUser && (
-            <div className="modal-modern-overlay" onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }}>
-              <div className="modal-modern" onClick={e => e.stopPropagation()}>
-                <div className="modal-modern-header">
+            <div className="modal-overlay" onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
                   <h2>Confirm Permanent Deletion</h2>
-                  <button onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+                  <button onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }} className="btn btn-ghost btn-sm">{'\u2715'}</button>
                 </div>
-                <div className="modal-modern-body">
+                <div className="modal-body">
                   <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
                     <strong>{'\u26A0\uFE0F'} Warning:</strong> Are you sure you want to permanently delete <strong>{deleteConfirmUser.name}</strong> and all associated data? This includes all topups, transactions, payments, screenshots, messages, chat history, notifications, referral records, sponsor data, and uploaded files. This action CANNOT be undone!
                   </div>
@@ -917,8 +917,8 @@ export default function FirebaseAdminUsersPage() {
                     rows={2} style={{ resize: 'vertical' }} />
                   {deleteError && <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>{deleteError}</div>}
                 </div>
-                <div className="modal-modern-footer">
-                  <button className={`btn-modern btn-modern-danger${deletingUser ? ' btn-loading' : ''}`}
+                <div className="modal-footer">
+                  <button className={`btn btn-danger${deletingUser ? ' btn-loading' : ''}`}
                     onClick={async () => {
                       if (deletingUser) return;
                       if (!deleteReason.trim()) { setDeleteError('Please provide a reason for deletion.'); return; }
@@ -937,7 +937,7 @@ export default function FirebaseAdminUsersPage() {
                     }} disabled={deletingUser}>
                     {deletingUser ? 'Deleting...' : 'Delete Permanently'}
                   </button>
-                  <button className="btn-modern btn-modern-ghost" onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }}>
+                  <button className="btn btn-ghost" onClick={() => { setDeleteConfirmUser(null); setDeleteReason(''); setDeleteError(''); }}>
                     Cancel
                   </button>
                 </div>
@@ -958,13 +958,13 @@ export default function FirebaseAdminUsersPage() {
           )}
 
           {bulkDeleteConfirm && (
-            <div className="modal-modern-overlay" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }}>
-              <div className="modal-modern" onClick={e => e.stopPropagation()}>
-                <div className="modal-modern-header">
+            <div className="modal-overlay" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
                   <h2>{'\u26A0\uFE0F'} Bulk Delete Users</h2>
-                  <button onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} className="btn-modern btn-modern-ghost btn-modern-sm">{'\u2715'}</button>
+                  <button onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} className="btn btn-ghost btn-sm">{'\u2715'}</button>
                 </div>
-                <div className="modal-modern-body">
+                <div className="modal-body">
                   <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
                     <strong>{'\u26A0\uFE0F'} Danger:</strong> You are about to permanently delete <strong>{selectedIds.size} user{selectedIds.size > 1 ? 's' : ''}</strong>. All associated data for each user will be permanently removed. This action CANNOT be undone!
                   </div>
@@ -987,13 +987,13 @@ export default function FirebaseAdminUsersPage() {
                     )}
                   </div>
                 </div>
-                <div className="modal-modern-footer">
-                  <button className={`btn-modern btn-modern-danger${bulkDeleting ? ' btn-loading' : ''}`}
+                <div className="modal-footer">
+                  <button className={`btn btn-danger${bulkDeleting ? ' btn-loading' : ''}`}
                     onClick={handleBulkDelete}
                     disabled={bulkDeleting || bulkDeleteText !== 'DELETE' || !bulkDeleteReason.trim()}>
                     {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} User${selectedIds.size > 1 ? 's' : ''}`}
                   </button>
-                  <button className="btn-modern btn-modern-ghost" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} disabled={bulkDeleting}>
+                  <button className="btn btn-ghost" onClick={() => { setBulkDeleteConfirm(false); setBulkDeleteText(''); setBulkDeleteReason(''); }} disabled={bulkDeleting}>
                     Cancel
                   </button>
                 </div>

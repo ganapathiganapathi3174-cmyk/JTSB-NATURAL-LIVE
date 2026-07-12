@@ -133,26 +133,26 @@ export default function AdminSidebar({ pendingCounts = {}, userName }) {
         {open ? '\u2715' : '\u2630'}
       </button>
       <div className={`sidebar-overlay${open ? ' open' : ''}`} onClick={() => setOpen(false)} />
-      <aside className={`admin-sidebar${open ? ' open' : ''}`}>
-        <div className="admin-sidebar-header">
-          <div className="admin-sidebar-brand">
-            <div className="admin-sidebar-brand-icon">
+      <aside className={`sidebar${open ? ' open' : ''}`}>
+        <div className="sidebar-header">
+          <div className="sidebar-brand">
+            <div className="sidebar-brand-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" />
                 <path d="M2 17l10 5 10-5" />
                 <path d="M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className="text-cosmic">Starlight Admin</span>
+            <span className="sidebar-brand-text">Starlight Admin</span>
           </div>
         </div>
 
-        <div className="admin-sidebar-user">
-          <div className="admin-sidebar-user-name">{userName || 'Admin'}</div>
-          <div className="admin-sidebar-user-role">Administrator</div>
+        <div className="sidebar-user">
+          <div className="sidebar-user-name">{userName || 'Admin'}</div>
+          <div className="sidebar-user-role">Administrator</div>
         </div>
 
-        <nav className="admin-sidebar-nav">
+        <nav className="sidebar-nav">
           {navItems.map(item => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
@@ -161,21 +161,21 @@ export default function AdminSidebar({ pendingCounts = {}, userName }) {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`admin-sidebar-link${isActive ? ' active' : ''}`}
+                className={`sidebar-link${isActive ? ' active' : ''}`}
               >
-                <span className="admin-sidebar-link-icon"><Icon /></span>
-                <span className="admin-sidebar-link-label">{item.label}</span>
+                <span className="sidebar-link-icon"><Icon /></span>
+                <span className="sidebar-link-label">{item.label}</span>
                 {badge != null && badge > 0 && (
-                  <span className="admin-sidebar-badge">{badge > 99 ? '99+' : badge}</span>
+                  <span className="sidebar-badge">{badge > 99 ? '99+' : badge}</span>
                 )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="admin-sidebar-footer">
-          <button className="admin-sidebar-logout" onClick={logout}>
-            <span className="admin-sidebar-link-icon"><IconLogout /></span>
+        <div className="sidebar-footer">
+          <button className="sidebar-logout" onClick={logout}>
+            <span className="sidebar-link-icon"><IconLogout /></span>
             <span>Log out</span>
           </button>
         </div>

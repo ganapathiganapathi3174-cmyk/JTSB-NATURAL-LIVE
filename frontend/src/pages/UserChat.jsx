@@ -151,7 +151,7 @@ export default function UserChat() {
   return (
     <div className="user-chat-container">
       <div className="user-chat-header">
-        <button className="btn-modern btn-modern-ghost btn-modern-sm" onClick={() => navigate('/fb/dashboard')}>
+        <button className="btn-ghost btn-sm" onClick={() => navigate('/fb/dashboard')}>
           {'\u2190'} Dashboard
         </button>
         <div className="user-chat-header-center">

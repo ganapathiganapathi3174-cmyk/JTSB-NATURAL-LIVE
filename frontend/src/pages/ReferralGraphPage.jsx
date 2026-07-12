@@ -70,7 +70,6 @@ function ReferralGraphModal({ user, onClose }) {
               {graphData?.referredUsers?.length > 0 && (
                 <>
                   <div className="graph-connector" />
-
                   <div className="graph-children">
                     {graphData.referredUsers.map((ref) => (
                       <div key={ref.id} className="graph-node-child">

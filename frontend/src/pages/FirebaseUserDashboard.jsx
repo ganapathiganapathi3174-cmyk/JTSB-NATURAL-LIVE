@@ -367,8 +367,7 @@ export default function FirebaseUserDashboard() {
 
   return (
     <div className="page-wrap has-bottom-nav">
-      {/* Top bar */}
-      <div className="card-glass mb-lg animate-fade-in-up" style={{ padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+      <div className="card mb-lg animate-fade-in-up" style={{ padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
         <div className="brand" style={{ fontSize: '1.15rem' }}>
           <span className="text-gradient">JTSB Natural</span>
         </div>
@@ -384,7 +383,7 @@ export default function FirebaseUserDashboard() {
             {showBellDropdown && (
               <>
                 <div className="modal-overlay" style={{ background: 'transparent' }} onClick={() => setShowBellDropdown(false)} />
-                <div className="card-glass" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, width: '340px', maxHeight: '420px', overflowY: 'auto', marginTop: '4px', padding: 0 }}>
+                <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, width: '340px', maxHeight: '420px', overflowY: 'auto', marginTop: '4px', padding: 0 }}>
                   <div style={{ padding: '0.7rem 1rem', borderBottom: '1px solid var(--border-light)', fontWeight: 600, fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>Notifications</span>
                     <Link to="/fb/messages" style={{ fontSize: '0.75rem', fontWeight: 500 }} onClick={() => setShowBellDropdown(false)}>View all</Link>
@@ -421,7 +420,7 @@ export default function FirebaseUserDashboard() {
       )}
 
       {/* Profile Card */}
-      <div className="card-glass mb-lg animate-fade-in-up stagger-1" style={{ padding: '1.5rem' }}>
+      <div className="card mb-lg animate-fade-in-up stagger-1" style={{ padding: '1.5rem' }}>
         <div className="flex flex-col" style={{ gap: '1.25rem' }}>
           <div className="flex items-center" style={{ gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', width: '64px', height: '64px', flexShrink: 0 }}>
@@ -458,13 +457,13 @@ export default function FirebaseUserDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
-              <Link to="/fb/messages" className="quick-action" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>
+              <Link to="/fb/messages" className="quick-btn" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                 Inbox{unreadCount > 0 && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '0.05rem 0.35rem' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
               </Link>
-              <Link to="/fb/chat" className="quick-action" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>Chat</Link>
-              <Link to="/fb/sponsor-marketplace" className="quick-action" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>Sponsor</Link>
-              <Link to="/fb/sponsor-requests" className="quick-action" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>Requests</Link>
+              <Link to="/fb/chat" className="quick-btn" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>Chat</Link>
+              <Link to="/fb/sponsor-marketplace" className="quick-btn" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>Sponsor</Link>
+              <Link to="/fb/sponsor-requests" className="quick-btn" style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>Requests</Link>
             </div>
           </div>
 
@@ -485,28 +484,28 @@ export default function FirebaseUserDashboard() {
 
       {/* Quick Stats */}
       <div className="grid grid-4 animate-fade-in-up stagger-2" style={{ gap: '1rem', marginBottom: '1.5rem' }}>
-        <div className="stat-card-glass">
+        <div className="stat-card">
           <div className="stat-icon" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
           <div className="stat-value">{approvedReferralCount}</div>
           <div className="stat-label">Completed Referrals</div>
         </div>
-        <div className="stat-card-glass">
+        <div className="stat-card">
           <div className="stat-icon" style={{ background: 'var(--success-light)', color: 'var(--success)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
           <div className="stat-value">₹{totalTopupIncome.toFixed(2)}</div>
           <div className="stat-label">Total Rewards</div>
         </div>
-        <div className="stat-card-glass">
+        <div className="stat-card">
           <div className="stat-icon" style={{ background: 'var(--warning-light)', color: 'var(--warning)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 9v6"/><path d="M9 12h6"/></svg>
           </div>
           <div className="stat-value">₹{walletBalance.toFixed(2)}</div>
           <div className="stat-label">Wallet Balance</div>
         </div>
-        <div className="stat-card-glass">
+        <div className="stat-card">
           <div className="stat-icon" style={{ background: 'var(--purple-glow)', color: 'var(--accent)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
@@ -518,7 +517,7 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {/* Contact Details */}
-      <div className="card-glass mb-lg animate-fade-in-up stagger-3" style={{ padding: '1.25rem' }}>
+      <div className="card mb-lg animate-fade-in-up stagger-3" style={{ padding: '1.25rem' }}>
         <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 600 }}>Contact Details</h3>
         <div className="grid grid-2" style={{ gap: '0.75rem' }}>
           <div className="flex items-center gap-sm">
@@ -546,7 +545,7 @@ export default function FirebaseUserDashboard() {
 
       {/* Referral Section */}
       {user?.referral_code && (
-        <div className="card-glass mb-lg animate-fade-in-up stagger-4" style={{ padding: '1.25rem' }}>
+        <div className="card mb-lg animate-fade-in-up stagger-4" style={{ padding: '1.25rem' }}>
           {isActive ? (
             <>
               <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 600 }} className="text-gradient">Refer & Earn</h3>
@@ -604,7 +603,7 @@ export default function FirebaseUserDashboard() {
 
       {/* Referral Progress */}
       {!isQualified && !isActive && !user?.is_first_payment_done && (
-        <div className="card-glass mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
+        <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
           <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 600 }}>Complete Referrals to Unlock Payment</h3>
           <p className="text-muted text-sm mb-md">Sponsor benefits unlock after 2 completed referrals.</p>
           {pendingReferralCount > 0 && (
@@ -622,7 +621,7 @@ export default function FirebaseUserDashboard() {
       )}
 
       {/* Topup Section */}
-      <div className="card-glass mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
+      <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
         <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 600 }} className="flex items-center gap-sm">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           Topup
@@ -657,8 +656,8 @@ export default function FirebaseUserDashboard() {
         {topups.length > 0 && (
           <div className="mt-md">
             <h4 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem' }}>Topup History</h4>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="table-glass" style={{ minWidth: 500 }}>
+            <div className="table-wrap">
+              <table className="table" style={{ minWidth: 500 }}>
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -714,8 +713,8 @@ export default function FirebaseUserDashboard() {
             </div>
           )}
 
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table-glass" style={{ minWidth: 400 }}>
+          <div className="table-wrap">
+            <table className="table" style={{ minWidth: 400 }}>
               <thead>
                 <tr>
                   <th>Date</th>
@@ -755,7 +754,7 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {/* Password */}
-      <div className="card-glass mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
+      <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
         <div className="flex items-center justify-between">
           <div>
             <span className="font-semibold text-sm">Password</span>
@@ -787,7 +786,7 @@ export default function FirebaseUserDashboard() {
 
       {/* Referrals List */}
       {(user?.payment_status === 'approved' || user?.payment_status === 'success') && (
-        <div className="card-glass mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
+        <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
           <div className="flex items-center justify-between mb-md">
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600 }}>My Referrals ({approvedReferralCount})</h3>
             <span className="badge badge-info">Views: {viewCount}</span>
@@ -820,7 +819,7 @@ export default function FirebaseUserDashboard() {
       )}
 
       {/* Activity */}
-      <div className="card-glass mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
+      <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
         <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 600 }} className="flex items-center gap-sm">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Recent Activity
@@ -845,7 +844,7 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {/* Timeline */}
-      <div className="card-glass mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
+      <div className="card mb-lg animate-fade-in-up stagger-5" style={{ padding: '1.25rem' }}>
         <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 600 }} className="flex items-center gap-sm">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Activity Timeline

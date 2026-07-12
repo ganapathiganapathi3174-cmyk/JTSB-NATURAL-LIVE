@@ -68,9 +68,9 @@ export default function AdminSponsorTransfersPage() {
       </div>
 
       {loading ? <div className="loading-spinner loading-spinner-lg" /> :
-      error ? <div className="error-message">{error}</div> :
+      error ? <div className="alert-error">{error}</div> :
       transfers.length === 0 ? <p>No transfers found</p> :
-      <div className="table-wrap-modern">
+      <div className="table-wrap">
         <table className="admin-table">
           <thead>
             <tr>

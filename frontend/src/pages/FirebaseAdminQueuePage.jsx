@@ -67,94 +67,92 @@ export default function FirebaseAdminQueuePage() {
   }
 
   return (
-    <div className="admin-layout">
+    <div className="layout-page">
       <AdminSidebar userName={getAdminName()} />
-      <main className="admin-content">
-        <div className="admin-content-inner">
-          <div className="admin-page-header">
-            <h1 className="admin-page-title">Queue Monitor</h1>
-            <div className="admin-page-actions">
-              <button className="btn-modern btn-modern-primary" onClick={processPending} disabled={processing}>
-                {processing ? 'Processing...' : '\u25B6 Process Pending'}
-              </button>
-              <button className="btn-modern btn-modern-ghost" onClick={fetchQueue} disabled={loading}>
-                Refresh
-              </button>
-            </div>
+      <main className="layout-inner">
+        <div className="page-header">
+          <h1 className="page-title">Queue Monitor</h1>
+          <div className="page-actions">
+            <button className="btn btn-primary" onClick={processPending} disabled={processing}>
+              {processing ? 'Processing...' : '\u25B6 Process Pending'}
+            </button>
+            <button className="btn btn-ghost" onClick={fetchQueue} disabled={loading}>
+              Refresh
+            </button>
           </div>
-
-          {error && <div className="alert alert-error">{error}</div>}
-          {actionMsg && <div className="alert alert-success">{actionMsg}</div>}
-
-          {loading && <div className="text-center"><div className="loading-spinner loading-spinner-lg" /><p>Loading queue...</p></div>}
-
-          {queueData && (
-            <>
-              <div className="stats-grid-modern">
-                <div className={`stat-card-modern ${queueData.ocr_queue > 0 ? 'accent' : 'success'}`}>
-                  <div className="stat-value">{queueData.ocr_queue}</div>
-                  <div className="stat-label">OCR Queue</div>
-                  <div className="stat-sub">Pending OCR processing</div>
-                </div>
-                <div className={`stat-card-modern ${queueData.retry_queue > 0 ? 'warning' : 'success'}`}>
-                  <div className="stat-value">{queueData.retry_queue}</div>
-                  <div className="stat-label">Retry Queue</div>
-                  <div className="stat-sub">Failed OCR (3+ retries)</div>
-                </div>
-                <div className={`stat-card-modern ${queueData.manual_review > 0 ? 'warning' : 'success'}`}>
-                  <div className="stat-value">{queueData.manual_review}</div>
-                  <div className="stat-label">Manual Review</div>
-                  <div className="stat-sub">Awaiting admin decision</div>
-                </div>
-                <div className={`stat-card-modern ${queueData.stuck_items > 0 ? 'danger' : 'success'}`}>
-                  <div className="stat-value">{queueData.stuck_items}</div>
-                  <div className="stat-label">Stuck Items</div>
-                  <div className="stat-sub">Processing {'>'}5 min</div>
-                </div>
-                <div className="stat-card-modern">
-                  <div className="stat-value">{queueData.pending_verification}</div>
-                  <div className="stat-label">Pending Verification</div>
-                  <div className="stat-sub">Awaiting verification check</div>
-                </div>
-                <div className="stat-card-modern">
-                  <div className="stat-value">{queueData.pending_registrations}</div>
-                  <div className="stat-label">Pending Registrations</div>
-                  <div className="stat-sub">Unprocessed registrations</div>
-                </div>
-              </div>
-
-              <div className="admin-card">
-                <div className="admin-card-header">
-                  <h3>Queue Summary</h3>
-                </div>
-                <div className="admin-card-body">
-                  <div className="table-wrap-modern"><table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Metric</th>
-                        <th>Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr><td>Total Payments</td><td>{queueData.total_payments}</td></tr>
-                      <tr><td>Total Registrations</td><td>{queueData.total_registrations}</td></tr>
-                      <tr><td>OCR Queue</td><td>{queueData.ocr_queue}</td></tr>
-                      <tr><td>Retry Queue</td><td>{queueData.retry_queue}</td></tr>
-                      <tr><td>Manual Review</td><td>{queueData.manual_review}</td></tr>
-                      <tr><td>Stuck Items</td><td>{queueData.stuck_items}</td></tr>
-                      <tr><td>Pending Verification</td><td>{queueData.pending_verification}</td></tr>
-                      <tr><td>Pending Registrations</td><td>{queueData.pending_registrations}</td></tr>
-                    </tbody>
-                  </table>
-                  </div>
-                  <p className="text-sm text-muted" style={{ marginTop: '0.5rem' }}>
-                    Last updated: {queueData.timestamp ? new Date(queueData.timestamp).toLocaleString() : 'N/A'}
-                  </p>
-                </div>
-              </div>
-            </>
-          )}
         </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+        {actionMsg && <div className="alert alert-success">{actionMsg}</div>}
+
+        {loading && <div className="text-center"><div className="loading-spinner loading-spinner-lg" /><p>Loading queue...</p></div>}
+
+        {queueData && (
+          <>
+            <div className="stats-grid">
+              <div className={`stat-card ${queueData.ocr_queue > 0 ? 'accent-primary' : 'accent-success'}`}>
+                <div className="stat-value">{queueData.ocr_queue}</div>
+                <div className="stat-label">OCR Queue</div>
+                <div className="stat-sub">Pending OCR processing</div>
+              </div>
+              <div className={`stat-card ${queueData.retry_queue > 0 ? 'accent-warning' : 'accent-success'}`}>
+                <div className="stat-value">{queueData.retry_queue}</div>
+                <div className="stat-label">Retry Queue</div>
+                <div className="stat-sub">Failed OCR (3+ retries)</div>
+              </div>
+              <div className={`stat-card ${queueData.manual_review > 0 ? 'accent-warning' : 'accent-success'}`}>
+                <div className="stat-value">{queueData.manual_review}</div>
+                <div className="stat-label">Manual Review</div>
+                <div className="stat-sub">Awaiting admin decision</div>
+              </div>
+              <div className={`stat-card ${queueData.stuck_items > 0 ? 'accent-danger' : 'accent-success'}`}>
+                <div className="stat-value">{queueData.stuck_items}</div>
+                <div className="stat-label">Stuck Items</div>
+                <div className="stat-sub">Processing {'>'}5 min</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value">{queueData.pending_verification}</div>
+                <div className="stat-label">Pending Verification</div>
+                <div className="stat-sub">Awaiting verification check</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value">{queueData.pending_registrations}</div>
+                <div className="stat-label">Pending Registrations</div>
+                <div className="stat-sub">Unprocessed registrations</div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <h3>Queue Summary</h3>
+              </div>
+              <div className="card-body">
+                <div className="table-wrap"><table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Total Payments</td><td>{queueData.total_payments}</td></tr>
+                    <tr><td>Total Registrations</td><td>{queueData.total_registrations}</td></tr>
+                    <tr><td>OCR Queue</td><td>{queueData.ocr_queue}</td></tr>
+                    <tr><td>Retry Queue</td><td>{queueData.retry_queue}</td></tr>
+                    <tr><td>Manual Review</td><td>{queueData.manual_review}</td></tr>
+                    <tr><td>Stuck Items</td><td>{queueData.stuck_items}</td></tr>
+                    <tr><td>Pending Verification</td><td>{queueData.pending_verification}</td></tr>
+                    <tr><td>Pending Registrations</td><td>{queueData.pending_registrations}</td></tr>
+                  </tbody>
+                </table>
+                </div>
+                <p className="text-sm text-muted" style={{ marginTop: '0.5rem' }}>
+                  Last updated: {queueData.timestamp ? new Date(queueData.timestamp).toLocaleString() : 'N/A'}
+                </p>
+              </div>
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

@@ -126,7 +126,7 @@ export default function AdminPendingPaymentsPage() {
       </div>
 
       {loading ? <div className="loading-spinner loading-spinner-lg" /> :
-      error ? <div className="error-message">{error}</div> :
+      error ? <div className="alert-error">{error}</div> :
       filteredPayments.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--muted)' }}>
           <p style={{ fontSize: '1.1rem' }}>No payments found</p>

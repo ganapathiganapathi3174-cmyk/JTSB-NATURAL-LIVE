@@ -260,32 +260,31 @@ export default function FirebaseAdminUPIPaymentsPage() {
   }
 
   return (
-    <div className="admin-layout">
+    <div className="layout-page">
       <AdminSidebar />
-      <main className="admin-main">
-        <div className="admin-content-inner">
-          <div className="admin-page-header">
-            <h1 className="admin-page-title">
-              <span className="admin-page-title-icon">{'\u{1F4B5}'}</span>
-              UPI Payment Monitor
-            </h1>
-            <div className="admin-page-actions">
-              {processing && <span className="badge badge-warning">⏳ Processing...</span>}
-              {processingResult && processingResult.processed > 0 && (
-                <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-                  +{processingResult.approved} approved / {processingResult.rejected} rejected
-                  {processingResult.manualReview > 0 && (
-                    <> / <span style={{ color: '#f59e0b' }}>{processingResult.manualReview} manual review</span></>
-                  )}
-                </span>
-              )}
-              {deleteMsg && <span style={{ color: 'var(--success, #16a34a)', fontSize: '0.85rem' }}>{deleteMsg}</span>}
-              <button onClick={handleExport} className="btn-modern btn-modern-ghost btn-modern-sm">Export CSV</button>
-              <button onClick={fetchData} className="btn-modern btn-modern-primary btn-modern-sm">
-                {loading ? '...' : 'Refresh'}
-              </button>
-            </div>
+      <main className="layout-inner">
+        <div className="page-header">
+          <h1 className="page-title">
+            <span className="admin-page-title-icon">{'\u{1F4B5}'}</span>
+            UPI Payment Monitor
+          </h1>
+          <div className="page-actions">
+            {processing && <span className="badge badge-warning">⏳ Processing...</span>}
+            {processingResult && processingResult.processed > 0 && (
+              <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+                +{processingResult.approved} approved / {processingResult.rejected} rejected
+                {processingResult.manualReview > 0 && (
+                  <> / <span style={{ color: '#f59e0b' }}>{processingResult.manualReview} manual review</span></>
+                )}
+              </span>
+            )}
+            {deleteMsg && <span style={{ color: 'var(--success, #16a34a)', fontSize: '0.85rem' }}>{deleteMsg}</span>}
+            <button onClick={handleExport} className="btn btn-ghost btn-sm">Export CSV</button>
+            <button onClick={fetchData} className="btn btn-primary btn-sm">
+              {loading ? '...' : 'Refresh'}
+            </button>
           </div>
+        </div>
 
         {error && <div className="error-banner">{error}</div>}
 
@@ -462,7 +461,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
 
         {deleteTarget && (
           <div
-            className="modal-modern-overlay"
+            className="modal-overlay"
             onClick={() => { if (!deleteLoading) { setDeleteTarget(null); setDeleteError(''); } }}
             style={{
               position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
@@ -472,7 +471,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
           >
             <div
               onClick={e => e.stopPropagation()}
-              className="card-glass"
+              className="card"
               style={{ maxWidth: '480px', width: '100%', padding: '1.5rem' }}
             >
               <div className="modal-header" style={{ padding: '0 0 0.75rem 0', border: 'none' }}>
@@ -556,9 +555,9 @@ export default function FirebaseAdminUPIPaymentsPage() {
         )}
 
         {detailPayment && (
-          <div className="modal-modern-overlay" onClick={() => setDetailPayment(null)}
+          <div className="modal-overlay" onClick={() => setDetailPayment(null)}
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9998, padding: '1rem' }}>
-            <div onClick={e => e.stopPropagation()} className="card-glass" style={{ maxWidth: '560px', width: '100%', padding: '1.5rem' }}>
+            <div onClick={e => e.stopPropagation()} className="card" style={{ maxWidth: '560px', width: '100%', padding: '1.5rem' }}>
               <div className="flex items-center justify-between mb-md">
                 <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Payment Details</h2>
                 <button onClick={() => setDetailPayment(null)} className="modal-close">{'\u2715'}</button>
@@ -596,7 +595,6 @@ export default function FirebaseAdminUPIPaymentsPage() {
             </div>
           </div>
         )}
-        </div>
       </main>
     </div>
   );

@@ -135,20 +135,20 @@ export default function FirebaseLoginPage() {
   }
 
   return (
-    <div className="page-wrap" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="text-center mb-lg animate-fade-in-up">
-        <div className="brand" style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>
-          <span className="text-gradient">JTSB Natural</span>
+    <div className="auth-page">
+      <div className="auth-card" style={{ maxWidth: 420 }}>
+        <div className="text-center mb-lg">
+          <div className="brand" style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>
+            <span className="text-gradient">JTSB Natural</span>
+          </div>
+          <p className="text-muted text-sm" style={{ margin: 0 }}>Premium FinTech Platform</p>
         </div>
-        <p className="text-muted text-sm" style={{ margin: 0 }}>Premium FinTech Platform</p>
-      </div>
 
-      <div className="card-glass animate-fade-in-up stagger-1" style={{ width: '100%', maxWidth: 420, padding: '2rem' }}>
-        <h1 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', letterSpacing: '-0.03em' }} className="text-gradient">Welcome Back</h1>
-        <p className="text-muted text-sm mb-lg" style={{ margin: '0 0 1.5rem' }}>Sign in to your account</p>
+        <h2 className="auth-title">Welcome Back</h2>
+        <p className="auth-subtitle">Sign in to your account</p>
 
         {showSetPasswordField && setPasswordFor ? (
-          <div className="card-dim mb-md" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)' }}>
+          <div className="card-dim mb-md" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', padding: '1rem' }}>
             <p style={{ fontSize: '0.85rem', margin: '0 0 0.75rem', color: 'var(--success)', fontWeight: 600 }}>
               Your account is approved! Set a password to login.
             </p>
@@ -157,7 +157,7 @@ export default function FirebaseLoginPage() {
                 <input type={showPassword ? 'text' : 'password'} value={newPassword} minLength={6}
                   onChange={e => setNewPassword(e.target.value)} required placeholder="New Password" />
               </div>
-              <button type="submit" className={`btn btn-primary${loading ? ' btn-loading' : ''} w-full`} disabled={loading}>
+              <button type="submit" className={`btn-primary${loading ? ' btn-loading' : ''} w-full`} disabled={loading}>
                 {loading ? 'Setting...' : 'Set Password & Login'}
               </button>
             </form>
@@ -182,7 +182,7 @@ export default function FirebaseLoginPage() {
                   {showPassword ? '🙈' : '👁️'}
                 </button>
               </div>
-              <button className={`btn btn-primary${loading ? ' btn-loading' : ''} w-full`} type="submit" disabled={loading}>
+              <button className={`btn-primary${loading ? ' btn-loading' : ''} w-full`} type="submit" disabled={loading}>
                 {loading ? 'Logging in...' : 'Sign In'}
               </button>
             </form>

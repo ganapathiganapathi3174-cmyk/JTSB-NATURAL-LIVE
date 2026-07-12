@@ -213,21 +213,21 @@ export default function FirebaseRegisterPage() {
   }
 
   return (
-    <div className="page-wrap" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="text-center mb-lg animate-fade-in-up">
-        <div className="brand" style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>
+    <div className="auth-page">
+      <div className="text-center mb-md">
+        <div className="brand auth-title">
           <span className="text-gradient">JTSB Natural</span>
         </div>
-        <p className="text-muted text-sm" style={{ margin: 0 }}>Premium FinTech Platform</p>
+        <p className="auth-subtitle">Premium FinTech Platform</p>
       </div>
 
       {paymentStep !== 'form' && (
-        <div className="step-indicator animate-fade-in-up">
+        <div className="step-indicator">
           <div className="step completed">
             <span className="step-number">✓</span>
             <span>Form</span>
           </div>
-          <div className={`step-line completed`} />
+          <div className="step-line completed" />
           <div className={`step ${paymentStep === 'upi' ? 'active' : ''} ${paymentStep === 'submitted' ? 'completed' : ''}`}>
             <span className="step-number">{paymentStep === 'submitted' ? '✓' : '2'}</span>
             <span>Payment</span>
@@ -240,57 +240,56 @@ export default function FirebaseRegisterPage() {
         </div>
       )}
 
-      <div className="card-glass animate-fade-in-up stagger-1" style={{ width: '100%', maxWidth: 460, padding: '2rem' }}>
-        <h1 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', letterSpacing: '-0.03em' }} className="text-gradient">
+      <div className="auth-card">
+        <h1 className="auth-title text-gradient">
           {paymentStep === 'form' ? 'Create Account' : paymentStep === 'upi' ? 'Complete Payment' : 'Payment Submitted!'}
         </h1>
-        <p className="text-muted text-sm mb-lg" style={{ margin: '0 0 1.5rem' }}>
+        <p className="auth-subtitle">
           {paymentStep === 'form' ? 'One-time payment for lifetime access' : 'Complete your registration'}
         </p>
 
         {error && (
-          <div className="card-dim mb-md" style={{ background: 'var(--danger-light)', border: '1px solid rgba(239,68,68,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--danger)' }}>
+          <div className="alert-error mb-md">
             {error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}
           </div>
         )}
         {success && (
-          <div className="card-dim mb-md" style={{ background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--success)' }}>
+          <div className="alert-success mb-md">
             {success}
           </div>
         )}
 
         {paymentStep === 'form' && (
           <form onSubmit={handleProceedToPayment}>
-            <div className="field-glass mb-md">
+            <div className="field mb-md">
               <input required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name *" />
             </div>
-            <div className="field-glass mb-md" style={{ position: 'relative' }}>
+            <div className="field mb-md">
               <input required type="email" value={email} onChange={e => { setEmail(e.target.value); setEmailExists(false); }}
                 onBlur={e => checkEmailDuplicate(e.target.value)} placeholder="Email Address *"
-                autoComplete="email" style={emailExists ? { borderColor: 'var(--danger)' } : {}} />
-              {checkingEmail && <span className="text-xs text-muted" style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)' }}>checking...</span>}
-              {emailExists && <p className="text-xs" style={{ margin: '0.25rem 0 0', color: 'var(--danger)' }}>Already registered. <Link to="/fb/login">Login?</Link></p>}
+                autoComplete="email" className={emailExists ? 'input-error' : ''} />
+              {checkingEmail && <span className="text-sm text-muted">checking...</span>}
+              {emailExists && <p className="text-sm" style={{ color: 'var(--danger)' }}>Already registered. <Link to="/fb/login">Login?</Link></p>}
             </div>
-            <div className="field-glass mb-md" style={{ position: 'relative' }}>
+            <div className="field mb-md">
               <input required inputMode="numeric" value={phone} onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setPhoneExists(false); }}
                 onBlur={e => checkPhoneDuplicate(e.target.value)} placeholder="Phone Number * (10 digits)"
-                autoComplete="tel" style={phoneExists ? { borderColor: 'var(--danger)' } : {}} />
-              {checkingPhone && <span className="text-xs text-muted" style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)' }}>checking...</span>}
-              {phoneExists && <p className="text-xs" style={{ margin: '0.25rem 0 0', color: 'var(--danger)' }}>Mobile number already registered.</p>}
+                autoComplete="tel" className={phoneExists ? 'input-error' : ''} />
+              {checkingPhone && <span className="text-sm text-muted">checking...</span>}
+              {phoneExists && <p className="text-sm" style={{ color: 'var(--danger)' }}>Mobile number already registered.</p>}
             </div>
-            <div className="field-glass mb-md" style={{ position: 'relative' }}>
+            <div className="field mb-md">
               <input required type={showPassword ? 'text' : 'password'} value={password} minLength={6}
-                onChange={e => setPassword(e.target.value)} placeholder="Password * (min 8 chars, upper+lower+number)"
-                style={{ paddingRight: '2.5rem' }} />
+                onChange={e => setPassword(e.target.value)} placeholder="Password * (min 8 chars, upper+lower+number)" />
               <button type="button" onClick={() => setShowPassword(!showPassword)}
-                style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)', padding: '0.25rem', lineHeight: 1 }}>
+                className="btn-ghost" style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)', padding: '0.25rem', lineHeight: 1 }}>
                 {showPassword ? '🙈' : '👁️'}
               </button>
             </div>
-            <div className="field-glass mb-lg">
+            <div className="field mb-lg">
               <input value={referralCode} onChange={e => setReferralCode(e.target.value.toUpperCase())} placeholder="Referral Code (optional)" />
             </div>
-            <button className={`btn btn-primary w-full${loading ? ' btn-loading' : ''}`} type="submit" disabled={!canSubmit || emailExists || phoneExists}>
+            <button className={`btn-primary w-full${loading ? ' btn-loading' : ''}`} type="submit" disabled={!canSubmit || emailExists || phoneExists}>
               {loading ? 'Processing...' : 'Proceed to Payment →'}
             </button>
           </form>
@@ -306,7 +305,7 @@ export default function FirebaseRegisterPage() {
               onError={(msg) => setError(msg)}
             />
             <div className="text-center mt-md">
-              <button className="btn btn-ghost btn-sm" onClick={() => setPaymentStep('form')}>
+              <button className="btn-ghost" onClick={() => setPaymentStep('form')}>
                 ← Back to Form
               </button>
             </div>
@@ -314,14 +313,14 @@ export default function FirebaseRegisterPage() {
         )}
 
         {paymentStep === 'upi' && !pendingRegId && (
-          <div className="card-dim text-center" style={{ padding: '1.5rem', background: 'var(--danger-light)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <div className="alert-error mb-md">
             <p className="text-sm" style={{ color: 'var(--danger)' }}>Session expired. Please refresh and try again.</p>
           </div>
         )}
 
         {paymentStep === 'submitted' && (
           <div className="text-center" style={{ padding: '1rem 0' }}>
-            <div style={{
+            <div className="badge" style={{
               width: 64, height: 64, borderRadius: '50%',
               background: 'linear-gradient(135deg, var(--success), #4ADE80)', color: 'var(--text)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -331,7 +330,7 @@ export default function FirebaseRegisterPage() {
             <p className="text-muted text-sm" style={{ marginTop: '0.75rem', lineHeight: 1.6 }}>
               Your payment is being verified. You will be able to login once your account is approved.
             </p>
-            <Link to="/fb/login" className="btn btn-primary" style={{ marginTop: '1rem', display: 'inline-flex' }}>
+            <Link to="/fb/login" className="btn-primary" style={{ marginTop: '1rem', display: 'inline-flex' }}>
               Go to Login
             </Link>
           </div>

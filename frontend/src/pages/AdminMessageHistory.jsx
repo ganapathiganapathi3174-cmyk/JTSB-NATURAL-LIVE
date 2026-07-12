@@ -71,12 +71,12 @@ export default function AdminMessageHistory() {
       <AdminSidebar userName={localStorage.getItem('fb_admin_name') || 'Admin'} pendingCounts={{}} />
       <main className="admin-main-content">
         <div className="admin-page">
-          <div className="admin-page-header">
+          <div className="page-header">
             <h1>Message History</h1>
             <div className="admin-page-subtitle">All admin-to-user communications</div>
           </div>
 
-          <div className="msg-admin-filters">
+          <div className="filters">
             <input className="input w-full" placeholder="Search by user ID, name, title, message, sender..."
               value={search} onChange={e => setSearch(e.target.value)} />
             <select className="input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ maxWidth: '180px' }}>
@@ -99,8 +99,8 @@ export default function AdminMessageHistory() {
           ) : filtered.length === 0 ? (
             <div className="admin-empty-state"><p className="muted">No messages found.</p></div>
           ) : (
-            <div className="table-modern-wrapper">
-              <table className="table-modern msg-admin-table">
+            <div className="table-wrap">
+              <table className="table-modern table-wrap">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -121,7 +121,7 @@ export default function AdminMessageHistory() {
                       <td data-label="Receiver">{n.receiverName || '-'}</td>
                       <td data-label="Title">{n.title || getTypeLabel(n.type)}</td>
                       <td data-label="Message" className="msg-admin-message-cell">
-                        <div className="msg-admin-message">{n.message}</div>
+                        <div className="card card-dim">{n.message}</div>
                       </td>
                       <td data-label="Sent By">{n.senderName || 'Admin'}</td>
                       <td data-label="Status">
