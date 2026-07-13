@@ -491,7 +491,7 @@ async function checkOcrTextHashDuplicate(textHash, excludeOrderId) {
   }
 }
 
-async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredUtr) {
+async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredUtr, userEnteredUpi) {
   const T = { start: Date.now(), imageLoad: 0, preprocess: 0, ocr: 0, parser: 0, fraud: 0, db: 0, decision: 0 };
   function stageTiming(stage) {
     const elapsed = Date.now() - T.start;
@@ -555,6 +555,8 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     bankSmsScore: 0,
     userEnteredUtr: userEnteredUtr || null,
     userUtrMatched: false,
+    userEnteredUpi: userEnteredUpi || null,
+    userUpiMatched: false,
     allowedAmounts: ALLOWED_AMOUNTS,
     debug: { ocrResults: [] },
     timings: {},
@@ -811,6 +813,31 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
       result.reasons.push('Receiver mismatch: expected ' + EXPECTED_RECEIVER_UPI + ', found "' + receiverInSms + '"');
     }
 
+    // User-entered UPI ID vs OCR-extracted UPI/receiver match
+    let userUpiMatch = false;
+    let userUpiReason = '';
+    if (!userEnteredUpi || !userEnteredUpi.trim()) {
+      userUpiReason = 'No UPI ID entered by user';
+      log('User-entered UPI: MISSING');
+    } else {
+      const cleanedUserUpi = userEnteredUpi.trim().toLowerCase().replace(/\s+/g, '');
+      const candidates = [
+        ocrData.extractedReceiverName,
+        ocrData.extractedSenderVpa,
+        ocrData.extractedReceiverAccount,
+      ].filter(Boolean).map(v => v.toLowerCase().replace(/\s+/g, ''));
+      userUpiMatch = candidates.some(c => c === cleanedUserUpi || c.includes(cleanedUserUpi) || cleanedUserUpi.includes(c));
+      if (userUpiMatch) {
+        log('User-entered UPI MATCHES SMS: ' + cleanedUserUpi);
+      } else {
+        userUpiReason = 'Entered UPI ID does not match the SMS. Entered: ' + cleanedUserUpi + ', SMS contains: ' + (candidates.join(', ') || 'none');
+        log('User-entered UPI MISMATCH: entered=' + cleanedUserUpi + ', sms=' + candidates.join(', '));
+        result.reasons.push(userUpiReason);
+      }
+    }
+    result.userUpiMatched = userUpiMatch;
+    result.checks.push({ name: 'user_upi_match', passed: userUpiMatch, entered: userEnteredUpi || '', extracted: [ocrData.extractedReceiverName, ocrData.extractedSenderVpa, ocrData.extractedReceiverAccount].filter(Boolean).join(', ') });
+
     const paymentStatusStr = ocrData.extractedPaymentStatus;
     const statusAccepted = paymentStatusAccepted(paymentStatusStr);
     const statusRejected = paymentStatusRejected(paymentStatusStr);
@@ -845,6 +872,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
       amountMatch,
       utrValid: !!validUtr,
       userUtrMatch,
+      userUpiMatch,
       utrUnique: !utrDuplicate.isDuplicate,
       receiverMatch: receiverValid,
       dateToday: dateValid,
@@ -865,6 +893,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
       { label: 'Amount match', pass: checksPass.amountMatch, weight: 15 },
       { label: 'UTR valid', pass: checksPass.utrValid, weight: 10 },
       { label: 'User UTR match', pass: checksPass.userUtrMatch, weight: 15 },
+      { label: 'User UPI match', pass: checksPass.userUpiMatch, weight: 10 },
       { label: 'UTR unique', pass: checksPass.utrUnique, weight: 10 },
       { label: 'Receiver match', pass: checksPass.receiverMatch, weight: 10 },
       { label: 'Date today', pass: checksPass.dateToday, weight: 10 },
@@ -910,6 +939,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
             amountMatch: 'Amount mismatch: extracted ' + ocrData.extractedAmount + ', expected ' + expectedAmount,
             utrValid: 'Invalid UTR extracted from SMS',
             userUtrMatch: 'Entered UTR does not match SMS UTR',
+            userUpiMatch: 'Entered UPI ID does not match the UPI ID in your SMS screenshot',
             utrUnique: 'Duplicate UTR detected in system',
             receiverMatch: 'Receiver UPI does not match expected ' + EXPECTED_RECEIVER_UPI,
             dateToday: 'Payment date ' + dateStr + ' is not today or is in the future',
@@ -969,6 +999,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     log('  OCR:    strategy=' + ocrResult.strategy + ', text=' + ocrText.length + ' chars, conf=' + avgConfidence + '%, required=' + MIN_OCR_CONFIDENCE + '%');
     log('  Parse:  amount=' + ocrData.extractedAmount + ', utr=' + ocrData.extractedUtr + ', bank=' + ocrData.extractedBankName + ', date=' + ocrData.extractedDate + ', time=' + ocrData.extractedTime + ', status=' + ocrData.extractedPaymentStatus);
     log('  User:   enteredUtr=' + (userEnteredUtr || 'none') + ' matched=' + userUtrMatch);
+    log('  User:   enteredUpi=' + (userEnteredUpi || 'none') + ' matched=' + userUpiMatch);
     log('  Checks: ' + JSON.stringify(checksPass));
     log('  Score:  ' + verificationScore + '% (' + earned + '/' + totalWeight + ')');
     log('  Result: ' + result.status + ' | allPass=' + allPass + ' | duration=' + result.verificationDuration + 'ms');

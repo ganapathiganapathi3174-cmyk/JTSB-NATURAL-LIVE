@@ -83,17 +83,18 @@ module.exports = async (req, res) => {
   const PIPELINE_TIMEOUT_MS = 28000;
 
   async function runPipeline() {
-    const { orderId, screenshot, utr } = req.body || {};
-    PH('Parsed Body', { hasOrderId: !!orderId, hasScreenshot: !!screenshot, hasUtr: !!utr });
+    const { orderId, screenshot, utr, upiId } = req.body || {};
+    PH('Parsed Body', { hasOrderId: !!orderId, hasScreenshot: !!screenshot, hasUtr: !!utr, hasUpiId: !!upiId });
     if (!orderId) { sendJSON(400, { error: 'orderId is required' }); return; }
     if (!screenshot) { sendJSON(400, { error: 'screenshot is required' }); return; }
+    if (!upiId) { sendJSON(400, { error: 'UPI ID is required' }); return; }
     PH('Order Validation');
 
     const uploadedUrl = await uploadBase64Image(screenshot);
     PH('Image Uploaded', { urlLength: (uploadedUrl || '').length, isBase64: uploadedUrl?.startsWith('data:') });
 
     PH('Calling Verification Pipeline...');
-    const result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null });
+    const result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null, userEnteredUpi: upiId });
     PH('Verification Pipeline Complete', { status: result.status, score: result.verificationScore });
 
     const totalMs = Date.now() - reqStart;

@@ -186,7 +186,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   });
   T.mark('updateOrderVerifying');
 
-  const verificationResult = await runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null);
+  const verificationResult = await runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null, extra?.userEnteredUpi || null);
   T.mark('runBankSmsVerification');
 
   const isVerified = verificationResult.status === 'verified';
@@ -269,6 +269,8 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     matchedDate: verificationResult.matchedDate,
     userUtrMatched: verificationResult.userUtrMatched,
     userEnteredUtr: verificationResult.userEnteredUtr,
+    userUpiMatched: verificationResult.userUpiMatched,
+    userEnteredUpi: verificationResult.userEnteredUpi,
     fraudScore: verificationResult.fraudScore,
     checks: verificationResult.checks,
   };
