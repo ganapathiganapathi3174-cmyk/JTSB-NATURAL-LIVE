@@ -80,7 +80,7 @@ module.exports = async (req, res) => {
 
   PH('Request Received');
 
-  const PIPELINE_TIMEOUT_MS = 26000;
+  const PIPELINE_TIMEOUT_MS = 28000;
 
   async function runPipeline() {
     const { orderId, screenshot, utr } = req.body || {};

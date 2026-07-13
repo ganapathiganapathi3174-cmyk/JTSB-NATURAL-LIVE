@@ -946,6 +946,15 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
   return result;
 }
 
+// Eager init worker pool at module load time (shaves 5-15s off cold start)
+if (Tesseract) {
+  initWorkerPool().then(() => {
+    log('Eager worker pool init complete: ' + workerPool.length + ' workers ready');
+  }).catch(e => {
+    log('Eager worker pool init failed: ' + e.message);
+  });
+}
+
 module.exports = {
   runBankSmsVerification, VERIFY_TIMEOUT_MS, shutdownWorker, initWorkerPool, ALLOWED_AMOUNTS, ADMIN_UPI_ID,
   exactAmountMatch, validateUtr, detectBankSmsText, computeImageHash, computeTextHash,
