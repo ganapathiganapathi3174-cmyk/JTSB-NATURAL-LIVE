@@ -2,6 +2,7 @@ const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
+const fsPromises = fs.promises;
 const path = require('path');
 const { Jimp } = require('jimp');
 const { analyzeImageQuality } = require('./_imageQuality.js');
@@ -30,6 +31,8 @@ const MAX_SESSION_AGE_MINUTES = 60;
 const DEBUG_DIR = path.join(__dirname, '..', 'debug_ocr');
 const MAX_OCR_STRATEGIES = 3;
 const FRAUD_CACHE_TTL = 100;
+const OCR_STRATEGY_TIMEOUT_MS = 20000;
+const OCR_WATCHDOG_TIMEOUT_MS = 25000;
 const EXPECTED_RECEIVER_UPI = ADMIN_UPI_ID.toLowerCase();
 const ACCEPTED_PAYMENT_STATUSES = ['SUCCESS', 'SUCCESSFUL', 'CREDITED', 'PAID'];
 const REJECTED_PAYMENT_STATUSES = ['FAILED', 'DECLINED', 'PENDING', 'PROCESSING', 'TIMEOUT', 'CANCELLED'];
@@ -63,12 +66,12 @@ function ensureDebugDir() {
   try { if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true }); } catch (_) {}
 }
 
-function saveDebugImage(buffer, name) {
+async function saveDebugImage(buffer, name) {
   try {
     ensureDebugDir();
     const ts = Date.now();
     const f = path.join(DEBUG_DIR, ts + '_' + name + '.png');
-    fs.writeFileSync(f, buffer);
+    await fsPromises.writeFile(f, buffer);
     log('Saved debug image: ' + f);
     return f;
   } catch (e) { log('Debug save failed: ' + e.message); return null; }
@@ -128,26 +131,24 @@ async function initWorkerPool() {
 }
 
 function getWorkerFromPool() {
-  if (workerPool.length === 0) return null;
+  if (workerPool.length === 0) return { worker: null, needsReplace: false };
   const entry = workerPool.reduce((a, b) => a.uses <= b.uses ? a : b);
   entry.uses++;
-  if (entry.uses >= WORKER_MAX_USES) {
-    entry.worker.terminate().catch(() => {});
-    workerPool = workerPool.filter(e => e !== entry);
-    workerPoolSize = workerPool.length;
-    initWorkerPool();
-  }
-  return entry.worker;
+  const needsReplace = entry.uses >= WORKER_MAX_USES;
+  return { worker: entry.worker, needsReplace, poolEntry: entry };
 }
 
 async function runTesseractOCR(imageBuffer) {
-  const worker = getWorkerFromPool();
-  if (!worker) {
+  let wp = getWorkerFromPool();
+  if (!wp.worker) {
     await initWorkerPool();
-    const w = getWorkerFromPool();
-    if (!w) return { text: '', words: [], confidence: 0, wordConf: 0, topConf: 0 };
+    wp = getWorkerFromPool();
+    if (!wp.worker) {
+      log('No worker available after pool init — returning empty OCR');
+      return { text: '', words: [], confidence: 0, wordConf: 0, topConf: 0 };
+    }
   }
-  const { data } = await worker.recognize(imageBuffer);
+  const { data } = await wp.worker.recognize(imageBuffer);
   const text = data.text || '';
   const words = data.words || [];
   const wordConf = words.length > 0
@@ -156,6 +157,15 @@ async function runTesseractOCR(imageBuffer) {
   const topConf = data.confidence !== undefined ? data.confidence : 0;
   const effectiveConf = wordConf > 0 ? wordConf : topConf;
   log('Tesseract: ' + text.length + ' chars, wordConf=' + wordConf + '%, topConf=' + topConf + '%, effectiveConf=' + effectiveConf + '%');
+
+  // Replace exhausted workers after recognition (never during — keeps pool non-empty)
+  if (wp.needsReplace && wp.poolEntry) {
+    wp.poolEntry.worker.terminate().catch(() => {});
+    workerPool = workerPool.filter(e => e !== wp.poolEntry);
+    workerPoolSize = workerPool.length;
+    initWorkerPool().catch(e => log('Worker replacement failed: ' + e.message));
+  }
+
   return { text, words, confidence: effectiveConf, wordConf, topConf };
 }
 
@@ -201,19 +211,27 @@ const STRATEGIES = [
 
 async function ocrWithRetry(rawBuf, orderId) {
   log('Running OCR with up to ' + Math.min(STRATEGIES.length, MAX_OCR_STRATEGIES) + ' strategies...');
-  saveDebugImage(rawBuf, orderId + '_original');
+  await saveDebugImage(rawBuf, orderId + '_original');
   const resizedBuf = await preprocessForOcr(rawBuf);
   let bestResult = { text: '', confidence: 0, strategy: 'none' };
   const results = [];
   const usedStrategies = STRATEGIES.slice(0, MAX_OCR_STRATEGIES);
+
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' timed out after ' + ms + 'ms')), ms)),
+    ]);
+  }
+
   const parallelResults = await Promise.all(usedStrategies.map(async (strategy) => {
     try {
       log('Strategy: ' + strategy.name + '...');
-      const processedBuf = await strategy.fn(resizedBuf);
+      const processedBuf = await withTimeout(strategy.fn(resizedBuf), OCR_STRATEGY_TIMEOUT_MS, strategy.name + ' preprocess');
       if (strategy.name !== 'original') {
-        saveDebugImage(processedBuf, orderId + '_' + strategy.name);
+        await saveDebugImage(processedBuf, orderId + '_' + strategy.name);
       }
-      const data = await runTesseractOCR(processedBuf);
+      const data = await withTimeout(runTesseractOCR(processedBuf), OCR_STRATEGY_TIMEOUT_MS, strategy.name + ' OCR');
       const ocrText = data.text || '';
       const effectiveConf = data.confidence || 0;
       log('  ' + strategy.name + ': ' + ocrText.length + ' chars @ ' + effectiveConf + '% (wordConf=' + (data.wordConf || 0) + '%, topConf=' + (data.topConf || 0) + '%)');
@@ -608,15 +626,38 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     }
 
     const tOcr = Date.now();
-    const [ocrResult, imageQuality, fraudPreQuery] = await Promise.all([
-      ocrWithRetry(rawBuf, orderId),
-      analyzeImageQuality(rawBuf).catch(() => ({
-        passed: true, overallGrade: 'unknown', issues: [], warnings: [],
-        blurScore: 0, cropRatio: 1.0, lowResolution: false, darkScore: 0,
-        glareScore: 0, compressionScore: 0, dimensions: { width: 0, height: 0 },
-      })),
-      fetchPaymentsCached().then(() => true).catch(() => false),
-    ]);
+
+    const ocrWatchdog = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('OCR watchdog timed out after ' + (OCR_WATCHDOG_TIMEOUT_MS / 1000) + 's')), OCR_WATCHDOG_TIMEOUT_MS)
+    );
+
+    let ocrResult, imageQuality, fraudPreQuery;
+    try {
+      const results = await Promise.race([
+        Promise.all([
+          ocrWithRetry(rawBuf, orderId),
+          analyzeImageQuality(rawBuf).catch(() => ({
+            passed: true, overallGrade: 'unknown', issues: [], warnings: [],
+            blurScore: 0, cropRatio: 1.0, lowResolution: false, darkScore: 0,
+            glareScore: 0, compressionScore: 0, dimensions: { width: 0, height: 0 },
+          })),
+          fetchPaymentsCached().then(() => true).catch(() => false),
+        ]),
+        ocrWatchdog,
+      ]);
+      ocrResult = results[0];
+      imageQuality = results[1];
+      fraudPreQuery = results[2];
+    } catch (watchdogErr) {
+      log('OCR watchdog triggered: ' + watchdogErr.message);
+      result.reasons.push('OCR processing timed out — please try again with a clearer screenshot');
+      result.verificationScore = 0;
+      result.verificationDuration = Date.now() - T.start;
+      T.ocr = Date.now() - tOcr;
+      printTimingsTable();
+      return result;
+    }
+
     T.ocr = Date.now() - tOcr;
     stageTiming('OCR');
 
