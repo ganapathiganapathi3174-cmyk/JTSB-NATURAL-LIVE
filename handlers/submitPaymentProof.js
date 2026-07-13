@@ -80,7 +80,9 @@ module.exports = async (req, res) => {
 
   PH('Request Received');
 
-  try {
+  const PIPELINE_TIMEOUT_MS = 26000;
+
+  async function runPipeline() {
     const { orderId, screenshot, utr } = req.body || {};
     PH('Parsed Body', { hasOrderId: !!orderId, hasScreenshot: !!screenshot, hasUtr: !!utr });
     if (!orderId) { sendJSON(400, { error: 'orderId is required' }); return; }
@@ -102,10 +104,17 @@ module.exports = async (req, res) => {
         ? 'Payment verified successfully'
         : 'Payment verification failed',
     });
+  }
+
+  try {
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Pipeline timed out after ' + (PIPELINE_TIMEOUT_MS / 1000) + 's')), PIPELINE_TIMEOUT_MS)
+    );
+    await Promise.race([runPipeline(), timeoutPromise]);
   } catch (err) {
     const totalMs = Date.now() - reqStart;
     PH('ERROR', err.message);
     console.error('[submitPaymentProof ERROR STACK]', err.stack || err.message);
-    sendJSON(err.status || 500, { error: 'Internal server error' });
+    sendJSON(504, { error: 'Verification timed out. Please try again or contact support.' });
   }
 };

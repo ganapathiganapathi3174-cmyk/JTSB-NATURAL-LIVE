@@ -18,6 +18,35 @@ function log(msg) {
 }
 function now() { return new Date().toISOString(); }
 
+function makeTimer() {
+  const marks = {};
+  const start = Date.now();
+  function mark(name) {
+    const elapsed = Date.now() - start;
+    const prev = marks[name];
+    if (prev) {
+      marks[name] = { at: elapsed, sincePrev: elapsed - (marks._last || 0) };
+    } else {
+      marks[name] = { at: elapsed, sincePrev: elapsed - (marks._last || 0) };
+    }
+    marks._last = elapsed;
+    const sp = marks[name].sincePrev;
+    log('[TIMING] ' + name + ' +' + elapsed + 'ms (+' + sp + 'ms since prev)');
+    if (sp > 2000) log('[BOTTLENECK] "' + name + '" took ' + sp + 'ms (> 2s threshold)');
+    return elapsed;
+  }
+  function summary() {
+    const total = Date.now() - start;
+    log('=== TIMING TABLE (total=' + total + 'ms) ===');
+    for (const [k, v] of Object.entries(marks)) {
+      if (k === '_last') continue;
+      log('  ' + k + ': ' + v.sincePrev + 'ms');
+    }
+    return total;
+  }
+  return { mark, summary, start: () => Date.now() - start };
+}
+
 async function lookupUser(userId) {
   try { const u = await getDoc(COL_USERS, userId); if (u) return u; } catch {}
   const found = await runQuery(COL_USERS, [{ field: 'email', op: 'EQUAL', value: userId }], { limit: 1 });
@@ -142,19 +171,23 @@ async function getPaymentOrder(orderId) {
 }
 
 async function submitPaymentProof(orderId, screenshotUrl, extra) {
+  const T = makeTimer();
   const order = await getPaymentOrder(orderId);
   if (!order) throw Object.assign(new Error('Order not found'), { status: 404 });
   if (order.status === 'expired') throw Object.assign(new Error('Order expired'), { status: 400 });
   if (order.status === 'verified') throw Object.assign(new Error('Order already verified'), { status: 400 });
   if (order.verification_status === 'processing') throw Object.assign(new Error('Verification already in progress'), { status: 409 });
+  T.mark('getPaymentOrder');
 
   await updateDoc(COL_ORDERS, orderId, {
     status: 'verifying',
     verification_status: 'processing',
     updated_at: now(),
   });
+  T.mark('updateOrderVerifying');
 
   const verificationResult = await runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null);
+  T.mark('runBankSmsVerification');
 
   const isVerified = verificationResult.status === 'verified';
   const finalOrderStatus = isVerified ? 'verified' : 'rejected';
@@ -172,9 +205,11 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     verification_completed_at: now(),
     updated_at: now(),
   });
+  T.mark('updateOrderResult');
 
   if (isVerified) {
     await executeVerifiedOrder(order, verificationResult, extra);
+    T.mark('executeVerifiedOrder');
   } else {
     const msg = 'Your payment of ₹' + order.amount + ' was rejected. Reasons: ' + (verificationResult.reasons || []).join(', ');
     await addDoc('notifications', {
@@ -184,6 +219,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       type: 'payment_rejected', status: 'unread', created_at: now(),
       senderId: 'system', senderName: 'System',
     }).catch(() => {});
+    T.mark('addRejectionNotification');
   }
 
   try { broadcast('paymentUpdated', { orderId, status: finalOrderStatus, type: order.type }); } catch {}
@@ -216,7 +252,9 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       }).catch(() => {});
     }
   } catch (e) { log('Failed to sync payment status: ' + e.message); }
+  T.mark('syncPaymentStatus');
 
+  T.summary();
   return {
     orderId,
     paymentId: syncedPaymentId || orderId,
@@ -237,12 +275,14 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
 }
 
 async function executeVerifiedOrder(order, verificationResult, extra) {
+  const T = makeTimer();
   const type = order.type;
   const amount = Number(order.amount);
   const orderId = order.id;
   const completedAt = now();
 
   if (type === 'registration') {
+    T.mark('executeVerifiedOrder:start');
     const pendingRegId = extra?.pendingRegId || order.pending_reg_id;
     if (!pendingRegId) {
       await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['No registration session linked'], updated_at: now() });
@@ -337,6 +377,7 @@ async function executeVerifiedOrder(order, verificationResult, extra) {
       verification_completed_at: completedAt,
       verification_duration: VERIFY_TIMEOUT_MS,
     }).catch(() => {});
+    T.mark('executeVerifiedOrder:registration');
   } else if (type === 'topup') {
     const userId = order.user_id;
     if (!userId) {
@@ -415,7 +456,10 @@ async function executeVerifiedOrder(order, verificationResult, extra) {
       verification_completed_at: completedAt,
       verification_duration: VERIFY_TIMEOUT_MS,
     }).catch(() => {});
+    T.mark('executeVerifiedOrder:topup');
   }
+  T.mark('executeVerifiedOrder:end');
+  T.summary();
 }
 
 async function retryPaymentOrder(orderId) {
