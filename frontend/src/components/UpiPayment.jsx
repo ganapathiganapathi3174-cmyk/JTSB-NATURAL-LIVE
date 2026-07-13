@@ -174,9 +174,19 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, screenshot: dataUrl, utr: utr.trim() }),
-        signal: AbortSignal.timeout(90000),
+        signal: AbortSignal.timeout(120000),
       });
-      const data = await resp.json();
+
+      // Safe JSON parsing — never show "Unexpected token" errors
+      let data;
+      const contentType = resp.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await resp.json();
+      } else {
+        const textBody = await resp.text();
+        console.error('[UPI-PAYMENT] Non-JSON response:', resp.status, textBody.substring(0, 200));
+        throw new Error(textBody.substring(0, 200) || 'Server returned an invalid response. Please try again.');
+      }
       if (!resp.ok) throw new Error(data.error || 'Verification failed');
 
       setVerifyResult(data);

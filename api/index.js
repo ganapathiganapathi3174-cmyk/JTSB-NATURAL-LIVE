@@ -106,7 +106,7 @@ module.exports = async (req, res) => {
     try {
       return require('../handlers/sseDashboard.js')(req, res);
     } catch (e) {
-      res.writeHead(500);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'SSE handler failed', detail: e.message }));
       return;
     }
@@ -138,10 +138,11 @@ module.exports = async (req, res) => {
 
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
-      res.writeHead(504);
-      res.end(JSON.stringify({ error: 'Request timed out' }));
+      console.error('[API] Request timed out for path=' + path + ' (25s limit)');
+      res.writeHead(504, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Request timed out. Please try again or contact support.' }));
     }
-  }, 30000);
+  }, 25000);
   const origEnd = res.end.bind(res);
   res.end = function (...a) { clearTimeout(timeout); return origEnd(...a); };
   const origWH = res.writeHead.bind(res);
@@ -152,8 +153,8 @@ module.exports = async (req, res) => {
     console.error('[API] Path=' + path + ' Error=' + (err?.message || err));
     metrics.trackAPICall(path, req.method, 500);
     if (!res.headersSent) {
-      res.writeHead(500);
-      res.end(JSON.stringify({ error: err?.message || 'Internal server error', path }));
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Internal server error', path }));
     }
   });
 };

@@ -226,9 +226,9 @@ const server = http.createServer((req, res) => {
     try { req.body = body ? JSON.parse(body) : {}; } catch (e) { req.body = {}; }
     handler(req, res);
   });
-  req.on('error', (err) => { clearTimeout(abortTimer); if (!res.headersSent) { res.writeHead(502); res.end(JSON.stringify({ error: 'Request error' })); } });
+  req.on('error', (err) => { clearTimeout(abortTimer); if (!res.headersSent) { res.writeHead(502, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Request error' })); } });
   } catch (err) {
-    res.writeHead(500); res.end(JSON.stringify({ error: 'Server error' }));
+    res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Server error' }));
   }
 });
 

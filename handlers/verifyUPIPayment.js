@@ -7,18 +7,18 @@ module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.writeHead(200).end();
-  if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
+  if (req.method !== 'POST') { res.writeHead(405, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
 
   try {
     const { pendingRegId, userId, type, amount, utr, upiId, paymentDate, screenshotUrl } = req.body || {};
     if (!type || !amount || !screenshotUrl) {
-      res.writeHead(400); res.end(JSON.stringify({ error: 'Missing required fields: type, amount, screenshotUrl' })); return;
+      res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing required fields: type, amount, screenshotUrl' })); return;
     }
 
     // Package validation for registration
     if (type === 'registration' && pendingRegId) {
       const pending = await getDoc(COL_PENDING_REGS, pendingRegId);
-      if (!pending) { res.writeHead(404); res.end(JSON.stringify({ error: 'Pending registration not found' })); return; }
+      if (!pending) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Pending registration not found' })); return; }
       const refCode = pending.referral_code;
       if (refCode) {
         const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: refCode.toUpperCase() }], { limit: 1 });
@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
         if (refUsers.length) allowedPkg = getReferrerPackage(refUsers[0]);
         else allowedPkg = getPackageByReferral(refCode);
         if (allowedPkg && !validatePackageAmount(allowedPkg, amount)) {
-          res.writeHead(400); res.end(JSON.stringify({ error: 'This referral link accepts only the \u20B9' + allowedPkg + ' package. Selected \u20B9' + amount + ' does not match.' })); return;
+          res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'This referral link accepts only the \u20B9' + allowedPkg + ' package. Selected \u20B9' + amount + ' does not match.' })); return;
         }
       }
     }
@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
       if (user) {
         const userPkg = getReferrerPackage(user);
         if (userPkg && !validatePackageAmount(userPkg, amount)) {
-          res.writeHead(400); res.end(JSON.stringify({ error: 'Your \u20B9' + userPkg + ' package only accepts \u20B9' + userPkg + ' topup. Selected \u20B9' + amount + ' does not match.' })); return;
+          res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Your \u20B9' + userPkg + ' package only accepts \u20B9' + userPkg + ' topup. Selected \u20B9' + amount + ' does not match.' })); return;
         }
       }
     }
@@ -58,7 +58,7 @@ module.exports = async (req, res) => {
         ? 'Payment verification failed'
         : 'Payment submitted for manual review';
 
-    res.writeHead(200); res.end(JSON.stringify({
+    res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({
       status: proofResult.status,
       paymentId,
       autoVerified: proofResult.verificationStatus === 'verified' || proofResult.verificationStatus === 'rejected',
@@ -78,6 +78,6 @@ module.exports = async (req, res) => {
   } catch (err) {
     const status = err.status || 500;
     console.error('[verifyUPIPayment] Error:', err.message);
-    res.writeHead(status); res.end(JSON.stringify({ error: 'Internal server error' }));
+    res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };

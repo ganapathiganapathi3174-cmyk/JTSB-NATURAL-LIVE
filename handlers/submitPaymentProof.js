@@ -52,53 +52,60 @@ async function uploadBase64Image(base64DataUrl) {
 
 module.exports = async (req, res) => {
   const reqStart = Date.now();
-  const logTiming = (stage) => console.log('[' + new Date().toISOString().slice(0, 19).replace('T', ' ') + '] [submitPaymentProof TIMING] ' + stage + ' at +' + (Date.now() - reqStart) + 'ms');
-  function bottleneckCheck(stage, elapsedMs) {
-    if (elapsedMs > 3000) console.log(`[submitPaymentProof BOTTLENECK] ⚠️ Stage "${stage}" took ${elapsedMs}ms (exceeds 3s threshold)`);
-  }
+  const PH = (stage, data) => {
+    const elapsed = Date.now() - reqStart;
+    const prefix = '[' + new Date().toISOString().slice(0, 19).replace('T', ' ') + '] [submitPaymentProof]';
+    if (data !== undefined) {
+      console.log(prefix + ' [' + stage + '] +' + elapsed + 'ms', typeof data === 'object' ? JSON.stringify(data).substring(0, 200) : data);
+    } else {
+      console.log(prefix + ' [' + stage + '] +' + elapsed + 'ms');
+    }
+    if (elapsed > 3000) console.log(prefix + ' [BOTTLENECK] Stage "' + stage + '" took ' + elapsed + 'ms (exceeds 3s)');
+  };
+  const sendJSON = (statusCode, payload) => {
+    if (res.headersSent) {
+      PH('Response Already Sent (skipping)', statusCode);
+      return;
+    }
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(payload));
+    PH('Response Sent', { status: statusCode, success: !payload.error });
+  };
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.writeHead(200).end();
-  if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
+  if (req.method !== 'POST') { sendJSON(405, { error: 'Method not allowed' }); return; }
 
-  logTiming('Request Received');
+  PH('Request Received');
 
   try {
     const { orderId, screenshot, utr } = req.body || {};
-    if (!orderId) { res.writeHead(400); res.end(JSON.stringify({ error: 'orderId is required' })); logTiming('Response Sent (missing orderId)'); return; }
-    if (!screenshot) { res.writeHead(400); res.end(JSON.stringify({ error: 'screenshot is required' })); logTiming('Response Sent (missing screenshot)'); return; }
-    logTiming('Order Validation');
+    PH('Parsed Body', { hasOrderId: !!orderId, hasScreenshot: !!screenshot, hasUtr: !!utr });
+    if (!orderId) { sendJSON(400, { error: 'orderId is required' }); return; }
+    if (!screenshot) { sendJSON(400, { error: 'screenshot is required' }); return; }
+    PH('Order Validation');
 
     const uploadedUrl = await uploadBase64Image(screenshot);
-    const uploadMs = Date.now() - reqStart - (Date.now() - reqStart - (Date.now() - reqStart));
-    bottleneckCheck('Image Upload', Date.now() - reqStart - (reqStart));
-    logTiming('Image Load');
+    PH('Image Uploaded', { urlLength: (uploadedUrl || '').length, isBase64: uploadedUrl?.startsWith('data:') });
 
+    PH('Calling Verification Pipeline...');
     const result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null });
-    bottleneckCheck('Verification Pipeline', Date.now() - reqStart);
-    logTiming('Response Sent');
+    PH('Verification Pipeline Complete', { status: result.status, score: result.verificationScore });
 
     const totalMs = Date.now() - reqStart;
-    bottleneckCheck('Total', totalMs);
-    logTiming('Response Sent (total=' + totalMs + 'ms)');
-    res.writeHead(200); res.end(JSON.stringify({
+    PH('Total Duration', totalMs + 'ms');
+    sendJSON(200, {
       ...result,
       message: result.status === 'verified'
         ? 'Payment verified successfully'
         : 'Payment verification failed',
-    }));
+    });
   } catch (err) {
     const totalMs = Date.now() - reqStart;
-    console.error(`[submitPaymentProof ERROR] at +${totalMs}ms:`);
-    console.error(err.stack || err.message);
-    bottleneckCheck('Error path', totalMs);
-    if (!res.headersSent) {
-      const status = err.status || 500;
-      const devMsg = process.env.NODE_ENV !== 'production' ? err.message : 'Verification failed';
-      res.writeHead(status); res.end(JSON.stringify({ error: devMsg }));
-    }
-    logTiming('Response Sent (error=' + (err.message || '') + ')');
+    PH('ERROR', err.message);
+    console.error('[submitPaymentProof ERROR STACK]', err.stack || err.message);
+    sendJSON(err.status || 500, { error: 'Internal server error' });
   }
 };
