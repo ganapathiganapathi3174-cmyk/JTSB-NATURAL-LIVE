@@ -8,7 +8,7 @@ const MOBILE_NUMBER = '9655897523';
 
 const PROGRESS_STEPS = [
   'Uploading Screenshot...',
-  'Reading Bank SMS...',
+  'Reading Payment Details...',
   'Extracting Amount...',
   'Extracting UTR...',
   'Checking Amount...',
@@ -148,7 +148,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
   }
 
   async function handleVerify() {
-    if (!fileRef.current?.files?.[0]) { setError('Please upload your bank SMS screenshot'); return; }
+    if (!fileRef.current?.files?.[0]) { setError('Please upload your payment screenshot'); return; }
     if (!utr.trim()) { setError('Please enter the transaction reference / UTR'); return; }
     if (!enteredUpiId.trim()) { setError('Please enter the UPI ID you paid to'); return; }
 
@@ -286,11 +286,10 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
             {verifyResult.reasons.map((r, i) => {
               const userFriendly = r
                 .replace(/amount_mismatch/i, 'Selected amount does not match payment.')
-                .replace(/invalid_utr/i, 'Could not read UTR from the SMS screenshot.')
-                .replace(/utr_mismatch/i, 'Entered UTR does not match the SMS.')
-                .replace(/duplicate_utr/i, 'This transaction has already been used.')
-                .replace(/invalid_bank_sms/i, 'Uploaded screenshot is not a valid bank payment SMS.')
-                .replace(/image_quality_failed/i, 'Invalid screenshot. Please upload a clear bank SMS screenshot.')
+.replace(/invalid_utr/i, 'Could not read UTR from the payment screenshot.')
+.replace(/utr_mismatch/i, 'Entered UTR does not match the screenshot.')
+.replace(/invalid_bank_sms/i, 'Uploaded screenshot is not a valid payment screenshot.')
+.replace(/image_quality_failed/i, 'Invalid screenshot. Please upload a clear payment screenshot.')
                 .replace(/fraud_detected/i, 'Suspicious activity detected.')
                 .replace(/receiver_mismatch/i, 'Payment receiver does not match.')
                 .replace(/timeout/i, 'Verification timed out. Please try again.');
@@ -305,7 +304,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
         {verifyResult.verificationScore != null && <p className="text-sm text-muted mt-sm">Score: {verifyResult.verificationScore}%</p>}
         {verifyResult?.userUtrMatched != null && <p className="text-sm text-muted mt-xs">UTR Match: {verifyResult.userUtrMatched ? '\u2713' : '\u2715'}</p>}
         {verifyResult?.userEnteredUtr && verifyResult?.ocrData?.extractedUtr && !verifyResult.userUtrMatched && (
-          <p className="text-sm mt-xs" style={{ color: '#FB7185' }}>Entered: {verifyResult.userEnteredUtr} | SMS: {verifyResult.ocrData.extractedUtr}</p>
+          <p className="text-sm mt-xs" style={{ color: '#FB7185' }}>Entered: {verifyResult.userEnteredUtr} | Extracted: {verifyResult.ocrData.extractedUtr}</p>
         )}
         {verifyResult?.userUpiMatched != null && (
           <p className="text-sm text-muted mt-xs">UPI ID Match: {verifyResult.userUpiMatched ? '\u2713' : '\u2715'}</p>
@@ -378,7 +377,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
           </div>
 
           <button type="button" className="btn btn-primary w-full btn-lg" onClick={() => setStep('verify')}>
-            I've Paid &mdash; Upload SMS Screenshot &rarr;
+            I've Paid &mdash; Upload Payment Screenshot &rarr;
           </button>
         </div>
       </div>
@@ -393,9 +392,9 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
         )}
 
         <div className="card card-body mb-md">
-          <h3 className="text-center mb">Upload Bank SMS Screenshot</h3>
+          <h3 className="text-center mb">Upload Payment Screenshot</h3>
           <p className="text-muted text-sm text-center mb-md" style={{ lineHeight: 1.6 }}>
-            Paid <strong>&#8377;{selectedAmount}</strong> to <strong style={{ userSelect: 'all' }}>{ADMIN_UPI}</strong>? Upload your bank SMS screenshot below to verify.
+            Paid <strong>&#8377;{selectedAmount}</strong> to <strong style={{ userSelect: 'all' }}>{ADMIN_UPI}</strong>? Upload your payment screenshot below to verify.
           </p>
 
           <div className="card-dim mb-md">
@@ -409,7 +408,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
           </div>
 
           <div className="field-glass">
-            <label className="text-sm font-semibold mb-xs" style={{ display: 'block' }}>Upload Bank SMS Screenshot *</label>
+            <label className="text-sm font-semibold mb-xs" style={{ display: 'block' }}>Upload Payment Screenshot *</label>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileChange}
               style={{ padding: '0.7rem', fontSize: '0.85rem', cursor: 'pointer' }} />
           </div>
@@ -421,7 +420,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
 
           <div className="field-glass">
             <label className="text-sm font-semibold mb-xs" style={{ display: 'block' }}>Transaction Reference / UTR *</label>
-            <input type="text" value={utr} onChange={e => setUtr(e.target.value)} placeholder="Enter the UTR number from your SMS"
+            <input type="text" value={utr} onChange={e => setUtr(e.target.value)} placeholder="Enter the UTR number from your payment"
               className="font-mono" />
           </div>
 
@@ -429,7 +428,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
             <label className="text-sm font-semibold mb-xs" style={{ display: 'block' }}>UPI ID You Paid To *</label>
             <input type="text" value={enteredUpiId} onChange={e => setEnteredUpiId(e.target.value)} placeholder="e.g. jayarajj126-3@okicici"
               className="font-mono" />
-            <p className="text-xs text-muted mt-xs">Enter the UPI ID shown in your payment SMS screenshot</p>
+            <p className="text-xs text-muted mt-xs">Enter the UPI ID shown in your payment screenshot</p>
           </div>
 
           <button type="button" className={`btn btn-primary w-full btn-lg${verifying ? ' btn-loading' : ''}`} onClick={handleVerify} disabled={verifying}>

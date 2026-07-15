@@ -212,7 +212,7 @@ module.exports = async (req, res) => {
 
         try { await addDoc('audit_logs', { action: 'companion_approve_registration', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { userId: newUserId, amount: amountNum, referredBy: referredByCode, utr: utrStr }, created_at: now }); } catch {}
         try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch {}
-        try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved (Auto)', message: 'Your registration payment of \u20B9' + amountNum + ' has been auto-approved via SMS verification.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
+        try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved (Auto)', message: 'Your registration payment of \u20B9' + amountNum + ' has been auto-approved via AI verification.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
         try { broadcast('paymentUpdated', { id: payment.id, status: 'approved', type: payType, userId: newUserId, source: 'companion' }); } catch {}
 
         log('SUCCESS', 'Registration approved: userId=' + newUserId + ', amount=' + amountNum + ', utr=' + utrStr);
@@ -275,7 +275,7 @@ module.exports = async (req, res) => {
         } catch (e) { log('SPONSOR', 'Sponsor topup completion error: ' + (e && e.message)); }
 
         try { await addDoc('audit_logs', { action: 'companion_approve_topup', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { userId, amount: amountNum, topupId, utr: utrStr }, created_at: now }); } catch {}
-        try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved (Auto)', message: 'Your topup of \u20B9' + amountNum + ' has been auto-approved via SMS verification.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
+        try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved (Auto)', message: 'Your topup of \u20B9' + amountNum + ' has been auto-approved via AI verification.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
         try { broadcast('paymentUpdated', { id: payment.id, status: 'approved', type: payType, userId, source: 'companion' }); } catch {}
 
         log('SUCCESS', 'Topup approved: userId=' + userId + ', amount=' + amountNum + ', utr=' + utrStr);
