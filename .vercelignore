@@ -1,0 +1,5 @@
+api/python_verifier
+api/__pycache__
+*.pyc
+test_report.json
+start_python_verifier.bat
