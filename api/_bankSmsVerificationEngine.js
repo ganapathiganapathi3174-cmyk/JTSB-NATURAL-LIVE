@@ -603,23 +603,37 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
         return aiResult;
       }
     } else {
-      log('Python AI verifier not available — trying AI bridge (stdin/stdout)');
+      log('Python AI verifier not available — probing AI bridge (stdin/stdout)');
+      let bridgeResult = null;
       try {
-        const bridgeResult = await analyzeWithAI(screenshotUrl, {
-          amount: expectedAmount,
-          receiverUpi: expectedUpi,
-          orderId,
-          date: orderCreatedAt,
-          utr: userEnteredUtr || '',
-        });
-        const mappedResult = mapAIResultToVerificationFormat(bridgeResult);
-        if (mappedResult._aiVerified || mappedResult.status !== 'pending') {
-          log('AI bridge verification complete: ' + mappedResult._decision + ' for ' + orderId);
-          mappedResult.verificationDuration = Date.now() - T.start;
-          return mappedResult;
+        bridgeResult = await Promise.race([
+          analyzeWithAI(screenshotUrl, {
+            amount: expectedAmount,
+            receiverUpi: expectedUpi,
+            orderId,
+            date: orderCreatedAt,
+            utr: userEnteredUtr || '',
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('AI_BRIDGE_PROBE_TIMEOUT')), 3000)),
+        ]);
+      } catch (probeErr) {
+        if (probeErr.message === 'AI_BRIDGE_PROBE_TIMEOUT') {
+          log('AI bridge probe timed out (3s) — Python not ready, using scoring pipeline');
+        } else {
+          log('AI bridge probe failed: ' + probeErr.message + ' — using scoring pipeline');
         }
-      } catch (bridgeError) {
-        log('AI bridge also failed: ' + bridgeError.message + ' — using scoring pipeline');
+      }
+      if (bridgeResult) {
+        try {
+          const mappedResult = mapAIResultToVerificationFormat(bridgeResult);
+          if (mappedResult._aiVerified || mappedResult.status !== 'pending') {
+            log('AI bridge verification complete: ' + mappedResult._decision + ' for ' + orderId);
+            mappedResult.verificationDuration = Date.now() - T.start;
+            return mappedResult;
+          }
+        } catch (bridgeError) {
+          log('AI bridge also failed: ' + bridgeError.message + ' — using scoring pipeline');
+        }
       }
     }
   } catch (aiError) {

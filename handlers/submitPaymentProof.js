@@ -80,7 +80,8 @@ module.exports = async (req, res) => {
 
   PH('Request Received');
 
-  const PIPELINE_TIMEOUT_MS = 28000;
+  const IS_VERCEL = !!process.env.VERCEL;
+  const PIPELINE_TIMEOUT_MS = IS_VERCEL ? 28000 : 130000;
 
   async function runPipeline() {
     const { orderId, screenshot, utr, upiId } = req.body || {};

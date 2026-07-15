@@ -165,7 +165,7 @@ async function getPaymentOrder(orderId) {
   if (order.status === 'pending' && order.expires_at && Date.now() > new Date(order.expires_at).getTime()) {
     order.status = 'expired';
     await updateDoc(COL_ORDERS, orderId, { status: 'expired', updated_at: now() }).catch(() => {});
-    broadcast('paymentUpdated', { orderId, status: 'expired' }).catch(() => {});
+    try { broadcast('paymentUpdated', { orderId, status: 'expired' }); } catch {}
   }
   return order;
 }
