@@ -1,7 +1,7 @@
 const {
   COL_ORDERS, COL_UPI_PAYMENTS, COL_USERS,
 } = require('../api/_shared.js');
-const { runQuery, addDoc, updateDoc } = require('../api/_supabase.js');
+const { runQuery, addDoc } = require('../api/_supabase.js');
 const metrics = require('../api/_metrics.js');
 
 const TRACE = (label) => console.log(`[${new Date().toISOString().slice(11, 23)}] ${label}`);
@@ -22,18 +22,14 @@ module.exports = async (req, res) => {
     for (const order of orders) {
       const orderId = order.id;
       results.processed++;
-      TRACE(`[AUTO-VERIFY] Processing order ${orderId}, type=${order.type}, amount=${order.amount}`);
 
       if (!order.screenshot_url) {
-        TRACE(`[AUTO-VERIFY] Order ${orderId} has no screenshot — marking expired`);
-        try {
-          const { updateDoc } = require('../api/_supabase.js');
-          await updateDoc(COL_ORDERS, orderId, { status: 'expired', verification_status: 'expired', updated_at: new Date().toISOString() }).catch(() => {});
-        } catch {}
+        TRACE(`[AUTO-VERIFY] Skipping order ${orderId} — no screenshot`);
         results.errors.push({ orderId, error: 'No screenshot provided' });
         continue;
       }
 
+      TRACE(`[AUTO-VERIFY] Processing order ${orderId}, type=${order.type}, amount=${order.amount}`);
       try {
         const { submitPaymentProof } = require('../api/_paymentOrderManager.js');
         const verification = await submitPaymentProof(orderId, order.screenshot_url);
