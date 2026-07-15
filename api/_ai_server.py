@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-Persistent AI Server — keeps OCR models (PaddleOCR, EasyOCR, Tesseract) in memory
-across invocations. Communicates via JSON-line protocol over stdin/stdout.
+Persistent AI Server V3.0 — keeps verification pipeline in memory across invocations.
+Communicates via JSON-line protocol over stdin/stdout.
 
 Protocol:
   Request:  {"action":"analyze","imagePath":"...","expected":{...},"id":"..."}
@@ -10,47 +10,27 @@ Protocol:
   Request:  {"action":"ping","id":"..."}
   Response: {"action":"pong","id":"..."}
 """
-import sys, os, json, time, traceback, ctypes
+import sys, os, json, time, traceback
 import warnings
 warnings.filterwarnings('ignore')
-os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
-# ── Pre-load torch DLLs to avoid 'procedure not found' error ──
-_torch_lib = os.path.join(os.path.dirname(sys.executable), 'Lib', 'site-packages', 'torch', 'lib')
-if os.path.isdir(_torch_lib):
-    os.environ['PATH'] = _torch_lib + os.pathsep + os.environ.get('PATH', '')
-    if hasattr(os, 'add_dll_directory'):
-        try:
-            os.add_dll_directory(_torch_lib)
-        except Exception:
-            pass
-    # Pre-load shm.dll and its dependencies
-    for _dll_name in ['shm.dll', 'c10.dll', 'torch.dll', 'torch_cpu.dll', 'torch_python.dll', 'uv.dll']:
-        _dll_path = os.path.join(_torch_lib, _dll_name)
-        if os.path.exists(_dll_path):
-            try:
-                ctypes.CDLL(_dll_path)
-            except Exception:
-                pass  # some may fail due to deps, that's OK
-
-# ── Import AI engine module ──
 import importlib
 engine_mod = importlib.import_module('_ai_engine')
 
-# ── Eagerly warm up OCR models ──
-print('[AI-SERVER] Warming up OCR models...', file=sys.stderr, flush=True)
+from _ai_engine import VerificationPipelineV3
+
+pipeline = None
+
+print('[AI-SERVER] Initializing verification pipeline V3...', file=sys.stderr, flush=True)
 warmup_t0 = time.time()
 try:
-    _ = engine_mod.get_paddle()
-    _ = engine_mod.check_tesseract()
-    print(f'[AI-SERVER] Warmup complete in {time.time()-warmup_t0:.1f}s', file=sys.stderr, flush=True)
+    pipeline = VerificationPipelineV3()
+    print(f'[AI-SERVER] Pipeline ready in {time.time()-warmup_t0:.1f}s', file=sys.stderr, flush=True)
 except Exception as warmup_err:
-    print(f'[AI-SERVER] Warmup failed: {warmup_err}', file=sys.stderr, flush=True)
-    print('[AI-SERVER] Models will load lazily on first request', file=sys.stderr, flush=True)
+    print(f'[AI-SERVER] Pipeline init failed: {warmup_err}', file=sys.stderr, flush=True)
 
 print('[AI-SERVER] Ready for requests', file=sys.stderr, flush=True)
-
 
 def main():
     for line in sys.stdin:
@@ -79,15 +59,27 @@ def main():
                 expected = req.get('expected', {})
                 sys.stderr.write(f'[AI-SERVER] Analyzing: {image_path} (id={req_id})\n')
                 sys.stderr.flush()
-                result = engine_mod.run_ai_engine(image_path, expected)
+
+                with open(image_path, 'rb') as f:
+                    image_data = f.read()
+
+                result = pipeline.run(
+                    image_data=image_data,
+                    expected_amount=expected.get('amount', 0),
+                    expected_receiver_upi=expected.get('receiverUpi', 'jayarajj126-3@okicici'),
+                    expected_receiver_name=expected.get('receiverName', 'JEYARAJ ALAG'),
+                    order_id=expected.get('orderId', ''),
+                    created_at=expected.get('date', ''),
+                    user_entered_utr=expected.get('utr', ''),
+                    user_entered_upi=expected.get('senderUpi', ''),
+                )
                 result['action'] = 'result'
                 result['id'] = req_id
                 result['server_duration'] = round(time.time() - proc_t0, 2)
-                # Ensure numpy types are serializable
-                from _ai_engine import NumpyEncoder
-                sys.stdout.write(json.dumps(result, cls=NumpyEncoder, default=str) + '\n')
+
+                sys.stdout.write(json.dumps(result, default=str) + '\n')
                 sys.stdout.flush()
-                sys.stderr.write(f'[AI-SERVER] Done: id={req_id}, status={result.get("status")}, duration={result.get("duration")}s\n')
+                sys.stderr.write(f'[AI-SERVER] Done: id={req_id}, decision={result.get("decision")}, confidence={result.get("confidence")}%, duration={result.get("processing_time_ms")}ms\n')
                 sys.stderr.flush()
             except Exception as e:
                 err = {
@@ -102,7 +94,6 @@ def main():
             err = {'action': 'error', 'id': req_id, 'message': f'Unknown action: {action}'}
             sys.stdout.write(json.dumps(err) + '\n')
             sys.stdout.flush()
-
 
 if __name__ == '__main__':
     main()

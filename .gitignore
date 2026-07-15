@@ -15,3 +15,10 @@ api/node_modules/
 my-worker/
 
 .env.vercel
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+test_report.json
+start_python_verifier.bat

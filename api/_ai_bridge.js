@@ -243,13 +243,78 @@ function mapAIResultToVerificationFormat(aiOutput) {
     return { ...fallback, error: aiOutput ? aiOutput.error : 'No output from AI engine' };
   }
 
-  const s1 = aiOutput.stages.stage1_opencv || {};
+  // Support both V3 (decision/checks format) and legacy format
+  const isV3 = aiOutput.decision && !aiOutput.stages;
+
+  if (isV3) {
+    const extracted = aiOutput.extracted || {};
+    const checks = aiOutput.checks || {};
+    const fraud = aiOutput.fraud || {};
+    const imageQuality = aiOutput.image_quality || {};
+    const authenticity = aiOutput.authenticity || {};
+    const appIdentified = aiOutput.app_identified || 'Unknown';
+
+    const allChecksPassed = Object.values(checks).every(v => v === true);
+    const hasManualReviewFlags = !allChecksPassed && aiOutput.decision === 'MANUAL_REVIEW';
+
+    return {
+      status: aiOutput.decision === 'AUTO_APPROVE' ? 'verified' : (aiOutput.decision === 'AUTO_REJECT' ? 'rejected' : 'pending'),
+      verificationScore: aiOutput.confidence || 0,
+      verificationDuration: aiOutput.processing_time_ms || 0,
+      autoVerified: aiOutput.decision === 'AUTO_APPROVE',
+      manualReviewRequired: hasManualReviewFlags,
+      reasons: aiOutput.reasons || [],
+      checks: Object.entries(checks).map(([name, passed]) => ({ name, passed })),
+      ocrData: {
+        rawText: '',
+        extractedAmount: extracted.amount,
+        extractedUtr: extracted.utr,
+        extractedReceiverName: extracted.receiver,
+        extractedSenderVpa: extracted.sender_vpa,
+        extractedBankName: extracted.bank || extracted.app,
+        extractedDate: extracted.date,
+        extractedTime: extracted.time,
+        extractedPaymentStatus: extracted.status,
+        confidence: aiOutput.ocr_confidence || 0,
+      },
+      imageQuality: {
+        passed: !(imageQuality.is_blurred || imageQuality.is_dark),
+        overallGrade: imageQuality.is_blurred ? 'blurred' : 'good',
+        issues: [],
+        blurScore: imageQuality.blur_score || 0,
+      },
+      matchedAmount: checks.amount || false,
+      matchedReceiver: checks.receiver || false,
+      matchedUtr: checks.utr || false,
+      matchedDate: checks.date || false,
+      matchedStatus: checks.status || false,
+      fraudScore: fraud.score || 0,
+      fraudFlags: fraud.flags || [],
+      duplicateUtrDetected: fraud.flags ? fraud.flags.includes('duplicate_utr') : false,
+      screenshotHash: '',
+      textHash: '',
+      bankSmsDetected: false,
+      bankSmsScore: 0,
+      userEnteredUtr: null,
+      userUtrMatched: false,
+      userEnteredUpi: null,
+      userUpiMatched: false,
+      allowedAmounts: [120, 500, 1000],
+      debug: { aiResult: aiOutput },
+      timings: { total: aiOutput.processing_time_ms || 0 },
+      _aiVerified: true,
+      _decision: aiOutput.decision,
+    };
+  }
+
+  // Legacy format support
+  const s1 = aiOutput.stages.stage1_opencv || aiOutput.stages.stage1_image_validation || {};
   const s3 = aiOutput.stages.stage3_multi_ocr || {};
   const s4 = aiOutput.stages.stage4_presence || {};
   const s5 = aiOutput.stages.stage5_match || {};
   const s7 = aiOutput.stages.stage7_quality || {};
   const matched = aiOutput.matched_fields || {};
-  const s8 = aiOutput.stages.stage8_decision || {};
+  const s8 = aiOutput.stages.stage8_decision || aiOutput.stages.stage15_decision || {};
 
   const engines = s3.engines || {};
   const activeEngines = Object.keys(engines).filter(k => engines[k].success);
@@ -294,7 +359,7 @@ function mapAIResultToVerificationFormat(aiOutput) {
       matchedFields: matched,
     },
     aiResult: {
-      status: aiOutput.status,
+      status: aiOutput.status || aiOutput.decision,
       reasons: aiOutput.reasons || [],
       duration: aiOutput.duration || 0,
       florenceAvailable: aiOutput.florenceAvailable || false,

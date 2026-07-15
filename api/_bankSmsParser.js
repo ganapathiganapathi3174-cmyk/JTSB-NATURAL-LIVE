@@ -19,7 +19,7 @@ function normalizeText(text) {
   return text
     .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ')
     .replace(/[–—−]/g, '-')
-    .replace(/\s+/g, ' ')
+    .replace(/[ \t]+/g, ' ')
     .trim();
 }
 
@@ -127,7 +127,16 @@ function extractSmsSenderVpa(lines) {
 function extractSmsReceiverName(lines) {
   for (const line of lines) {
     if (/\bA\/?C\b|ACCOUNT\s*(?:NO|NUMBER)?\.?\s*:?\s*[*X]/i.test(line)) continue;
-    const m = line.match(/(?:TO|PAID\s*TO|BENEFICIARY|RECEIVER|TRANSFER\s*TO)\s*:?\s*([A-Za-z][A-Za-z\s.]+?)(?:\s*(?:UPI|VIA|ON|AT|REF|\d|$))/i);
+    // Try "Beneficiary Name:" pattern first (common Indian bank SMS format)
+    let m = line.match(/(?:BENEFICIARY\s*NAME|BENEFICIARY)\s*:?\s*([A-Za-z][A-Za-z\s.]+?)(?:\s*(?:UPI|VIA|ON|AT|REF|\d|$))/i);
+    if (m) {
+      const name = m[1].trim().replace(/[:\s]+$/, '');
+      if (name.length > 1 && !/^\d+$/.test(name) && !name.includes('@') && !name.includes('.com')
+          && !/^(?:YOUR\s+)?A\/?C|ACCOUNT/i.test(name)
+          && name !== 'your') return name;
+    }
+    // Fallback: generic TO/PAID TO/BENEFICIARY/RECEIVER patterns
+    m = line.match(/(?:TO|PAID\s*TO|RECEIVER|TRANSFER\s*TO)\s*:?\s*([A-Za-z][A-Za-z\s.]+?)(?:\s*(?:UPI|VIA|ON|AT|REF|\d|$))/i);
     if (m) {
       const name = m[1].trim().replace(/[:\s]+$/, '');
       if (name.length > 1 && !/^\d+$/.test(name) && !name.includes('@') && !name.includes('.com')
@@ -218,22 +227,25 @@ function extractSmsDate(lines) {
 
 function extractSmsTime(lines) {
   for (const line of lines) {
-    const m = line.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(?:AM|PM|am|pm)?/);
+    const m = line.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?/);
     if (m) {
       let hour = parseInt(m[1]), minute = parseInt(m[2]);
       if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
         let display = String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
         if (m[3]) display += ':' + m[3];
+        if (m[4]) display += ' ' + m[4].toUpperCase();
         return display;
       }
     }
   }
   for (const line of lines) {
-    const m = line.match(/(\d{1,2})\.(\d{2})\s*(?:AM|PM|am|pm)?/);
+    const m = line.match(/(\d{1,2})\.(\d{2})\s*(AM|PM|am|pm)?/);
     if (m) {
       let hour = parseInt(m[1]), minute = parseInt(m[2]);
       if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-        return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+        let display = String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+        if (m[3]) display += ' ' + m[3].toUpperCase();
+        return display;
       }
     }
   }
@@ -243,6 +255,8 @@ function extractSmsTime(lines) {
 function extractSmsPaymentStatus(lines) {
   for (const line of lines) {
     const upper = line.toUpperCase();
+    // Skip "Received at" / "SMS Time" / header lines — not payment status
+    if (/\bSMS\s+(?:TIME|CONTENT|RECEIVED)\b|RECEIVED\s+AT\b/.test(upper)) continue;
     if (/\b(CREDITED|SUCCESS|SUCCESSFUL|COMPLETED|PAID|DONE|RECEIVED)\b/.test(upper)) return 'SUCCESS';
     if (/\b(DEBITED|DEBIT)\b/.test(upper)) return 'DEBIT_SUCCESS';
     if (/\b(PENDING|PROCESSING|INITIATED|AWAITING)\b/.test(upper)) return 'PENDING';
@@ -254,6 +268,8 @@ function extractSmsPaymentStatus(lines) {
 function extractSmsTransactionType(lines) {
   for (const line of lines) {
     const upper = line.toUpperCase();
+    // Skip "Received at" and header lines
+    if (/\bSMS\s+(?:TIME|CONTENT|RECEIVED)\b|RECEIVED\s+AT\b/.test(upper)) continue;
     if (/\bCREDITED\b/.test(upper)) return 'CREDITED';
     if (/\bDEBITED\b/.test(upper)) return 'DEBITED';
     if (/\bPAID\b/.test(upper)) return 'PAID';

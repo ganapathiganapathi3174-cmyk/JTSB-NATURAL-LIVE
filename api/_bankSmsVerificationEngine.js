@@ -8,9 +8,11 @@ const { Jimp } = require('jimp');
 const { analyzeImageQuality } = require('./_imageQuality.js');
 const { parseBankSmsOcr } = require('./_bankSmsParser.js');
 const { runQuery } = require('./_supabase.js');
-const { COL_UPI_PAYMENTS, ADMIN_UPI_ID, ADMIN_ACCOUNT_MASK } = require('./_shared.js');
+const { COL_UPI_PAYMENTS, ADMIN_UPI_ID, ADMIN_ACCOUNT_MASK, ADMIN_NAME, ALLOWED_PACKAGE_AMOUNTS } = require('./_shared.js');
 const metrics = require('./_metrics.js');
 const { broadcast } = require('./_sse.js');
+const { runAIVerification, checkHealth } = require('./_aiVerificationBridge.js');
+const { analyzeWithAI, mapAIResultToVerificationFormat } = require('./_ai_bridge.js');
 
 let Tesseract = null;
 try {
@@ -34,7 +36,7 @@ const FRAUD_CACHE_TTL = 100;
 const OCR_STRATEGY_TIMEOUT_MS = 20000;
 const OCR_WATCHDOG_TIMEOUT_MS = 25000;
 const EXPECTED_RECEIVER_UPI = ADMIN_UPI_ID.toLowerCase();
-const ACCEPTED_PAYMENT_STATUSES = ['SUCCESS', 'SUCCESSFUL', 'CREDITED', 'PAID'];
+const ACCEPTED_PAYMENT_STATUSES = ['SUCCESS', 'SUCCESSFUL', 'CREDITED', 'PAID', 'DEBIT_SUCCESS'];
 const REJECTED_PAYMENT_STATUSES = ['FAILED', 'DECLINED', 'PENDING', 'PROCESSING', 'TIMEOUT', 'CANCELLED'];
 const APPROVED_STATUS = 'verified';
 const REJECTED_STATUS = 'rejected';
@@ -362,6 +364,13 @@ function receiverAccountMatch(extractedAccount) {
   return clean === mask || clean.endsWith(mask);
 }
 
+function receiverNameMatch(extractedName) {
+  if (!extractedName || !ADMIN_NAME) return false;
+  const clean = extractedName.replace(/\.$/, '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z]/g, '');
+  const expected = ADMIN_NAME.replace(/\.$/, '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z]/g, '');
+  return clean === expected || clean.includes(expected) || expected.includes(clean);
+}
+
 function paymentStatusAccepted(status) {
   if (!status) return false;
   const upper = status.toUpperCase().trim();
@@ -561,6 +570,61 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     debug: { ocrResults: [] },
     timings: {},
   };
+
+  // ── AI Payment Screenshot Verification (Primary path) ──
+  try {
+    const healthOk = await checkHealth().catch(() => false);
+    if (healthOk) {
+      log('Python AI verifier available — using AI pipeline for ' + orderId);
+      const aiResult = await runAIVerification({
+        screenshotUrl,
+        expectedAmount,
+        expectedReceiverUpi: expectedUpi,
+        orderId,
+        createdAt: orderCreatedAt,
+        userEnteredUtr,
+        userEnteredUpi,
+      });
+      if (aiResult._aiVerified) {
+        log('AI verification complete: ' + aiResult._decision + ' for ' + orderId);
+        aiResult.verificationDuration = Date.now() - T.start;
+        return aiResult;
+      }
+      if (aiResult.reasons && aiResult.reasons.length > 0) {
+        log('AI verification result: ' + aiResult._decision + ' - ' + aiResult.reasons.join('; '));
+        if (aiResult._decision === 'AUTO_REJECT') {
+          aiResult.verificationDuration = Date.now() - T.start;
+          return aiResult;
+        }
+      }
+      log('AI result: ' + (aiResult._decision || 'inconclusive') + ' — using result as-is');
+      if (aiResult.status && aiResult.status !== 'pending') {
+        aiResult.verificationDuration = Date.now() - T.start;
+        return aiResult;
+      }
+    } else {
+      log('Python AI verifier not available — trying AI bridge (stdin/stdout)');
+      try {
+        const bridgeResult = await analyzeWithAI(screenshotUrl, {
+          amount: expectedAmount,
+          receiverUpi: expectedUpi,
+          orderId,
+          date: orderCreatedAt,
+          utr: userEnteredUtr || '',
+        });
+        const mappedResult = mapAIResultToVerificationFormat(bridgeResult);
+        if (mappedResult._aiVerified || mappedResult.status !== 'pending') {
+          log('AI bridge verification complete: ' + mappedResult._decision + ' for ' + orderId);
+          mappedResult.verificationDuration = Date.now() - T.start;
+          return mappedResult;
+        }
+      } catch (bridgeError) {
+        log('AI bridge also failed: ' + bridgeError.message + ' — using scoring pipeline');
+      }
+    }
+  } catch (aiError) {
+    log('AI verification attempt failed: ' + aiError.message + ' — using scoring pipeline');
+  }
 
   try {
     if (!expectedAmount || !ALLOWED_AMOUNTS.includes(expectedAmount)) {
@@ -804,13 +868,13 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     if (!timeWithinWindow) log('Time outside session window: ' + timeStr + ' (created=' + orderCreatedAt + ', max=' + MAX_SESSION_AGE_MINUTES + 'min)');
     if (timeIsFuture) log('Time is in the future: ' + timeStr);
 
-    const receiverValid = receiverExactMatch(ocrData.extractedReceiverName) || receiverExactMatch(ocrData.extractedReceiverAccount) || receiverExactMatch(ocrData.extractedSenderVpa) || receiverAccountMatch(ocrData.extractedReceiverAccount);
+    const receiverValid = receiverExactMatch(ocrData.extractedReceiverName) || receiverExactMatch(ocrData.extractedReceiverAccount) || receiverExactMatch(ocrData.extractedSenderVpa) || receiverAccountMatch(ocrData.extractedReceiverAccount) || receiverNameMatch(ocrData.extractedReceiverName);
     result.matchedReceiver = receiverValid;
     result.checks.push({ name: 'receiver_validation', passed: receiverValid, extractedName: ocrData.extractedReceiverName, extractedAccount: ocrData.extractedReceiverAccount, expected: EXPECTED_RECEIVER_UPI });
     if (!receiverValid) {
       const receiverInSms = ocrData.extractedReceiverName || ocrData.extractedReceiverAccount || ocrData.extractedSenderVpa || '(not found)';
-      log('Receiver mismatch: "' + receiverInSms + '" !== "' + EXPECTED_RECEIVER_UPI + '"');
-      result.reasons.push('Receiver mismatch: expected ' + EXPECTED_RECEIVER_UPI + ', found "' + receiverInSms + '"');
+      log('Receiver mismatch: "' + receiverInSms + '" !== "' + EXPECTED_RECEIVER_UPI + '" or name "' + ADMIN_NAME + '"');
+      result.reasons.push('Receiver mismatch: expected ' + ADMIN_NAME + ' (' + EXPECTED_RECEIVER_UPI + '), found "' + receiverInSms + '"');
     }
 
     // User-entered UPI ID vs OCR-extracted UPI/receiver match
@@ -944,7 +1008,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
             receiverMatch: 'Receiver UPI does not match expected ' + EXPECTED_RECEIVER_UPI,
             dateToday: 'Payment date ' + dateStr + ' is not today or is in the future',
             timeWindow: 'Payment time ' + timeStr + ' exceeds ' + MAX_SESSION_AGE_MINUTES + ' minute window from session creation',
-            paymentStatus: 'Payment status must be SUCCESS/SUCCESSFUL/CREDITED/PAID, found: ' + (paymentStatusStr || 'unknown'),
+            paymentStatus: 'Payment status must be ' + ACCEPTED_PAYMENT_STATUSES.join('/') + ', found: ' + (paymentStatusStr || 'unknown'),
             bankSmsValid: 'Screenshot does not match bank SMS format (score=' + bankSms.score + ')',
             imageQualityPass: 'Image quality check failed: ' + (imageQuality.issues || []).join(', '),
             screenshotUnique: 'Duplicate screenshot detected in system',
@@ -1031,7 +1095,7 @@ module.exports = {
   runBankSmsVerification, VERIFY_TIMEOUT_MS, shutdownWorker, initWorkerPool, ALLOWED_AMOUNTS, ADMIN_UPI_ID,
   exactAmountMatch, validateUtr, detectBankSmsText, computeImageHash, computeTextHash,
   isToday, isFutureDate, isWithinSessionWindow, isFutureTime,
-  receiverExactMatch, receiverAccountMatch, paymentStatusAccepted, paymentStatusRejected,
+  receiverExactMatch, receiverAccountMatch, receiverNameMatch, paymentStatusAccepted, paymentStatusRejected,
   checkDuplicateUtr, checkScreenshotHashDuplicate, checkOcrTextHashDuplicate,
   checkFraud, MIN_OCR_CONFIDENCE, MIN_BANK_SMS_SCORE, MAX_SESSION_AGE_MINUTES,
   ACCEPTED_PAYMENT_STATUSES, REJECTED_PAYMENT_STATUSES, EXPECTED_RECEIVER_UPI,
