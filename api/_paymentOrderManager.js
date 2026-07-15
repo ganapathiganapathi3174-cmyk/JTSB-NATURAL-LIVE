@@ -170,6 +170,8 @@ async function getPaymentOrder(orderId) {
   return order;
 }
 
+const IS_VERCEL = !!process.env.VERCEL;
+
 async function submitPaymentProof(orderId, screenshotUrl, extra) {
   const T = makeTimer();
   const order = await getPaymentOrder(orderId);
@@ -186,7 +188,45 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   });
   T.mark('updateOrderVerifying');
 
-  const verificationResult = await runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null, extra?.userEnteredUpi || null);
+  let verificationResult;
+  try {
+    verificationResult = await Promise.race([
+      runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null, extra?.userEnteredUpi || null),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFY_TIMEOUT')), IS_VERCEL ? 8000 : 120000)),
+    ]);
+  } catch (e) {
+    if (e.message === 'VERIFY_TIMEOUT') {
+      log('OCR verification timed out on ' + (IS_VERCEL ? 'Vercel' : 'local') + ' — returning pending for async processing');
+      await updateDoc(COL_ORDERS, orderId, {
+        status: 'pending',
+        verification_status: 'pending',
+        updated_at: now(),
+      }).catch(() => {});
+      T.mark('timeoutFallback');
+      await addDoc(COL_UPI_PAYMENTS, {
+        utr: null, upi_id: ADMIN_UPI_ID,
+        amount: Number(order.amount), amount_option: String(order.amount),
+        payment_type: order.type,
+        screenshot_url: screenshotUrl,
+        status: 'pending',
+        user_id: order.user_id || null,
+        pending_reg_id: order.pending_reg_id || null,
+        payment_date: now(),
+        verification_locked: false,
+        created_at: now(),
+      }).catch(() => {});
+      return {
+        orderId, paymentId: orderId,
+        status: 'pending', verificationStatus: 'pending',
+        verificationScore: 0, ocrData: null, reasons: ['Verification queued for async processing'],
+        matchedAmount: false, matchedReceiver: false, matchedUtr: false,
+        matchedDate: false, userUtrMatched: false, userEnteredUtr: extra?.userEnteredUtr || null,
+        userUpiMatched: false, userEnteredUpi: extra?.userEnteredUpi || null,
+        fraudScore: 0, checks: [],
+      };
+    }
+    throw e;
+  }
   T.mark('runBankSmsVerification');
 
   const isVerified = verificationResult.status === 'verified';

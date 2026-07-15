@@ -56,7 +56,9 @@ module.exports = async (req, res) => {
       ? 'Payment verified successfully'
       : proofResult.status === 'rejected'
         ? 'Payment verification failed'
-        : 'Payment submitted for manual review';
+        : proofResult.status === 'pending' && proofResult.reasons?.some(r => r.includes('queued'))
+          ? 'Payment submitted — verification in progress'
+          : 'Payment submitted for manual review';
 
     res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({
       status: proofResult.status,
