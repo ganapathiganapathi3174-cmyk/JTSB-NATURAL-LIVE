@@ -12,7 +12,7 @@ async function processNextPayment() {
   // Try pending orders with screenshots first
   const orders = await runQuery(COL_ORDERS, [
     { field: 'status', op: 'EQUAL', value: 'pending' },
-  ], { orderBy: 'updated_at', ascending: true, limit: 5 });
+  ], { limit: 5 });
 
   for (const order of orders || []) {
     if (!order.screenshot_url) continue;
