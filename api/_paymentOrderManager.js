@@ -209,15 +209,17 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
         pending_reg_id: order.pending_reg_id || null,
         payment_date: now(), verification_locked: false, created_at: now(),
       }).catch(() => {});
-      // Auto-trigger background processing after response
-      const autoProcess = async () => {
+      // Auto-trigger background processing (fire-and-forget)
+      const autoProcess = () => {
         try {
           const { processNextPayment } = require('../handlers/processPendingPayments.js');
-          const r = await processNextPayment();
-          log('Auto-process: ' + r.processed + ' processed, ' + r.approved + ' approved, ' + r.rejected + ' rejected');
-        } catch (e2) { log('Auto-process error: ' + e2.message); }
+          processNextPayment().then(r => {
+            log('Auto-process: ' + r.processed + ' processed, ' + r.approved + ' approved');
+          }).catch(e2 => log('Auto-process error: ' + e2.message));
+        } catch (e2) { log('Auto-process load error: ' + e2.message); }
       };
-      autoProcess();
+      // Use nextTick to avoid circular dependency at module load time
+      process.nextTick(autoProcess);
       return {
         orderId, paymentId: orderId,
         status: 'pending', verificationStatus: 'pending',
