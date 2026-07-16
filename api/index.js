@@ -147,7 +147,22 @@ module.exports = async (req, res) => {
   const origEnd = res.end.bind(res);
   res.end = function (...a) { clearTimeout(timeout); return origEnd(...a); };
   const origWH = res.writeHead.bind(res);
-  res.writeHead = function (code, ...a) { clearTimeout(timeout); metrics.trackAPICall(path, req.method, code); return origWH(code, ...a); };
+  res.writeHead = function (code, ...a) {
+    clearTimeout(timeout);
+    metrics.trackAPICall(path, req.method, code);
+    // Auto-set Content-Type: application/json for JSON responses if missing
+    if (code >= 200 && code < 300 && code !== 204) {
+      if (a.length === 0 || (a.length >= 1 && typeof a[0] === 'number')) {
+        // writeHead(code) or writeHead(code, statusMessage)
+        origWH.call(res, code, ...a, { 'Content-Type': 'application/json' });
+        return;
+      }
+      if (typeof a[0] === 'object' && !a[0]['Content-Type'] && !a[0]['content-type']) {
+        a[0]['Content-Type'] = 'application/json';
+      }
+    }
+    return origWH(code, ...a);
+  };
 
   await handler(req, res).catch(err => {
     clearTimeout(timeout);

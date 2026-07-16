@@ -1,5 +1,5 @@
 const { COL_PENDING_REGS, hashPassword, isSystemReferralCode, getPackageByReferral, getReferrerPackage, validatePackageAmount } = require('../api/_shared.js');
-const { addDoc, writeDoc, findUserByEmail, findUserByPhone, findUserBySponsorCode, getDoc } = require('../api/_supabase.js');
+const { addDoc, writeDoc, findUserByEmail, findUserByPhone, findUserBySponsorCode, getDoc, runQuery } = require('../api/_supabase.js');
 
 // OCR is NOT imported here — preRegister never triggers OCR (Requirement #4)
 // OCR runs ONLY when user uploads payment proof via submitPaymentProof
@@ -43,6 +43,7 @@ module.exports = async (req, res) => {
     else if (['unknown', 'undefined', 'null'].includes(name.trim().toLowerCase())) errors.push('Invalid name value');
     if (!email || !email.trim()) errors.push('Email is required');
     else if (['unknown', 'undefined', 'null'].includes(email.trim().toLowerCase())) errors.push('Invalid email value');
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errors.push('Invalid email format');
     if (!phone || !phone.trim()) errors.push('Phone is required');
     else if (['unknown', 'undefined', 'null'].includes(phone.trim().toLowerCase())) errors.push('Invalid phone value');
     if (!password || password.length < 6) errors.push('Password must be at least 6 characters');
@@ -61,8 +62,13 @@ module.exports = async (req, res) => {
       () => findUserByEmail(email),
       'handlers/preRegister.js', 'module.exports', 58
     );
+    const existingEmailPending = await MEASURE(
+      'findPendingEmail',
+      () => runQuery(COL_PENDING_REGS, [{ field: 'email', op: 'EQUAL', value: email.toLowerCase().trim() }], { limit: 1 }),
+      'handlers/preRegister.js', 'module.exports', 64
+    ).catch(() => []);
     STEP(3, 'After Supabase Query — email check done');
-    if (existingEmailUser) {
+    if (existingEmailUser || (existingEmailPending && existingEmailPending.length > 0)) {
       res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered. Please login.' }));
       LOG(`Response: email exists — total ${Date.now() - reqStart}ms`);
       return;
@@ -75,8 +81,13 @@ module.exports = async (req, res) => {
       () => findUserByPhone(phone),
       'handlers/preRegister.js', 'module.exports', 73
     );
+    const existingPhonePending = await MEASURE(
+      'findPendingPhone',
+      () => runQuery(COL_PENDING_REGS, [{ field: 'phone', op: 'EQUAL', value: phone.trim() }], { limit: 1 }),
+      'handlers/preRegister.js', 'module.exports', 79
+    ).catch(() => []);
     STEP(4, 'After Supabase Query — phone check done');
-    if (existingPhoneUser) {
+    if (existingPhoneUser || (existingPhonePending && existingPhonePending.length > 0)) {
       res.writeHead(409); res.end(JSON.stringify({ error: 'Phone already registered. Please login.' }));
       LOG(`Response: phone exists — total ${Date.now() - reqStart}ms`);
       return;
