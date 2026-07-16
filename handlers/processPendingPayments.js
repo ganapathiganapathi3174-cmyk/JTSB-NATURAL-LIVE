@@ -73,7 +73,7 @@ async function handler(req, res) {
   } catch (err) {
     console.error('[processPendingPayments] Error:', err.message);
     console.error('[processPendingPayments] Stack:', err.stack);
-    res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 }
 
