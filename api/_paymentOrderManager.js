@@ -192,7 +192,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   try {
     verificationResult = await Promise.race([
       runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null, extra?.userEnteredUpi || null),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFY_TIMEOUT')), IS_VERCEL ? 8000 : 120000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFY_TIMEOUT')), IS_VERCEL ? 25000 : 120000)),
     ]);
   } catch (e) {
     if (e.message === 'VERIFY_TIMEOUT') {
