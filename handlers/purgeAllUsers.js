@@ -1,24 +1,13 @@
-const { deleteDoc, runQuery } = require('../api/_supabase.js');
-const r2 = require('../api/_r2.js');
+const { getSupabaseClient } = require('../api/_supabase.js');
 
-const COL_USERS = 'users';
-const COL_UPI_PAYMENTS = 'upi_payments';
-const COL_TOPUPS = 'topups';
-const COL_WALLET_BALANCES = 'wallet_balances';
-const COL_WALLET_TX = 'wallet_transactions';
-const COL_VERIFICATION_LOGS = 'verification_logs';
-const COL_PROCESSED_PAYMENTS = 'processed_payments';
-const COL_REFERRALS = 'referrals';
-const COL_NOTIFICATIONS = 'notifications';
-const COL_PENDING_REGS = 'pending_registrations';
-const COL_TOPUP_INCOME = 'topup_referral_income';
-const COL_SPONSOR_DATA = 'sponsor_data';
-const COL_CHAT_MESSAGES = 'chat_messages';
-const COL_CHAT_CONVOS = 'chat_conversations';
-const COL_DELETION_AUDIT_LOGS = 'deletion_audit_logs';
-const COL_UNIQUES = 'uniques';
-const COL_ORDERS = 'payment_sessions';
-const COL_AUDIT_LOGS = 'audit_logs';
+const TABLES = [
+  'users', 'upi_payments', 'topups', 'wallet_balances',
+  'wallet_transactions', 'verification_logs', 'processed_payments',
+  'referrals', 'notifications', 'pending_registrations',
+  'topup_referral_income', 'sponsor_data', 'chat_messages',
+  'chat_conversations', 'payment_sessions', 'audit_logs',
+  'deletion_audit_logs', 'uniques',
+];
 
 const KEEP_EMAILS = ['system1000@jayaraj.in', 'system500@jayaraj.in', 'system120@jayaraj.in'];
 
@@ -31,78 +20,59 @@ module.exports = async (req, res) => {
   if (!req.admin) { res.writeHead(401); res.end(JSON.stringify({ error: 'Authentication required' })); return; }
 
   try {
-    const allUsers = await runQuery(COL_USERS, [], { limit: 1000 });
-    const toDelete = allUsers.filter(u => !KEEP_EMAILS.includes(u.email));
-
+    const supabase = getSupabaseClient();
     let totalDeleted = 0;
-    const deletedIds = [];
+    const deleteResults = {};
 
-    for (const user of toDelete) {
-      const userId = user.id;
-      deletedIds.push({ id: userId, email: user.email });
-
-      // Collect screenshot URLs
-      try {
-        const payments = await runQuery(COL_UPI_PAYMENTS, [{ field: 'user_id', op: 'EQUAL', value: userId }], { limit: 200 });
-        for (const p of payments) {
-          if (p.screenshot_url) {
-            try { await deleteDoc(COL_UPI_PAYMENTS, p.id); totalDeleted++; } catch (e) { console.log('delete payment fail:', p.id, e.message); }
-          }
-        }
-      } catch {}
-
-      // Delete all related records
-      const tables = [
-        COL_REFERRALS, COL_TOPUPS, COL_TOPUP_INCOME,
-        COL_NOTIFICATIONS, COL_WALLET_TX, COL_UPI_PAYMENTS,
-        COL_PROCESSED_PAYMENTS, COL_VERIFICATION_LOGS, COL_SPONSOR_DATA,
-        COL_PENDING_REGS,
-      ];
-      for (const table of tables) {
-        try {
-          const docs = await runQuery(table, [{ field: 'user_id', op: 'EQUAL', value: userId }]);
-          for (const d of docs) {
-            try { await deleteDoc(table, d.id); totalDeleted++; } catch (e) { console.log('delete fail', table, d.id, e.message); }
-          }
-        } catch {}
+    // 1. Delete all rows from all tables except users (handle users separately to keep system accounts)
+    for (const table of TABLES) {
+      if (table === 'users' || table === 'uniques') continue;
+      const { data, error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) {
+        console.error('[purge] ' + table + ' error:', error.message);
+        continue;
       }
-
-      // Delete from other tables
-      try { await deleteDoc(COL_WALLET_BALANCES, userId); totalDeleted++; } catch {}
-      try { await deleteDoc(COL_ORDERS, userId); totalDeleted++; } catch {}
-
-      if (user.email) { try { await deleteDoc(COL_UNIQUES, 'email:' + user.email.toLowerCase().trim()); totalDeleted++; } catch {} }
-      if (user.phone) { try { await deleteDoc(COL_UNIQUES, 'phone:' + user.phone.trim()); totalDeleted++; } catch {} }
-
-      // Final: delete the user itself
-      try { await deleteDoc(COL_USERS, userId); totalDeleted++; } catch (e) { console.log('delete user fail:', userId, e.message); }
+      const count = data ? data.length : 0;
+      totalDeleted += count;
+      deleteResults[table] = count;
     }
 
-    // Also delete all pending_registrations without user_id
-    try {
-      const regs = await runQuery(COL_PENDING_REGS, []);
-      for (const r of regs) {
-        try { await deleteDoc(COL_PENDING_REGS, r.id); totalDeleted++; } catch {}
-      }
-    } catch {}
+    // 2. Delete users except system accounts (1000, 500, 120)
+    const { data: allUsers } = await supabase.from('users').select('id,email').limit(1000);
+    const toDelete = (allUsers || []).filter(u => !KEEP_EMAILS.includes(u.email));
+    const keepIds = (allUsers || []).filter(u => KEEP_EMAILS.includes(u.email)).map(u => u.id);
 
-    // Delete all upi_payments (old expired ones)
-    try {
-      const allPayments = await runQuery(COL_UPI_PAYMENTS, []);
-      for (const p of allPayments) {
-        try { await deleteDoc(COL_UPI_PAYMENTS, p.id); totalDeleted++; } catch {}
+    if (toDelete.length > 0) {
+      const ids = toDelete.map(u => u.id);
+      // Delete in batches of 50
+      for (let i = 0; i < ids.length; i += 50) {
+        const batch = ids.slice(i, i + 50);
+        const { error } = await supabase.from('users').delete().in('id', batch);
+        if (error) console.error('[purge] users batch error:', error.message);
       }
-    } catch {}
+      totalDeleted += ids.length;
+      deleteResults['users'] = ids.length;
+      deleteResults['users_skipped'] = keepIds.length;
+    }
 
-    res.writeHead(200); res.end(JSON.stringify({
+    // 3. Delete uniques for deleted users
+    for (const user of toDelete) {
+      if (user.email) {
+        await supabase.from('uniques').delete().eq('id', 'email:' + user.email.toLowerCase().trim()).maybeSingle();
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
       success: true,
-      message: 'Purged ' + toDelete.length + ' users and ' + totalDeleted + ' total records',
-      deletedUsers: deletedIds,
-      skipCount: allUsers.length - toDelete.length,
-      totalRecords: totalDeleted,
+      message: 'Purged ' + totalDeleted + ' records total. ' + toDelete.length + ' users deleted, ' + keepIds.length + ' system accounts kept.',
+      deletedUsers: toDelete.length,
+      keptUsers: keepIds.length,
+      perTable: deleteResults,
     }));
   } catch (err) {
     console.error('[purgeAllUsers] Error:', err.message);
-    res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message }));
   }
 };
