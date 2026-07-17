@@ -197,29 +197,40 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   } catch (e) {
     if (e.message === 'VERIFY_TIMEOUT') {
       log('OCR timed out — queuing for async processing');
+      const currentRetries = Number(order.verification_retries || 0);
+      const newRetries = currentRetries + 1;
+      const MAX_RETRIES = 2;
+      if (newRetries >= MAX_RETRIES) {
+        log('Max retries (' + MAX_RETRIES + ') reached — marking order as failed');
+        await updateDoc(COL_ORDERS, orderId, {
+          status: 'failed', verification_status: 'failed', verification_retries: newRetries,
+          rejection_reasons: ['OCR timed out after ' + MAX_RETRIES + ' attempts'],
+          updated_at: now(),
+        }).catch(() => {});
+        T.mark('maxRetriesReached');
+        return {
+          orderId, paymentId: orderId,
+          status: 'failed', verificationStatus: 'failed',
+          verificationScore: 0, ocrData: null, reasons: ['OCR failed after ' + MAX_RETRIES + ' attempts'],
+          matchedAmount: false, matchedReceiver: false, matchedUtr: false,
+          matchedDate: false, userUtrMatched: false, userEnteredUtr: extra?.userEnteredUtr || null,
+          userUpiMatched: false, userEnteredUpi: extra?.userEnteredUpi || null,
+          fraudScore: 0, checks: [],
+        };
+      }
       await updateDoc(COL_ORDERS, orderId, {
-        status: 'queued', verification_status: 'pending', updated_at: now(),
+        status: 'queued', verification_status: 'pending', verification_retries: newRetries, updated_at: now(),
       }).catch(() => {});
       T.mark('timeoutFallback');
-      await addDoc(COL_UPI_PAYMENTS, {
-        utr: null, upi_id: ADMIN_UPI_ID,
-        amount: Number(order.amount), amount_option: String(order.amount),
-        payment_type: order.type, screenshot_url: screenshotUrl,
-        status: 'pending', user_id: order.user_id || null,
-        pending_reg_id: order.pending_reg_id || null,
-        payment_date: now(), verification_locked: false, created_at: now(),
-      }).catch(() => {});
-      // Auto-trigger background processing (fire-and-forget)
-      const autoProcess = () => {
+      // Auto-trigger background retry (fire-and-forget)
+      process.nextTick(() => {
         try {
           const { processNextPayment } = require('../handlers/processPendingPayments.js');
           processNextPayment().then(r => {
             log('Auto-process: ' + r.processed + ' processed, ' + r.approved + ' approved');
           }).catch(e2 => log('Auto-process error: ' + e2.message));
         } catch (e2) { log('Auto-process load error: ' + e2.message); }
-      };
-      // Use nextTick to avoid circular dependency at module load time
-      process.nextTick(autoProcess);
+      });
       return {
         orderId, paymentId: orderId,
         status: 'pending', verificationStatus: 'pending',
