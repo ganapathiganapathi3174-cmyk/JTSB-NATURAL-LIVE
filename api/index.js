@@ -95,6 +95,7 @@ try { handlers.getCompanionStatus = requireAdmin(safeHandler('getCompanionStatus
 try { handlers.getAdminSponsorTransfers = requireAdmin(safeHandler('getAdminSponsorTransfers', require('../handlers/getAdminSponsorTransfers.js'))); } catch (e) { handlers.getAdminSponsorTransfers = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getAdminSponsorTransfers load failed',detail:e.message})); }; }
 try { handlers.getPendingPaymentsQueue = requireAdmin(safeHandler('getPendingPaymentsQueue', require('../handlers/getPendingPaymentsQueue.js'))); } catch (e) { handlers.getPendingPaymentsQueue = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getPendingPaymentsQueue load failed',detail:e.message})); }; }
 try { handlers.fixSystemUsers = safeHandler('fixSystemUsers', require('../handlers/fixSystemUsers.js')); } catch (e) { handlers.fixSystemUsers = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'fixSystemUsers load failed',detail:e.message})); }; }
+try { handlers.purgeAllUsers = requireAdmin(safeHandler('purgeAllUsers', require('../handlers/purgeAllUsers.js'))); } catch (e) { handlers.purgeAllUsers = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'purgeAllUsers load failed',detail:e.message})); }; }
 
 console.error('[INDEX] ' + Object.keys(handlers).length + ' handlers loaded');
 

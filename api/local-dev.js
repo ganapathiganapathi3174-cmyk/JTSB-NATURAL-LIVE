@@ -124,6 +124,7 @@ const handlerCfg = [
   ['getAdminSponsorTransfers', true, '../handlers/getAdminSponsorTransfers.js'],
   ['getPendingPaymentsQueue', true, '../handlers/getPendingPaymentsQueue.js'],
   ['fixSystemUsers', false, '../handlers/fixSystemUsers.js'],
+  ['purgeAllUsers', true, '../handlers/purgeAllUsers.js'],
 ];
 const handlerModules = {};
 const handlers = {};
