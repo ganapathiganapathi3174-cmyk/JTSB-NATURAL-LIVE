@@ -12,10 +12,8 @@ module.exports = async (req, res) => {
     const healthStatus = health.getHealthStatus();
     const queueStatus = await queue.getQueueStatus();
 
-    // Run fresh checks if requested
-    if (req.method === 'POST' && req.body?.refresh) {
-      await health.runAllChecks();
-    }
+    // Run fresh checks on every request (Vercel serverless — no persistent interval available)
+    await health.runAllChecks();
 
     res.writeHead(200);
     res.end(JSON.stringify({

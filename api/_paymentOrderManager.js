@@ -198,7 +198,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     if (e.message === 'VERIFY_TIMEOUT') {
       log('OCR timed out — queuing for async processing');
       await updateDoc(COL_ORDERS, orderId, {
-        status: 'pending', verification_status: 'pending', updated_at: now(),
+        status: 'queued', verification_status: 'pending', updated_at: now(),
       }).catch(() => {});
       T.mark('timeoutFallback');
       await addDoc(COL_UPI_PAYMENTS, {

@@ -9,9 +9,9 @@ const PER_PAYMENT_TIMEOUT = IS_VERCEL ? 22000 : 90000;
 async function processNextPayment() {
   const result = { processed: 0, approved: 0, rejected: 0, manualReview: 0, errors: [] };
 
-  // Try pending orders with screenshots first
+  // Try pending/queued orders with screenshots first
   const orders = await runQuery(COL_ORDERS, [
-    { field: 'status', op: 'EQUAL', value: 'pending' },
+    { field: 'status', op: 'IN', value: ['pending', 'queued'] },
   ], { limit: 5 });
 
   for (const order of orders || []) {
