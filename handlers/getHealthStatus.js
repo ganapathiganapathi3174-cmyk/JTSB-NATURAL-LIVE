@@ -9,11 +9,11 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.writeHead(200).end();
 
   try {
-    const healthStatus = health.getHealthStatus();
-    const queueStatus = await queue.getQueueStatus();
-
     // Run fresh checks on every request (Vercel serverless — no persistent interval available)
     await health.runAllChecks();
+
+    const healthStatus = health.getHealthStatus();
+    const queueStatus = await queue.getQueueStatus();
 
     res.writeHead(200);
     res.end(JSON.stringify({
