@@ -107,6 +107,7 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
   const orderData = {
     id: orderId,
     user_id: userId || null,
+    pending_reg_id: pendingRegId || null,
     type,
     amount: Number(amount),
     status: 'pending',
@@ -201,11 +202,21 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
 
   // Persist screenshot + UTR to upi_payments immediately so async retry can process it
   try {
-    const searchField = extra?.pendingRegId ? 'pending_reg_id' : 'user_id';
-    const searchValue = extra?.pendingRegId || extra?.userId || order.user_id;
-    if (searchValue) {
+    const pendingRegId = extra?.pendingRegId || order.pending_reg_id;
+    if (pendingRegId) {
       const existingPayments = await runQuery(COL_UPI_PAYMENTS, [
-        { field: searchField, op: 'EQUAL', value: searchValue },
+        { field: 'pending_reg_id', op: 'EQUAL', value: pendingRegId },
+      ], { limit: 5 });
+      for (const p of existingPayments) {
+        await updateDoc(COL_UPI_PAYMENTS, p.id, {
+          screenshot_url: screenshotUrl,
+          utr: extra?.userEnteredUtr || p.utr,
+          verification_locked: false,
+        }).catch(() => {});
+      }
+    } else if (order.user_id) {
+      const existingPayments = await runQuery(COL_UPI_PAYMENTS, [
+        { field: 'user_id', op: 'EQUAL', value: order.user_id },
       ], { limit: 5 });
       for (const p of existingPayments) {
         await updateDoc(COL_UPI_PAYMENTS, p.id, {
@@ -270,14 +281,19 @@ function scheduleAsyncVerification(orderId, screenshotUrl, extra) {
         }).catch(() => {});
         // Also mark upi_payments as manual_review
         try {
-          const ups = await runQuery(COL_UPI_PAYMENTS, [
-            { field: extra?.pendingRegId ? 'pending_reg_id' : 'user_id', op: 'EQUAL', value: extra?.pendingRegId || extra?.userId || order.user_id },
-          ], { limit: 5 });
-          for (const p of ups) {
-            await updateDoc(COL_UPI_PAYMENTS, p.id, {
-              status: 'manual_review', verification_locked: false,
-              rejection_reasons: ['Auto-verification failed, awaiting admin review'],
-            }).catch(() => {});
+          const pendingRegId = order?.pending_reg_id || extra?.pendingRegId;
+          const searchField = pendingRegId ? 'pending_reg_id' : 'user_id';
+          const searchValue = pendingRegId || order?.user_id || extra?.userId;
+          if (searchValue) {
+            const ups = await runQuery(COL_UPI_PAYMENTS, [
+              { field: searchField, op: 'EQUAL', value: searchValue },
+            ], { limit: 5 });
+            for (const p of ups) {
+              await updateDoc(COL_UPI_PAYMENTS, p.id, {
+                status: 'manual_review', verification_locked: false,
+                rejection_reasons: ['Auto-verification failed, awaiting admin review'],
+              }).catch(() => {});
+            }
           }
         } catch {}
       }
