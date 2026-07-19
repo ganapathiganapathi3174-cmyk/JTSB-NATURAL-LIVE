@@ -217,169 +217,72 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     }
   } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
 
-  let verificationResult;
-  try {
-    verificationResult = await Promise.race([
-      runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null, extra?.userEnteredUpi || null),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFY_TIMEOUT')), IS_VERCEL ? 25000 : 120000)),
-    ]);
-  } catch (e) {
-    if (e.message === 'VERIFY_TIMEOUT') {
-      log('OCR timed out — queuing for async processing');
-      const currentRetries = Number(order.verification_retries || 0);
-      const newRetries = currentRetries + 1;
-      const MAX_RETRIES = 2;
-      if (newRetries >= MAX_RETRIES) {
-        log('Max retries (' + MAX_RETRIES + ') reached — marking order as failed');
-        await updateDoc(COL_ORDERS, orderId, {
-          status: 'failed', verification_status: 'failed', verification_retries: newRetries,
-          rejection_reasons: ['OCR timed out after ' + MAX_RETRIES + ' attempts'],
-          updated_at: now(),
-        }).catch(() => {});
-        T.mark('maxRetriesReached');
-        verifyingOrders.delete(orderId);
-        return {
-          orderId, paymentId: orderId,
-          status: 'failed', verificationStatus: 'failed',
-          verificationScore: 0, ocrData: null, reasons: ['OCR failed after ' + MAX_RETRIES + ' attempts'],
-          matchedAmount: false, matchedReceiver: false, matchedUtr: false,
-          matchedDate: false, userUtrMatched: false, userEnteredUtr: extra?.userEnteredUtr || null,
-          userUpiMatched: false, userEnteredUpi: extra?.userEnteredUpi || null,
-          fraudScore: 0, checks: [],
-        };
-      }
-      await updateDoc(COL_ORDERS, orderId, {
-        status: 'queued', verification_status: 'pending', verification_retries: newRetries,
-        screenshot_url: screenshotUrl, utr: extra?.userEnteredUtr || null,
-        updated_at: now(),
-      }).catch(() => {});
-      // Save screenshot + UTR on upi_payments so async retry can process it
-      try {
-        const existingPayments = await runQuery(COL_UPI_PAYMENTS, [
-          { field: extra?.pendingRegId ? 'pending_reg_id' : 'order_id', op: 'EQUAL', value: extra?.pendingRegId || orderId },
-        ], { limit: 5 });
-        for (const p of existingPayments) {
-          await updateDoc(COL_UPI_PAYMENTS, p.id, {
-            screenshot_url: screenshotUrl,
-            utr: extra?.userEnteredUtr || p.utr,
-            verification_locked: false,
-          }).catch(() => {});
-        }
-      } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
-      T.mark('timeoutFallback');
-      // Auto-trigger background retry (fire-and-forget)
-      process.nextTick(() => {
-        try {
-          const { processNextPayment } = require('../handlers/processPendingPayments.js');
-          processNextPayment().then(r => {
-            log('Auto-process: ' + r.processed + ' processed, ' + r.approved + ' approved');
-          }).catch(e2 => log('Auto-process error: ' + e2.message));
-        } catch (e2) { log('Auto-process load error: ' + e2.message); }
-      });
-      verifyingOrders.delete(orderId);
-      return {
-        orderId, paymentId: orderId,
-        status: 'pending', verificationStatus: 'pending',
-        verificationScore: 0, ocrData: null, reasons: ['Verification queued for async processing'],
-        matchedAmount: false, matchedReceiver: false, matchedUtr: false,
-        matchedDate: false, userUtrMatched: false, userEnteredUtr: extra?.userEnteredUtr || null,
-        userUpiMatched: false, userEnteredUpi: extra?.userEnteredUpi || null,
-        fraudScore: 0, checks: [],
-      };
-    }
-    verifyingOrders.delete(orderId);
-    throw e;
-  }
-  T.mark('runBankSmsVerification');
-
-  const isVerified = verificationResult.status === 'verified';
-  const finalOrderStatus = isVerified ? 'verified' : 'rejected';
-
+  // Return immediately — don't make user wait for OCR. Process in background.
   await updateDoc(COL_ORDERS, orderId, {
-    status: finalOrderStatus,
-    verification_status: verificationResult.status,
-    verification_score: verificationResult.verificationScore || 0,
-    screenshot_url: screenshotUrl,
-    ocr_result: verificationResult.ocrData || null,
-    rejection_reasons: verificationResult.reasons || [],
-    final_score: verificationResult.verificationScore || 0,
-    fraud_score: verificationResult.fraudScore || 0,
-    verified_at: now(),
-    verification_completed_at: now(),
+    status: 'queued', verification_status: 'pending',
+    screenshot_url: screenshotUrl, utr: extra?.userEnteredUtr || null,
     updated_at: now(),
-  });
-  T.mark('updateOrderResult');
+  }).catch(() => {});
+  T.mark('queueImmediate');
 
-  if (isVerified) {
-    await executeVerifiedOrder(order, verificationResult, extra);
-    T.mark('executeVerifiedOrder');
-  } else {
-    const msg = 'Your payment of ₹' + order.amount + ' was rejected. Reasons: ' + (verificationResult.reasons || []).join(', ');
-    await addDoc('notifications', {
-      receiverId: order.user_id || '',
-      title: 'Payment Rejected',
-      message: msg,
-      type: 'payment_rejected', status: 'unread', created_at: now(),
-      senderId: 'system', senderName: 'System',
-    }).catch(() => {});
-    T.mark('addRejectionNotification');
-  }
-
-  try { broadcast('paymentUpdated', { orderId, status: finalOrderStatus, type: order.type }); } catch {}
-
-  let syncedPaymentId = null;
-  try {
-    let existingPayments = [];
-    const searchRegId = extra?.pendingRegId || order.pending_reg_id;
-    if (order.type === 'registration' && searchRegId) {
-      existingPayments = await runQuery(COL_UPI_PAYMENTS, [
-        { field: 'pending_reg_id', op: 'EQUAL', value: searchRegId },
-      ], { limit: 10 });
-    } else if (order.type === 'topup' && (extra?.userId || order.user_id)) {
-      existingPayments = await runQuery(COL_UPI_PAYMENTS, [
-        { field: 'user_id', op: 'EQUAL', value: extra?.userId || order.user_id },
-      ], { limit: 10 });
-    }
-    if (existingPayments.length > 0) {
-      const target = existingPayments.find(p => p.status === 'pending') || existingPayments[0];
-      syncedPaymentId = target.id;
-      await updateDoc(COL_UPI_PAYMENTS, target.id, {
-        status: finalOrderStatus,
-        utr: extra?.userEnteredUtr || verificationResult.ocrData?.extractedUtr || target.utr,
-        screenshot_url: screenshotUrl,
-        ocr_result: verificationResult.ocrData || null,
-        final_score: verificationResult.verificationScore || 0,
-        fraud_score: verificationResult.fraudScore || 0,
-        verified_at: finalOrderStatus === 'verified' ? now() : target.verified_at,
-        verification_completed_at: now(),
-        verification_locked: false,
-        rejection_reasons: verificationResult.reasons || [],
-      }).catch(() => {});
-    }
-  } catch (e) { log('Failed to sync payment status: ' + e.message); }
-  T.mark('syncPaymentStatus');
-
-  T.summary();
+  scheduleAsyncVerification(orderId, screenshotUrl, extra);
   verifyingOrders.delete(orderId);
   return {
-    orderId,
-    paymentId: syncedPaymentId || orderId,
-    status: finalOrderStatus,
-    verificationStatus: verificationResult.status,
-    verificationScore: verificationResult.verificationScore,
-    ocrData: verificationResult.ocrData,
-    reasons: verificationResult.reasons,
-    matchedAmount: verificationResult.matchedAmount,
-    matchedReceiver: verificationResult.matchedReceiver,
-    matchedUtr: verificationResult.matchedUtr,
-    matchedDate: verificationResult.matchedDate,
-    userUtrMatched: verificationResult.userUtrMatched,
-    userEnteredUtr: verificationResult.userEnteredUtr,
-    userUpiMatched: verificationResult.userUpiMatched,
-    userEnteredUpi: verificationResult.userEnteredUpi,
-    fraudScore: verificationResult.fraudScore,
-    checks: verificationResult.checks,
+    orderId, paymentId: orderId,
+    status: 'pending', verificationStatus: 'pending',
+    verificationScore: 0, ocrData: null, reasons: ['Verification queued for async processing'],
+    matchedAmount: false, matchedReceiver: false, matchedUtr: false,
+    matchedDate: false, userUtrMatched: false, userEnteredUtr: extra?.userEnteredUtr || null,
+    userUpiMatched: false, userEnteredUpi: extra?.userEnteredUpi || null,
+    fraudScore: 0, checks: [],
   };
+}
+
+function scheduleAsyncVerification(orderId, screenshotUrl, extra) {
+  process.nextTick(() => {
+    (async () => {
+      try {
+        const order = await getDoc(COL_ORDERS, orderId).catch(() => null);
+        if (!order) return;
+        const v = await Promise.race([
+          runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null, extra?.userEnteredUpi || null),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 25000 : 120000)),
+        ]);
+        const isVerified = v.status === 'verified';
+        const finalStatus = isVerified ? 'verified' : 'rejected';
+        await updateDoc(COL_ORDERS, orderId, {
+          status: finalStatus, verification_status: v.status,
+          verification_score: v.verificationScore || 0, ocr_result: v.ocrData || null,
+          rejection_reasons: v.reasons || [], verified_at: now(),
+          verification_completed_at: now(), updated_at: now(),
+        }).catch(() => {});
+        if (isVerified) {
+          await executeVerifiedOrder(order, v, extra).catch(e => log('Async exec err: ' + e.message));
+        }
+        try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch {}
+      } catch (e) {
+        log('Async verification failed for ' + orderId + ': ' + e.message);
+        // Mark as manual_review so admin can handle it
+        await updateDoc(COL_ORDERS, orderId, {
+          status: 'failed', verification_status: 'manual_review',
+          rejection_reasons: ['Auto-verification failed: ' + e.message],
+          updated_at: now(),
+        }).catch(() => {});
+        // Also mark upi_payments as manual_review
+        try {
+          const ups = await runQuery(COL_UPI_PAYMENTS, [
+            { field: extra?.pendingRegId ? 'pending_reg_id' : 'user_id', op: 'EQUAL', value: extra?.pendingRegId || extra?.userId || order.user_id },
+          ], { limit: 5 });
+          for (const p of ups) {
+            await updateDoc(COL_UPI_PAYMENTS, p.id, {
+              status: 'manual_review', verification_locked: false,
+              rejection_reasons: ['Auto-verification failed, awaiting admin review'],
+            }).catch(() => {});
+          }
+        } catch {}
+      }
+    })();
+  });
 }
 
 // Cleanup verifyingOrders on process exit

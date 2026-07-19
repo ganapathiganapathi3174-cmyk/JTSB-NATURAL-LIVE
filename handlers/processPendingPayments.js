@@ -56,6 +56,11 @@ async function processNextPayment() {
         else result.manualReview++;
       } catch (e) {
         result.errors.push({ paymentId: payment.id, error: e.message === 'TIMEOUT' ? 'Timeout' : e.message });
+        // Don't leave payment stuck — mark for admin review
+        await updateDoc(COL_UPI_PAYMENTS, payment.id, {
+          status: 'manual_review', verification_locked: false,
+          rejection_reasons: ['Auto-verification timed out, awaiting admin review'],
+        }).catch(() => {});
       }
     }
   }
