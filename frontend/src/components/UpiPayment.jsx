@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import QrCodeDisplay from './QrCodeDisplay.jsx';
 
 const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
@@ -84,7 +84,7 @@ function getStatusDisplay(status) {
   if (status === 'verified') return { label: 'APPROVED', color: 'var(--success)', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.2)' };
   if (status === 'rejected') return { label: 'REJECTED', color: 'var(--danger)', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.2)' };
   if (status === 'failed') return { label: 'FAILED', color: 'var(--danger)', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.2)' };
-  if (status === 'pending' || status === 'queued') return { label: 'QUEUED', color: 'var(--info)', bg: 'rgba(34,211,238,0.12)', border: 'rgba(34,211,238,0.2)' };
+  if (status === 'processing' || status === 'pending' || status === 'queued') return { label: 'PROCESSING', color: 'var(--info)', bg: 'rgba(34,211,238,0.12)', border: 'rgba(34,211,238,0.2)' };
   if (status === 'manual_review') return { label: 'MANUAL REVIEW', color: 'var(--warning)', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.2)' };
   return { label: (status || '').toUpperCase(), color: 'var(--text-secondary)', bg: 'var(--surface-2)', border: 'var(--border)' };
 }
@@ -446,41 +446,67 @@ function ManualReviewResult({ result, type, onContinue }) {
 }
 
 function PendingResult({ result, orderId, onStatusUpdate, onStartOver }) {
-  const displayStatus = getStatusDisplay('pending');
+  const displayStatus = getStatusDisplay('processing');
   const [elapsed, setElapsed] = useState(0);
-  const pollRef = useRef(null);
+  const [connected, setConnected] = useState(false);
   const mountedRef = useRef(true);
+  const esRef = useRef(null);
+  const pollRef = useRef(null);
+  const startTimeRef = useRef(Date.now());
+  const MAX_WAIT = 60000;
+  const POLL_INTERVAL = 3000;
 
-  // Poll for status updates every 3 seconds, max 30 seconds
+  const checkFinalStatus = useCallback((status, data) => {
+    if (!mountedRef.current) return false;
+    const finalStatuses = ['verified', 'rejected', 'failed', 'manual_review'];
+    if (finalStatuses.includes(status) && onStatusUpdate) {
+      onStatusUpdate({ status, verificationScore: data?.verificationScore, verificationStatus: data?.verificationStatus || status });
+      return true;
+    }
+    return false;
+  }, [onStatusUpdate]);
+
+  // SSE subscription
   useEffect(() => {
-    const startTime = Date.now();
-    const INTERVAL = 3000;
-    const MAX_WAIT = 30000;
+    if (!orderId) return;
+    const es = new EventSource(FUNCTIONS_BASE + '/sse/dashboard');
+    esRef.current = es;
+    es.addEventListener('paymentUpdated', (e) => {
+      if (!mountedRef.current) return;
+      try {
+        const data = JSON.parse(e.data);
+        if (data.orderId === orderId) {
+          setConnected(true);
+          checkFinalStatus(data.status, data);
+        }
+      } catch (_) {}
+    });
+    es.onerror = () => { if (mountedRef.current) setConnected(false); };
+    return () => { es.close(); esRef.current = null; };
+  }, [orderId, checkFinalStatus]);
 
-    async function pollStatus() {
-      if (!orderId) return;
+  // Polling fallback (every 3s, max 60s)
+  useEffect(() => {
+    if (!orderId) return;
+    async function poll() {
+      if (!mountedRef.current) return;
       try {
         const resp = await fetch(`${FUNCTIONS_BASE}/getPaymentOrderStatus?orderId=${encodeURIComponent(orderId)}`);
         const data = await resp.json();
         if (!mountedRef.current) return;
-        const finalStatus = data.status;
-        if (finalStatus === 'verified' || finalStatus === 'rejected' || finalStatus === 'failed') {
-          if (onStatusUpdate) {
-            onStatusUpdate({ status: finalStatus, verificationScore: data.verificationScore, verificationStatus: data.verificationStatus });
-          }
-          return;
-        }
+        if (checkFinalStatus(data.status, data)) return;
       } catch (_) {}
-      const soFar = Date.now() - startTime;
+      const soFar = Date.now() - startTimeRef.current;
       setElapsed(soFar);
-      if (soFar < MAX_WAIT && mountedRef.current) {
-        pollRef.current = setTimeout(pollStatus, INTERVAL);
-      }
+      if (soFar < MAX_WAIT) pollRef.current = setTimeout(poll, POLL_INTERVAL);
     }
+    pollRef.current = setTimeout(poll, POLL_INTERVAL);
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, [orderId, checkFinalStatus]);
 
-    pollRef.current = setTimeout(pollStatus, INTERVAL);
-    return () => { mountedRef.current = false; if (pollRef.current) clearTimeout(pollRef.current); };
-  }, [orderId, onStatusUpdate]);
+  useEffect(() => {
+    return () => { mountedRef.current = false; if (esRef.current) esRef.current.close(); };
+  }, []);
 
   return (
     <div className="animate-fade-in-up" style={{ maxWidth: 700, margin: '0 auto', width: '100%' }}>
@@ -498,10 +524,10 @@ function PendingResult({ result, orderId, onStatusUpdate, onStartOver }) {
           </div>
 
           <h2 style={{ margin: 0, fontSize: '1.375rem', color: 'var(--cyan-200)' }}>
-            Verification In Progress
+            Processing Payment
           </h2>
           <p className="text-muted mt-sm" style={{ lineHeight: 1.6, maxWidth: 400, margin: '0.5rem auto 0' }}>
-            Your payment is being verified. This usually completes within a few seconds.
+            Your payment is being verified in the background. The result will appear here automatically once processing completes.
           </p>
 
           <div className="flex-center gap-sm mt-md" style={{ flexWrap: 'wrap' }}>
@@ -513,18 +539,12 @@ function PendingResult({ result, orderId, onStatusUpdate, onStartOver }) {
               letterSpacing: '0.05em',
             }}>
               {displayStatus.label} {elapsed > 0 ? `(${Math.round(elapsed / 1000)}s)` : ''}
+              {connected ? ' ● Live' : ''}
             </span>
           </div>
 
           <div className="flex-center gap-md mt-lg" style={{ flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn btn-ghost btn-lg"
-              onClick={onStartOver}
-              aria-label="Start over"
-            >
-              Back to Home
-            </button>
+            <button type="button" className="btn btn-ghost btn-lg" onClick={onStartOver}>Back to Home</button>
           </div>
         </div>
       </div>
