@@ -406,11 +406,11 @@ export default function FirebaseAdminPaymentsPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap animate-fade-in-up">
       <AdminSidebar pendingCounts={pendingCounts} userName={getAdminName()} />
       <main className="layout-inner">
         <div className="page-header">
-          <h1 className="page-title">
+          <h1 className="page-title text-gradient">
             {'\u{1F4B3}'}
             Payments
           </h1>
@@ -454,7 +454,7 @@ export default function FirebaseAdminPaymentsPage() {
           </div>
         </div>
 
-        <div className="card mb-md">
+        <div className="card mb-md glass-card">
           <div className="card-header">
             <h2 className="card-title">{'\u{1F50D}'} Search & Filter</h2>
             <button className="btn btn-ghost btn-xs" onClick={() => {
@@ -475,7 +475,7 @@ export default function FirebaseAdminPaymentsPage() {
             }}>{'\u{1F4E5}'} Export CSV</button>
           </div>
           <div className="filters">
-            <input className="search-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name, email, or UTR..." />
+            <input className="search-input glass-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name, email, or UTR..." />
             <select value={smartFilter} onChange={e => updateSmartFilter(e.target.value)}>
               <option value="">All Payments</option>
               <option value="pending">Pending</option>
@@ -500,7 +500,7 @@ export default function FirebaseAdminPaymentsPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card glass-card">
           <div className="card-header">
             <h2 className="card-title">{'\u{1F4CB}'} Payments ({filteredPayments.length})</h2>
           </div>

@@ -48,41 +48,46 @@ export default function FirebaseAdminLoginPage() {
   }
 
   return (
-    <div className="flex flex-center" style={{ minHeight: '100vh' }}>
-      <div className="glass-card" style={{ maxWidth: 400, width: '100%' }}>
-        <div className="text-center mb-md">
-          <h1 className="text-xl font-bold mb-xs">StarlightAscent</h1>
-          <p className="text-muted text-sm">Admin Login</p>
+    <div className="auth-page animate-fade-in-up">
+      <div className="auth-container">
+        <div className="auth-card">
+          <div className="auth-header">
+            <div className="auth-logo">✦</div>
+            <h1 className="auth-title">Admin Login</h1>
+            <p className="auth-subtitle">Sign in to the admin panel</p>
+          </div>
+          {error && <div className="alert-error mb-md">{error}</div>}
+          <form onSubmit={handleSubmit}>
+            <div className="mb-md">
+              <input
+                required
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Email"
+                className="glass-input"
+              />
+            </div>
+            <div className="mb-lg">
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Password"
+                className="glass-input"
+              />
+            </div>
+            <div className="flex flex-center">
+              <button className={`btn-primary btn-lg${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading}>
+                {loading ? 'Logging in...' : 'Log In'}
+              </button>
+            </div>
+          </form>
+          <div className="auth-footer">
+            <a href="/fb/login" className="font-semibold">User Login</a>
+          </div>
         </div>
-        {error && <div className="alert-error mb-md">{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <div className="field mb-md">
-            <label>Email</label>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="field mb-lg">
-            <label>Password</label>
-            <input
-              required
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-center">
-            <button className={`btn-primary btn-lg${loading ? ' btn-loading' : ''}`} type="submit" disabled={loading}>
-              {loading ? 'Logging in...' : 'Log In'}
-            </button>
-          </div>
-        </form>
-        <p className="text-muted text-sm mt-lg text-center">
-          <a href="/fb/login" className="font-semibold">User Login</a>
-        </p>
       </div>
     </div>
   );

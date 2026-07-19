@@ -71,11 +71,11 @@ export default function SponsorMarketplacePage() {
   }
 
   return (
-    <div className="page-wrap">
-      <div className="card" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem' }}>
+    <div className="page-wrap animate-fade-in-up">
+      <div className="glass-strong" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem', borderRadius: 'var(--radius-lg)' }}>
         <div className="flex items-center justify-between mb-lg" style={{ flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h1 className="page-title">Sponsor Marketplace</h1>
+            <h1 className="page-title text-gradient">Sponsor Marketplace</h1>
             {plan > 0 && <p className="text-sm text-muted mt-xs">Your Plan: ₹{plan}</p>}
           </div>
           <div className="flex gap-sm">
@@ -90,9 +90,9 @@ export default function SponsorMarketplacePage() {
         {successMsg && <div className="alert alert-success">{successMsg}</div>}
 
         {showMyRequests && (
-          <div className="card mb-lg">
+          <div className="glass card mb-lg">
             <div className="card-header">
-              <h2 className="card-title">My Pending Transfer Requests</h2>
+              <h2 className="card-title text-gradient">My Pending Transfer Requests</h2>
             </div>
             <div className="card-body">
               {myRequests.length === 0 ? (
@@ -115,7 +115,7 @@ export default function SponsorMarketplacePage() {
             <p className="text-muted text-sm">Loading sponsors...</p>
           </div>
         ) : sponsors.length === 0 ? (
-          <div className="card text-center" style={{ padding: '2.5rem' }}>
+          <div className="glass card text-center" style={{ padding: '2.5rem' }}>
             <p className="text-lg text-muted">No sponsors available for ₹{plan} plan</p>
             <p className="text-sm text-muted mt-sm">Check back later or upgrade your plan</p>
             <button onClick={() => navigate('/fb/dashboard')} className="btn btn-primary mt-lg">Back to Dashboard</button>
@@ -123,8 +123,8 @@ export default function SponsorMarketplacePage() {
         ) : (
           <div className="card-grid">
             {sponsors.map(sponsor => (
-              <div key={sponsor.id} className="card card-hover" style={{ padding: '1.25rem' }}>
-                <h3 className="text-lg font-semibold mb-md">{sponsor.name || 'Sponsor'}</h3>
+                <div key={sponsor.id} className="glass card card-hover" style={{ padding: '1.25rem' }}>
+                  <h3 className="text-lg font-semibold mb-md text-gradient">{sponsor.name || 'Sponsor'}</h3>
                 <div className="flex flex-col gap-sm mb-lg">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted">User ID</span>

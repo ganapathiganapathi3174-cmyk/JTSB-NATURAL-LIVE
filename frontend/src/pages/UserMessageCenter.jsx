@@ -87,12 +87,12 @@ export default function UserMessageCenter() {
   const grouped = groupByDate(notifications);
 
   return (
-    <div className="page-wrap" style={{ maxWidth: '720px', margin: '0 auto' }}>
-      <div className="flex-between items-center mb-md" style={{ paddingTop: '1rem' }}>
+    <div className="page-wrap animate-fade-in-up" style={{ maxWidth: '720px', margin: '0 auto' }}>
+      <div className="glass-strong flex-between items-center mb-md" style={{ padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)' }}>
         <button className="btn-ghost btn-sm" onClick={() => navigate('/fb/dashboard')}>
           {'\u2190'} Dashboard
         </button>
-        <h1 className="text-lg font-bold">Inbox</h1>
+        <h1 className="text-lg font-bold text-gradient">Inbox</h1>
         {unreadCount > 0 && (
           <button className="btn-ghost btn-sm" onClick={handleMarkAllRead}>
             Mark All Read ({unreadCount})
@@ -124,15 +124,15 @@ export default function UserMessageCenter() {
                 <span className="text-muted text-xs font-semibold" style={{ background: 'var(--surface-2)', padding: '0.2rem 0.75rem', borderRadius: 12 }}>{dateLabel}</span>
               </div>
               {items.map(n => (
-                <div
-                  key={n.id}
-                  onClick={() => handleMarkAsRead(n)}
-                  className={`card mb-sm animate-fade-in-up`}
-                  style={{
-                    cursor: 'pointer',
-                    background: n.status === 'unread' ? 'var(--accent-light)' : '',
-                    border: n.status === 'unread' ? '1px solid var(--accent-glow)' : '',
-                  }}
+              <div
+                key={n.id}
+                onClick={() => handleMarkAsRead(n)}
+                className={`glass card mb-sm animate-fade-in-up`}
+                style={{
+                  cursor: 'pointer',
+                  background: n.status === 'unread' ? 'var(--accent-light)' : '',
+                  border: n.status === 'unread' ? '1px solid var(--accent-glow)' : '',
+                }}
                 >
                   <div className="flex-between items-center mb-xs">
                     <div className="flex items-center gap-xs">

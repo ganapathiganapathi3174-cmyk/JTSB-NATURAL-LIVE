@@ -237,6 +237,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
   if (step === 'success' || (verifyResult?.status === 'verified')) {
     return (
       <div className="flex flex-col items-center py-4 animate-fade-in-up">
+        <div className="glass-strong" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', textAlign: 'center', width: '100%' }}>
         <div className="flex-center" style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, #4ADE80, #22C55E)', color: '#fff', fontSize: '1.75rem', margin: '0 auto 1.25rem', boxShadow: '0 0 30px rgba(74,222,128,0.3)' }}>&#10003;</div>
         <h3 className="text-gradient-success" style={{ margin: 0, fontSize: '1.25rem' }}>Payment Verified!</h3>
         <p className="text-muted mt-sm" style={{ lineHeight: 1.6 }}>
@@ -245,6 +246,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
         {verifyResult?.verificationScore != null && <p className="text-sm" style={{ color: '#4ADE80', marginTop: '0.25rem' }}>Score: {verifyResult.verificationScore}%</p>}
         {verifyResult?.userUtrMatched != null && <p className="text-sm text-muted mt-xs">UTR Match: {verifyResult.userUtrMatched ? '\u2713' : '\u2715'}</p>}
         {verifyResult?.userUpiMatched != null && <p className="text-sm text-muted mt-xs">UPI ID Match: {verifyResult.userUpiMatched ? '\u2713' : '\u2715'}</p>}
+        </div>
       </div>
     );
   }
@@ -252,7 +254,8 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
   if (step === 'progress') {
     return (
       <div className="animate-fade-in-up" style={{ padding: '1rem 0' }}>
-        <h3 className="text-sm text-muted text-center mb-md" style={{ fontSize: '0.95rem' }}>AI Verification In Progress</h3>
+        <div className="glass-strong" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', maxWidth: 360, margin: '0 auto' }}>
+        <h3 className="text-sm text-center mb-md text-gradient" style={{ fontSize: '0.95rem' }}>AI Verification In Progress</h3>
         <div className="verification-timeline" style={{ maxWidth: 320, margin: '0 auto' }}>
           {PROGRESS_STEPS.map((label, i) => {
             const isActive = i === progressIndex;
@@ -268,6 +271,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
         {error && (
           <div className="alert alert-error mt-md">{error}</div>
         )}
+        </div>
       </div>
     );
   }
@@ -277,6 +281,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
     const isError = verifyResult.status === 'error';
     return (
       <div className="flex flex-col items-center py-4 animate-fade-in-up">
+        <div className="glass-strong" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', textAlign: 'center', width: '100%' }}>
         <div className="flex-center" style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, #FB7185, #F43F5E)', color: '#fff', fontSize: '1.75rem', margin: '0 auto 1.25rem', boxShadow: '0 0 30px rgba(251,113,133,0.3)' }}>
           {isError ? '!' : '\u2715'}
         </div>
@@ -313,6 +318,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
           <button type="button" className="btn btn-primary btn-sm" onClick={handleRetry}>Try Again</button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={resetAll}>Start Over</button>
         </div>
+        </div>
       </div>
     );
   }
@@ -325,8 +331,8 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
           <div className="alert alert-error mb-md">{error}</div>
         )}
 
-        <div className="card card-body text-center mb-md">
-          <h3 className="mb" style={{ fontSize: '1rem' }}>Pay <span className="text-gradient">&#8377;{selectedAmount}</span></h3>
+        <div className="glass card card-body text-center mb-md">
+          <h3 className="mb text-gradient" style={{ fontSize: '1rem' }}>Pay <span>&#8377;{selectedAmount}</span></h3>
           <p className="text-muted text-sm mb-md">Scan QR or tap an app to pay</p>
 
           <div className="flex-center mb-md">
@@ -391,8 +397,8 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
           <div className="alert alert-error mb-md">{error}</div>
         )}
 
-        <div className="card card-body mb-md">
-          <h3 className="text-center mb">Upload Payment Screenshot</h3>
+        <div className="glass card card-body mb-md">
+          <h3 className="text-center mb text-gradient">Upload Payment Screenshot</h3>
           <p className="text-muted text-sm text-center mb-md" style={{ lineHeight: 1.6 }}>
             Paid <strong>&#8377;{selectedAmount}</strong> to <strong style={{ userSelect: 'all' }}>{ADMIN_UPI}</strong>? Upload your payment screenshot below to verify.
           </p>
@@ -449,14 +455,14 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
         <div className="alert alert-error mb-md">{error}</div>
       )}
 
-      <h3 className="text-center mb-md" style={{ fontSize: '1rem' }}>
+      <h3 className="text-center mb-md text-gradient" style={{ fontSize: '1rem' }}>
         {type === 'registration' ? 'Select Your Plan' : 'Select Topup Amount'}
       </h3>
 
       <div className="grid-2">
         {AMOUNT_OPTIONS.map((opt) => (
           <button key={opt.amount} type="button" disabled={creatingOrder} onClick={() => handleAmountSelect(opt.amount)}
-            className={`card card-body text-center${creatingOrder && selectedAmount === opt.amount ? '' : ' card-hover'}`}
+            className={`glass card card-body text-center${creatingOrder && selectedAmount === opt.amount ? '' : ' card-hover'}`}
             style={{
               cursor: creatingOrder ? 'default' : 'pointer',
               border: selectedAmount === opt.amount ? '2px solid var(--primary)' : '2px solid var(--border)',

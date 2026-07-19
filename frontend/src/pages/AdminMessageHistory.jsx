@@ -67,17 +67,17 @@ export default function AdminMessageHistory() {
   }, [notifications]);
 
   return (
-    <div className="fb-admin-layout">
+    <div className="fb-admin-layout animate-fade-in-up">
       <AdminSidebar userName={localStorage.getItem('fb_admin_name') || 'Admin'} pendingCounts={{}} />
       <main className="admin-main-content">
         <div className="admin-page">
           <div className="page-header">
-            <h1>Message History</h1>
+            <h1 className="text-gradient">Message History</h1>
             <div className="admin-page-subtitle">All admin-to-user communications</div>
           </div>
 
           <div className="filters">
-            <input className="input w-full" placeholder="Search by user ID, name, title, message, sender..."
+            <input className="input w-full glass-input" placeholder="Search by user ID, name, title, message, sender..."
               value={search} onChange={e => setSearch(e.target.value)} />
             <select className="input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ maxWidth: '180px' }}>
               {typeOptions.map(t => (

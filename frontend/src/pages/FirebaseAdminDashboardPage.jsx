@@ -416,11 +416,11 @@ export default function FirebaseAdminDashboardPage() {
   }), [stats]);
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap animate-fade-in-up">
       <AdminSidebar pendingCounts={pendingCounts} userName={getAdminName()} />
       <main className="layout-inner">
         <div className="page-header">
-          <h1 className="page-title">
+          <h1 className="page-title text-gradient">
             Dashboard Overview
           </h1>
           <div className="page-actions">
@@ -433,8 +433,8 @@ export default function FirebaseAdminDashboardPage() {
           </div>
         </div>
 
-        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-          <div className="card card-hover" style={{ padding: '1.5rem' }}>
+        <div className="stats-grid animate-fade-in" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+          <div className="card card-hover glass-card" style={{ padding: '1.5rem' }}>
             <div className="flex items-center gap-sm mb-sm">
               <div style={{ fontSize: '1.5rem', opacity: 0.6 }}>{'\u{1F4B0}'}</div>
               <span className="text-sm text-muted font-medium">Total Payment Amount</span>
@@ -444,7 +444,7 @@ export default function FirebaseAdminDashboardPage() {
             </div>
             <div className="text-xs text-muted mt-xs">{'\u20B9'}120 + {'\u20B9'}500 + {'\u20B9'}1,000 packages</div>
           </div>
-          <div className="card card-hover" style={{ padding: '1.5rem' }}>
+          <div className="card card-hover glass-card" style={{ padding: '1.5rem' }}>
             <div className="flex items-center gap-sm mb-sm">
               <div style={{ fontSize: '1.5rem', opacity: 0.6 }}>{'\u{1F4B3}'}</div>
               <span className="text-sm text-muted font-medium">Total Topup Amount</span>
@@ -493,7 +493,7 @@ export default function FirebaseAdminDashboardPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card glass-card">
           <div className="card-header">
             <h2 className="card-title">{'\u{1F4CA}'} Priority Overview</h2>
           </div>
@@ -521,7 +521,7 @@ export default function FirebaseAdminDashboardPage() {
         </div>
 
         <div className="stats-grid">
-          <div className="card">
+          <div className="card glass-card">
             <div className="card-header">
               <h2 className="card-title">{'\u26A1'} Quick Actions</h2>
             </div>
@@ -549,7 +549,7 @@ export default function FirebaseAdminDashboardPage() {
             </div>
           </div>
 
-          <div className="card">
+          <div className="card glass-card">
             <div className="card-header">
               <h2 className="card-title">{'\u{1F4CA}'} System Health</h2>
               <button className="btn btn-ghost btn-sm" onClick={fetchHealth} disabled={healthLoading}>
@@ -626,7 +626,7 @@ export default function FirebaseAdminDashboardPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card glass-card">
           <div className="card-header">
             <h2 className="card-title">{'\u{1F4CA}'} Collection Analytics</h2>
           </div>
@@ -685,7 +685,7 @@ export default function FirebaseAdminDashboardPage() {
 
             <div className="mt-lg">
               <div className="flex flex-between items-center mb-md" style={{ borderBottom: '1px solid var(--border)' }}>
-                <h3 className="card-title" style={{ fontSize: '0.95rem' }}>
+                <h3 className="card-title text-gradient-success" style={{ fontSize: '0.95rem' }}>
                   {'\u{1F4CB}'} Payment Collection Records
                   <span className="text-xs text-muted font-semibold">
                     ({filteredEntries.length} entries)
@@ -768,9 +768,9 @@ export default function FirebaseAdminDashboardPage() {
         )}
 
         {eligibleSponsorsList.length > 0 && (
-          <div className="card">
+          <div className="card glass-card">
             <div className="card-header">
-              <h2 className="card-title">{'\u{1F3C6}'} Sponsor Status & Topup Eligibility ({eligibleSponsorsList.length})</h2>
+              <h2 className="card-title text-gradient">{'\u{1F3C6}'} Sponsor Status & Topup Eligibility ({eligibleSponsorsList.length})</h2>
             </div>
             <div className="card-body">
               <div className="table-wrap">
@@ -842,9 +842,9 @@ export default function FirebaseAdminDashboardPage() {
         )}
 
         {sponsorClaims.filter(c => c.status === 'pending').length > 0 && (
-          <div className="card" style={{ borderLeft: '3px solid var(--warning)' }}>
+          <div className="card glass-card" style={{ borderLeft: '3px solid var(--warning)' }}>
             <div className="card-header">
-              <h2 className="card-title">{'\u{1F3C6}'} Pending Sponsor Claims ({sponsorClaims.filter(c => c.status === 'pending').length})</h2>
+              <h2 className="card-title text-gradient">{'\u{1F3C6}'} Pending Sponsor Claims ({sponsorClaims.filter(c => c.status === 'pending').length})</h2>
             </div>
             <div className="card-body">
               <div className="table-wrap">
@@ -907,9 +907,9 @@ export default function FirebaseAdminDashboardPage() {
         )}
 
         {inactiveUsersList.length > 0 && (
-          <div className="card">
+          <div className="card glass-card">
             <div className="card-header">
-              <h2 className="card-title">{'\u26A0\uFE0F'} Inactive Users & Reasons ({inactiveUsersList.length})</h2>
+              <h2 className="card-title text-gradient-danger">{'\u26A0\uFE0F'} Inactive Users & Reasons ({inactiveUsersList.length})</h2>
             </div>
             <div className="card-body">
               <div className="table-wrap">

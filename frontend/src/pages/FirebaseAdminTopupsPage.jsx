@@ -287,11 +287,11 @@ export default function FirebaseAdminTopupsPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap animate-fade-in-up">
       <AdminSidebar pendingCounts={{ pendingPayments: 0, pendingTopups: stats.pending }} userName={getAdminName()} />
       <main className="layout-inner">
         <div className="page-header">
-          <h1 className="page-title">
+          <h1 className="page-title text-gradient">
             {'\u{1F4B0}'}
             Topups
           </h1>
@@ -326,12 +326,12 @@ export default function FirebaseAdminTopupsPage() {
           </div>
         </div>
 
-        <div className="card mb-md">
+        <div className="card mb-md glass-card">
           <div className="card-header">
             <h2 className="card-title">{'\u{1F50D}'} Search & Filter</h2>
           </div>
           <div className="filters">
-            <input className="search-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name or email..." />
+            <input className="search-input glass-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name or email..." />
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="">All Status</option>
               <option value="approved">Approved</option>
@@ -346,7 +346,7 @@ export default function FirebaseAdminTopupsPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card glass-card">
           <div className="card-header">
             <h2 className="card-title">{'\u{1F4CB}'} Topup History ({filteredTopups.length})</h2>
           </div>

@@ -30,7 +30,7 @@ export default function PaymentPage() {
   if (submitted) {
     return (
       <div className="flex flex-center" style={{ minHeight: '100vh' }}>
-        <div className="card text-center animate-fade-in-up" style={{ maxWidth: 440, width: '100%' }}>
+        <div className="glass card text-center animate-fade-in-up" style={{ maxWidth: 440, width: '100%' }}>
           <div className="badge" style={{
             width: 64, height: 64, borderRadius: '50%',
             background: 'linear-gradient(135deg, var(--success), #4ADE80)', color: 'var(--text)',
@@ -46,15 +46,15 @@ export default function PaymentPage() {
   }
 
   return (
-    <div className="flex flex-center" style={{ minHeight: '100vh' }}>
-      <div className="text-center mb-lg animate-fade-in-up">
-        <div className="text-lg font-bold mb-xs">
+    <div className="flex flex-center animate-fade-in-up" style={{ minHeight: '100vh' }}>
+      <div className="text-center mb-lg">
+        <div className="glass-strong text-lg font-bold mb-xs" style={{ padding: '0.5rem 1.5rem', borderRadius: 'var(--radius-lg)', display: 'inline-block' }}>
           <span className="text-gradient">StarlightAscent</span>
         </div>
         <p className="text-muted text-sm">Premium FinTech Platform</p>
       </div>
 
-      <div className="card animate-fade-in-up stagger-1" style={{ width: '100%', maxWidth: 480 }}>
+      <div className="glass card animate-fade-in-up stagger-1" style={{ width: '100%', maxWidth: 480 }}>
         <h1 className="text-xl font-bold mb-xs text-gradient">Wallet Topup</h1>
         <p className="text-muted text-sm mb-lg">Add funds to your wallet via UPI</p>
 

@@ -86,10 +86,10 @@ export default function AdminPendingPaymentsPage() {
   ];
 
   return (
-    <div className="admin-page" style={{ padding: '2rem' }}>
+    <div className="admin-page animate-fade-in-up" style={{ padding: '2rem' }}>
       <div className="admin-header">
         <div>
-          <h1>Pending Payment Queue</h1>
+          <h1 className="text-gradient">Pending Payment Queue</h1>
           <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
             Auto-expires after {timeoutMinutes} minutes
             {isLive

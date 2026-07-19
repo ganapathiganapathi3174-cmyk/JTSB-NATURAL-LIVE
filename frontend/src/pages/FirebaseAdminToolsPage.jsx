@@ -276,11 +276,11 @@ export default function FirebaseAdminToolsPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap animate-fade-in-up">
       <AdminSidebar userName={getAdminName()} />
       <main className="layout-inner">
         <div className="page-header">
-          <h1 className="page-title">Admin Tools</h1>
+          <h1 className="page-title text-gradient">Admin Tools</h1>
         </div>
 
           <div className="tools-tabs">
@@ -297,7 +297,7 @@ export default function FirebaseAdminToolsPage() {
 
           {activeTab === 'bulk' && (
             <div className="tools-panel">
-              <div className="card mb-md">
+                <div className="card mb-md glass-card">
                 <div className="card-header">
                   <h2 className="card-title">{'\u{1F4CB}'} Bulk Approve / Reject Payments</h2>
                   <div className="page-actions">
@@ -382,11 +382,12 @@ export default function FirebaseAdminToolsPage() {
           {activeTab === 'payment-tools' && (
             <div className="tools-panel">
               <div className="tools-grid">
-                <div className="card">
+                <div className="card glass-card">
                   <h2 className="card-title" style={{ marginBottom: '1rem' }}>{'\u{1F50D}'} Re-run OCR</h2>
                   <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>Reset OCR state for a payment and re-extract text from the screenshot.</p>
                   <div className="filters">
                     <input
+                      className="glass-input"
                       placeholder="Enter Payment ID"
                       value={paymentId}
                       onChange={e => setPaymentId(e.target.value)}
@@ -397,11 +398,12 @@ export default function FirebaseAdminToolsPage() {
                   </div>
                 </div>
 
-                <div className="card">
+                <div className="card glass-card">
                   <h2 className="card-title" style={{ marginBottom: '1rem' }}>{'\u{1F504}'} Re-run Verification</h2>
                   <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>Reset verification state and re-run the full verification pipeline.</p>
                   <div className="filters">
                     <input
+                      className="glass-input"
                       placeholder="Enter Payment ID"
                       value={paymentId}
                       onChange={e => setPaymentId(e.target.value)}
@@ -412,10 +414,11 @@ export default function FirebaseAdminToolsPage() {
                   </div>
                 </div>
 
-                <div className="card" style={{ gridColumn: '1 / -1' }}>
+                <div className="card glass-card" style={{ gridColumn: '1 / -1' }}>
                   <h2 className="card-title" style={{ marginBottom: '1rem' }}>{'\u{1F50E}'} Single Payment Lookup</h2>
                   <div className="filters" style={{ marginBottom: '1rem' }}>
                     <input
+                      className="glass-input"
                       placeholder="Enter Payment ID"
                       value={paymentLookupId}
                       onChange={e => setPaymentLookupId(e.target.value)}
@@ -467,7 +470,7 @@ export default function FirebaseAdminToolsPage() {
 
           {activeTab === 'reports' && (
             <div className="tools-panel">
-              <div className="card">
+              <div className="card glass-card">
                 <div className="card-header">
                   <h2 className="card-title">{'\u{1F4E5}'} Download Reports</h2>
                 </div>
@@ -494,7 +497,7 @@ export default function FirebaseAdminToolsPage() {
 
           {activeTab === 'audit' && (
             <div className="tools-panel">
-              <div className="card">
+              <div className="card glass-card">
                 <div className="card-header">
                   <h2 className="card-title">{'\u{1F4DD}'} Audit Log</h2>
                   <button className="btn btn-ghost btn-sm" onClick={fetchAuditLogs} disabled={auditLoading}>

@@ -38,9 +38,9 @@ function ReferralGraphModal({ user, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="glass-strong modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Referral Graph</h2>
+          <h2 className="text-gradient">Referral Graph</h2>
           <button onClick={onClose} className="modal-close">{'\u2715'}</button>
         </div>
 
@@ -53,8 +53,8 @@ function ReferralGraphModal({ user, onClose }) {
           <div className="modal-body">
             <div className="flex flex-col items-center gap-md">
               {graphData?.referredByUser && (
-                <div className="card" style={{ background: 'var(--primary-soft)', border: '1px solid rgba(139,92,246,0.2)', textAlign: 'center', padding: '1rem', width: '100%', maxWidth: 300 }}>
-                  <div className="font-semibold">{graphData.referredByUser.name}</div>
+                <div className="glass card" style={{ textAlign: 'center', padding: '1rem', width: '100%', maxWidth: 300 }}>
+                  <div className="font-semibold text-gradient">{graphData.referredByUser.name}</div>
                   <div className="text-sm text-muted">{graphData.referredByUser.email}</div>
                   <div className="text-xs text-muted mt-xs">Referrer</div>
                 </div>
@@ -64,7 +64,7 @@ function ReferralGraphModal({ user, onClose }) {
                 <div style={{ width: 2, height: 24, background: 'var(--border)' }} />
               )}
 
-              <div className="card" style={{ background: 'var(--success-soft)', border: '1px solid rgba(16,185,129,0.2)', textAlign: 'center', padding: '1rem', width: '100%', maxWidth: 300 }}>
+              <div className="glass card" style={{ textAlign: 'center', padding: '1rem', width: '100%', maxWidth: 300 }}>
                 <div className="font-semibold">{user.name}</div>
                 <div className="text-sm text-muted">{user.email}</div>
                 <div className="text-xs text-muted mt-xs">
@@ -129,23 +129,25 @@ export default function ReferralGraphPage() {
 
   if (loading) {
     return (
-      <div className="page-wrap flex flex-center">
-        <div className="loading-spinner loading-spinner-lg" />
-        <div className="loading-text">Loading...</div>
-      </div>
+    <div className="page-wrap flex flex-center animate-fade-in-up">
+      <div className="loading-spinner loading-spinner-lg" />
+      <div className="loading-text">Loading...</div>
+    </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="page-wrap flex flex-center">
-        <div className="text-muted text-sm">User not found</div>
+      <div className="page-wrap flex flex-center animate-fade-in-up">
+        <div className="glass card text-center" style={{ padding: '2rem' }}>
+          <div className="text-muted text-sm">User not found</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="page-wrap flex flex-center" style={{ minHeight: '100vh' }}>
+    <div className="page-wrap flex flex-center animate-fade-in-up" style={{ minHeight: '100vh' }}>
       <ReferralGraphModal user={user} onClose={() => window.close()} />
     </div>
   );

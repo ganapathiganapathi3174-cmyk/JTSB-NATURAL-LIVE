@@ -260,11 +260,11 @@ export default function FirebaseAdminUPIPaymentsPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap animate-fade-in-up">
       <AdminSidebar />
       <main className="layout-inner">
         <div className="page-header">
-          <h1 className="page-title">
+          <h1 className="page-title text-gradient">
             {'\u{1F4B5}'}
             UPI Payment Monitor
           </h1>
@@ -348,7 +348,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') fetchData(); }}
-            className="search-input"
+            className="search-input glass-input"
           />
           <button onClick={processPending} disabled={processing} className="btn btn-primary btn-sm">
             {processing ? '\u23F3 Processing...' : '\u{1F504} Process Pending'}
@@ -358,7 +358,7 @@ export default function FirebaseAdminUPIPaymentsPage() {
         {loading && <div className="loading-spinner loading-spinner-lg" />}
 
         {!loading && !error && (
-          <div className="card">
+          <div className="card glass-card">
             <div className="card-header">
               <h2 className="card-title">{'\u{1F4CB}'} Payments ({payments.length})</h2>
             </div>

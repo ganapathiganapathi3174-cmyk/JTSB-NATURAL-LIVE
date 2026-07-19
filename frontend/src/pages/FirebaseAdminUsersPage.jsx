@@ -652,11 +652,11 @@ export default function FirebaseAdminUsersPage() {
   };
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap animate-fade-in-up">
       <AdminSidebar pendingCounts={pendingCounts} userName={getAdminName()} />
       <main className="layout-inner">
         <div className="page-header">
-          <h1 className="page-title">
+          <h1 className="page-title text-gradient">
             {'\u{1F465}'}
             User Management
           </h1>
@@ -667,7 +667,7 @@ export default function FirebaseAdminUsersPage() {
           </div>
         </div>
 
-        <div className="card mb-md">
+        <div className="card mb-md glass-card">
           <div className="card-header">
             <h2 className="card-title">{'\u{1F50D}'} Search & Filter</h2>
             <div className="flex gap-sm">
@@ -677,7 +677,7 @@ export default function FirebaseAdminUsersPage() {
             </div>
           </div>
           <div className="filters">
-            <input className="search-input" value={q} onChange={e => setQ(e.target.value)}
+            <input className="search-input glass-input" value={q} onChange={e => setQ(e.target.value)}
               placeholder="Search by name, email, phone, or referral_code..." />
             <select value={statusFilter} onChange={e => updateStatusFilter(e.target.value)}>
               <option value="">All Users</option>
@@ -704,7 +704,7 @@ export default function FirebaseAdminUsersPage() {
           </div>
         )}
 
-        <div className="card">
+        <div className="card glass-card">
           <div className="card-header">
             <h2 className="card-title">{'\u{1F465}'} All Users ({filteredUsers.length})</h2>
           </div>

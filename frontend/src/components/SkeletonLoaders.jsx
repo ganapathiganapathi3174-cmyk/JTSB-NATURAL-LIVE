@@ -29,7 +29,7 @@ export function CardSkeleton({ count = 4 }) {
   return (
     <div className="stats-grid">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="skeleton-card-modern">
+        <div key={i} className="glass skeleton-card-modern" style={{ borderRadius: 'var(--radius-lg)' }}>
           <div className="skeleton skeleton-line-sm" style={{ width: '40%', marginBottom: '0.5rem' }} />
           <div className="skeleton skeleton-line-lg" style={{ width: '60%' }} />
         </div>
@@ -40,13 +40,13 @@ export function CardSkeleton({ count = 4 }) {
 
 export function PageSkeleton() {
   return (
-    <div className="admin-content-inner">
+    <div className="admin-content-inner animate-fade-in-up">
       <div className="admin-page-header">
         <div className="skeleton skeleton-line-lg" style={{ width: '200px', height: '28px' }} />
       </div>
       <CardSkeleton count={4} />
       <div style={{ marginTop: '1.5rem' }}>
-        <div className="skeleton-card-modern">
+        <div className="glass skeleton-card-modern" style={{ borderRadius: 'var(--radius-lg)' }}>
           <div className="skeleton skeleton-line" style={{ width: '160px', marginBottom: '1rem' }} />
           <TableSkeleton rows={4} cols={5} />
         </div>

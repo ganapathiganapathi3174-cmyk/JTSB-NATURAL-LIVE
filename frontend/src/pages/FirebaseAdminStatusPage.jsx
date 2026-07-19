@@ -283,19 +283,19 @@ export default function FirebaseAdminStatusPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap animate-fade-in-up">
       <AdminSidebar userName={getAdminName()} />
       <main className="layout-inner">
         <div className="page-header">
-          <h1 className="page-title">Status Board</h1>
+          <h1 className="page-title text-gradient">Status Board</h1>
           <div className="page-actions">
             <span className="text-sm text-muted">Showing {filteredCount} of {totalCount} users</span>
           </div>
         </div>
 
-        <div className="card mb-md" style={{ padding: '0.75rem 1rem' }}>
+        <div className="card mb-md glass-card" style={{ padding: '0.75rem 1rem' }}>
           <input
-            className="input"
+            className="input glass-input"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search by name, email, phone, code..."

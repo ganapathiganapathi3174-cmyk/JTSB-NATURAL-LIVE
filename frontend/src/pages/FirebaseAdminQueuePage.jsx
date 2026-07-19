@@ -67,11 +67,11 @@ export default function FirebaseAdminQueuePage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap animate-fade-in-up">
       <AdminSidebar userName={getAdminName()} />
       <main className="layout-inner">
         <div className="page-header">
-          <h1 className="page-title">Queue Monitor</h1>
+          <h1 className="page-title text-gradient">Queue Monitor</h1>
           <div className="page-actions">
             <button className="btn btn-primary" onClick={processPending} disabled={processing}>
               {processing ? 'Processing...' : '\u25B6 Process Pending'}
@@ -125,9 +125,9 @@ export default function FirebaseAdminQueuePage() {
               </div>
             </div>
 
-            <div className="card">
+            <div className="card glass-card">
               <div className="card-header">
-                <h3>Queue Summary</h3>
+                <h3 className="text-gradient">Queue Summary</h3>
               </div>
               <div className="card-body">
                 <div className="table-wrap">

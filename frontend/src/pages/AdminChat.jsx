@@ -244,7 +244,7 @@ export default function AdminChat() {
   }
 
   return (
-    <div className="fb-admin-layout">
+    <div className="fb-admin-layout animate-fade-in-up">
       <AdminSidebar userName={adminName} pendingCounts={{}} />
       <main className="admin-main-content chat-main">
         <div className="chat-layout">
@@ -261,7 +261,7 @@ export default function AdminChat() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="chat-search-icon">
                 <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
-              <input className="chat-search-input" placeholder="Search users..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+              <input className="chat-search-input glass-input" placeholder="Search users..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
             <div className="chat-sidebar-list">
               {searchQuery.trim() ? (
@@ -316,7 +316,7 @@ export default function AdminChat() {
 
                 <div className="chat-search-box" style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-                  <input className="chat-search-input" placeholder="Search in conversation..." value={msgSearchQuery} onChange={e => setMsgSearchQuery(e.target.value)} style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem' }} />
+                  <input className="chat-search-input glass-input" placeholder="Search in conversation..." value={msgSearchQuery} onChange={e => setMsgSearchQuery(e.target.value)} style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem' }} />
                   {msgSearchQuery && <button className="btn-icon btn-ghost" onClick={() => setMsgSearchQuery('')} title="Clear search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>}
                 </div>
 
@@ -348,7 +348,7 @@ export default function AdminChat() {
                       <span className="chat-attach-remove">&times;</span>
                     </div>
                   )}
-                  <input className="chat-input-field" placeholder="Type a message..." value={inputText} onChange={e => setInputText(e.target.value)} autoFocus />
+                  <input className="chat-input-field glass-input" placeholder="Type a message..." value={inputText} onChange={e => setInputText(e.target.value)} autoFocus />
                   <button type="submit" className="chat-send-btn" disabled={(!inputText.trim() && !attachFile) || sending}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
                   </button>

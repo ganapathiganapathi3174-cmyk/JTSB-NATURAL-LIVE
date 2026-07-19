@@ -36,9 +36,9 @@ export default function AdminSponsorTransfersPage() {
   function handleSearch() { loadTransfers(filter, search); }
 
   return (
-    <div className="admin-page" style={{ padding: '2rem' }}>
+    <div className="admin-page animate-fade-in-up" style={{ padding: '2rem' }}>
       <div className="admin-header">
-        <h1>Sponsor Transfers</h1>
+        <h1 className="text-gradient">Sponsor Transfers</h1>
         <button onClick={() => navigate('/fb-admin/dashboard')} className="btn btn-secondary">Back to Dashboard</button>
       </div>
 
@@ -63,7 +63,7 @@ export default function AdminSponsorTransfersPage() {
         <button onClick={() => setFilter('approved')} className={`btn ${filter === 'approved' ? 'btn-primary' : 'btn-secondary'}`}>Approved</button>
         <button onClick={() => setFilter('rejected')} className={`btn ${filter === 'rejected' ? 'btn-primary' : 'btn-secondary'}`}>Rejected</button>
         <div style={{ flex: 1 }} />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email" className="input" style={{ maxWidth: '240px' }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email" className="input glass-input" style={{ maxWidth: '240px' }} />
         <button onClick={handleSearch} className="btn btn-secondary">Search</button>
       </div>
 

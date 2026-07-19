@@ -135,72 +135,72 @@ export default function FirebaseLoginPage() {
   }
 
   return (
-    <div className="flex flex-center" style={{ minHeight: '100vh' }}>
-      <div className="glass-card" style={{ maxWidth: 420, width: '100%' }}>
-        <div className="text-center mb-lg">
-          <div className="text-xl font-bold mb-xs">
-            <span className="text-gradient">StarlightAscent</span>
+    <div className="auth-page animate-fade-in-up">
+      <div className="auth-container">
+        <div className="auth-card">
+          <div className="auth-header">
+            <div className="auth-logo">✦</div>
+            <h1 className="auth-title">Welcome Back</h1>
+            <p className="auth-subtitle">Sign in to your account</p>
           </div>
-          <p className="text-muted text-sm">Premium FinTech Platform</p>
-        </div>
 
-        <h2 className="text-xl font-bold mb-xs">Welcome Back</h2>
-        <p className="text-muted text-sm mb-md">Sign in to your account</p>
+          {showSetPasswordField && setPasswordFor ? (
+            <div className="card-dim mb-md">
+              <p className="text-sm font-semibold mb-sm" style={{ color: 'var(--success)' }}>
+                Your account is approved! Set a password to login.
+              </p>
+              <form onSubmit={handleSetPassword}>
+                <div className="mb-md">
+                  <input type={showPassword ? 'text' : 'password'} value={newPassword} minLength={6}
+                    onChange={e => setNewPassword(e.target.value)} required placeholder="New Password" className="glass-input" />
+                </div>
+                <button type="submit" className={`btn-primary btn-lg${loading ? ' btn-loading' : ''} w-full`} disabled={loading}>
+                  {loading ? 'Setting...' : 'Set Password & Login'}
+                </button>
+              </form>
+            </div>
+          ) : (
+            <>
+              {error && (
+                <div className="alert-error mb-md">
+                  {error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}
+                </div>
+              )}
 
-        {showSetPasswordField && setPasswordFor ? (
-          <div className="card-dim mb-md">
-            <p className="text-sm font-semibold mb-sm" style={{ color: 'var(--success)' }}>
-              Your account is approved! Set a password to login.
-            </p>
-            <form onSubmit={handleSetPassword}>
-              <div className="field-glass mb-md">
-                <input type={showPassword ? 'text' : 'password'} value={newPassword} minLength={6}
-                  onChange={e => setNewPassword(e.target.value)} required placeholder="New Password" />
-              </div>
-              <button type="submit" className={`btn-primary btn-lg${loading ? ' btn-loading' : ''} w-full`} disabled={loading}>
-                {loading ? 'Setting...' : 'Set Password & Login'}
-              </button>
-            </form>
-          </div>
-        ) : (
-          <>
-            {error && (
-              <div className="alert-error mb-md">
-                {error}{rateLimitCountdown > 0 && ` (retry in ${rateLimitCountdown}s)`}
-              </div>
-            )}
+              <form onSubmit={handleSubmit}>
+                <div className="mb-md">
+                  <input required value={loginInput} onChange={e => setLoginInput(e.target.value)} placeholder="Enter your email" className="glass-input" />
+                </div>
+                <div className="mb-lg">
+                  <div className="flex items-center gap-xs" style={{ position: 'relative' }}>
+                    <input required type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                      placeholder="Password" className="glass-input" style={{ paddingRight: '2.5rem' }} />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)}
+                      className="btn-ghost btn-icon" style={{ position: 'absolute', right: '0.5rem' }}>
+                      {showPassword ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+                </div>
+                <button className={`btn-primary btn-lg${loading ? ' btn-loading' : ''} w-full`} type="submit" disabled={loading}>
+                  {loading ? 'Logging in...' : 'Sign In'}
+                </button>
+              </form>
 
-            <form onSubmit={handleSubmit}>
-              <div className="field-glass mb-md">
-                <input required value={loginInput} onChange={e => setLoginInput(e.target.value)} placeholder="Enter your email" />
-              </div>
-              <div className="field-glass mb-lg">
-                <div className="flex items-center gap-xs" style={{ position: 'relative' }}>
-                  <input required type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="Password" className="flex-1" style={{ paddingRight: '2.5rem' }} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="btn-ghost btn-icon" style={{ position: 'absolute', right: '0.5rem' }}>
-                    {showPassword ? '🙈' : '👁️'}
-                  </button>
+              <div className="text-muted text-sm text-center mt-lg">or</div>
+
+              <div className="auth-footer">
+                <div className="flex flex-col items-center gap-sm">
+                  <span className="text-muted text-sm">
+                    New user? <Link to="/fb/register" className="font-semibold">Create Account</Link>
+                  </span>
+                  <span className="text-muted text-sm">
+                    Admin? <Link to="/fb-admin" className="font-semibold">Admin Login</Link>
+                  </span>
                 </div>
               </div>
-              <button className={`btn-primary btn-lg${loading ? ' btn-loading' : ''} w-full`} type="submit" disabled={loading}>
-                {loading ? 'Logging in...' : 'Sign In'}
-              </button>
-            </form>
-
-            <div className="text-muted text-sm text-center mt-lg">or</div>
-
-            <div className="flex flex-col items-center gap-sm mt-md">
-              <span className="text-muted text-sm">
-                New user? <Link to="/fb/register" className="font-semibold">Create Account</Link>
-              </span>
-              <span className="text-muted text-sm">
-                Admin? <Link to="/fb-admin" className="font-semibold">Admin Login</Link>
-              </span>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

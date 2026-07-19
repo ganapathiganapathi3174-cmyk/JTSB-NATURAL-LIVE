@@ -234,9 +234,11 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
   if (step === 'success') {
     return (
       <div className="flex flex-col items-center py-2 animate-fade-in-up">
-        <div className="flex-center" style={{ width: 56, height: 56, borderRadius: 'var(--radius-full)', background: 'var(--success)', color: '#fff', fontSize: '1.5rem', margin: '0 auto 1rem' }}>&#10003;</div>
-        <h3 style={{ margin: 0 }}>Payment Successful!</h3>
-        <p className="text-muted mt-sm">Your payment has been confirmed.</p>
+        <div className="glass-strong" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', textAlign: 'center', width: '100%' }}>
+          <div className="flex-center" style={{ width: 56, height: 56, borderRadius: 'var(--radius-full)', background: 'var(--success)', color: '#fff', fontSize: '1.5rem', margin: '0 auto 1rem' }}>&#10003;</div>
+          <h3 className="text-gradient" style={{ margin: 0 }}>Payment Successful!</h3>
+          <p className="text-muted mt-sm">Your payment has been confirmed.</p>
+        </div>
       </div>
     );
   }
@@ -247,6 +249,7 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
 
     return (
       <div className="flex flex-col items-center py-2 animate-fade-in-up">
+        <div className="glass-strong" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', textAlign: 'center', width: '100%' }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%',
           background: statusColor, color: '#fff',
@@ -256,7 +259,7 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
         }}>
           {paymentStatus === 'approved' ? '\u2713' : paymentStatus === 'expired' || paymentStatus === 'failed' ? '\u2715' : '\u23F3'}
         </div>
-        <h3 style={{ margin: 0 }}>
+        <h3 className="text-gradient" style={{ margin: 0 }}>
           {paymentStatus === 'pending' ? 'Waiting for Payment Verification' :
            paymentStatus === 'approved' ? 'Payment Approved' :
            paymentStatus === 'expired' ? 'Payment Expired' :
@@ -276,6 +279,7 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
             {paymentStatus === 'expired' || paymentStatus === 'failed' ? 'Try Different Method' : 'Cancel'}
           </button>
         </div>
+        </div>
       </div>
     );
   }
@@ -286,9 +290,9 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
         <div className="alert alert-error">{error}</div>
       )}
 
-      <div className="card card-body mb-md text-center">
+      <div className="glass card card-body mb-md text-center">
         <p className="text-sm text-muted mb-xs">Pay via Mobile Number</p>
-        <div className="text-xl font-bold" style={{ color: 'var(--violet-200)' }}>{MOBILE_NUMBER}</div>
+        <div className="text-xl font-bold text-gradient">{MOBILE_NUMBER}</div>
         <p className="text-xs text-tertiary mt-xs">Send to this number via any UPI app</p>
         <div className="flex justify-center gap-sm mt-sm">
           <button
@@ -369,9 +373,9 @@ export default function MobilePaymentOption({ type, amount, pendingRegId, userId
           </div>
         )}
 
-        <div className="card-dim flex items-center gap-sm">
+        <div className="glass card-dim flex items-center gap-sm" style={{ borderRadius: 'var(--radius)' }}>
           <span className="text-sm text-muted">UPI ID:</span>
-          <span className="text-sm font-mono" style={{ color: 'var(--violet-200)', flex: 1 }}>{UPI_ID}</span>
+          <span className="text-sm font-mono text-gradient" style={{ flex: 1 }}>{UPI_ID}</span>
           <button
             type="button"
             className="btn btn-ghost btn-sm"

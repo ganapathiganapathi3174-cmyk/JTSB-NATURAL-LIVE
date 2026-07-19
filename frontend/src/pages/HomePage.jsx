@@ -13,7 +13,7 @@ export default function HomePage() {
   }, [navigate]);
 
   return (
-    <div className="flex flex-center" style={{ minHeight: '100vh' }}>
+    <div className="auth-page animate-fade-in-up">
       <div className="loading-spinner loading-spinner-lg" />
     </div>
   );

@@ -17,7 +17,7 @@ export default function QrCodeDisplay({ value, size = 200, bgColor = '#ffffff', 
   if (!value) return null;
 
   return (
-    <div className="premium-qr">
+    <div className="glass premium-qr" style={{ padding: '0.75rem', borderRadius: 'var(--radius-lg)', display: 'inline-block' }}>
       <canvas ref={canvasRef} />
     </div>
   );

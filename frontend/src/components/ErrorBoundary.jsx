@@ -17,22 +17,24 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="error-boundary">
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>&#9888;</div>
-          <h2>Something went wrong</h2>
-          <p>Please try refreshing the page.</p>
-          {process.env.NODE_ENV !== 'production' && this.state.error && (
-            <pre>
-              {this.state.error.message}
-              {this.state.error.stack}
-            </pre>
-          )}
-          <button
-            onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
-            className="btn btn-primary btn-lg"
-          >
-            Refresh Page
-          </button>
+        <div className="error-boundary animate-fade-in-up">
+          <div className="glass-strong" style={{ maxWidth: 480, margin: '2rem auto', padding: '2.5rem', borderRadius: 'var(--radius-lg)', textAlign: 'center' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>&#9888;</div>
+            <h2 className="text-gradient text-lg font-bold mb-sm">Something went wrong</h2>
+            <p className="text-muted mb-lg">Please try refreshing the page.</p>
+            {process.env.NODE_ENV !== 'production' && this.state.error && (
+              <pre className="glass" style={{ padding: '1rem', borderRadius: 'var(--radius)', marginBottom: '1rem', textAlign: 'left', fontSize: '0.75rem', overflow: 'auto', maxHeight: 200 }}>
+                {this.state.error.message}
+                {this.state.error.stack}
+              </pre>
+            )}
+            <button
+              onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+              className="btn btn-primary btn-lg"
+            >
+              Refresh Page
+            </button>
+          </div>
         </div>
       );
     }

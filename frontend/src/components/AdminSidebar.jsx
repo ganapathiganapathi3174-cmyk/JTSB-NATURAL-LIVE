@@ -134,7 +134,7 @@ export default function AdminSidebar({ pendingCounts = {}, userName }) {
       </button>
       <div className={`sidebar-overlay${open ? ' open' : ''}`} onClick={() => setOpen(false)} />
       <aside className={`sidebar${open ? ' open' : ''}`}>
-        <div className="sidebar-header">
+        <div className="sidebar-header glass-strong" style={{ margin: '0.5rem', borderRadius: 'var(--radius-lg)' }}>
           <div className="sidebar-brand">
             <div className="sidebar-brand-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -143,11 +143,11 @@ export default function AdminSidebar({ pendingCounts = {}, userName }) {
                 <path d="M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className="sidebar-brand-text">Starlight Admin</span>
+            <span className="sidebar-brand-text text-gradient">Starlight Admin</span>
           </div>
         </div>
 
-        <div className="sidebar-user">
+        <div className="sidebar-user glass" style={{ margin: '0 0.5rem 0.5rem', borderRadius: 'var(--radius-lg)' }}>
           <div className="sidebar-user-avatar">{(userName || 'A')[0].toUpperCase()}</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">{userName || 'Admin'}</div>

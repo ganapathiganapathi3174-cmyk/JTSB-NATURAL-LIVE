@@ -47,7 +47,7 @@ export function ToastProvider({ children }) {
       {children}
       <div className="toast-container">
         {toasts.map(t => (
-          <div key={t.id} className={`toast toast-${t.type}`} onClick={() => removeToast(t.id)}>
+          <div key={t.id} className={`glass-strong toast toast-${t.type} animate-fade-in-up`} onClick={() => removeToast(t.id)}>
             <span className="toast-icon">{iconMap[t.type] || ''}</span>
             <span className="toast-msg">{t.message}</span>
           </div>

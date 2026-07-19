@@ -60,10 +60,10 @@ export default function SponsorRequestsPage() {
   }
 
   return (
-    <div className="page-wrap">
-      <div className="card" style={{ maxWidth: '900px', margin: '0 auto', padding: '1.5rem' }}>
+    <div className="page-wrap animate-fade-in-up">
+      <div className="glass-strong" style={{ maxWidth: '900px', margin: '0 auto', padding: '1.5rem', borderRadius: 'var(--radius-lg)' }}>
         <div className="flex items-center justify-between mb-lg" style={{ flexWrap: 'wrap', gap: '1rem' }}>
-          <h1 className="text-xl font-bold m-0">Sponsor Transfer Requests</h1>
+          <h1 className="text-xl font-bold m-0 text-gradient">Sponsor Transfer Requests</h1>
           <button onClick={() => navigate('/fb/dashboard')} className="btn btn-ghost btn-sm">Back to Dashboard</button>
         </div>
 
@@ -75,17 +75,17 @@ export default function SponsorRequestsPage() {
             <div className="loading-spinner loading-spinner-lg" />
           </div>
         ) : requests.length === 0 ? (
-          <div className="card text-center" style={{ padding: '2.5rem' }}>
+          <div className="glass card text-center" style={{ padding: '2.5rem' }}>
             <p className="text-lg text-muted">No pending transfer requests</p>
             <p className="text-sm text-muted mt-sm">Users will appear here when they request you as their sponsor</p>
           </div>
         ) : (
           <div className="flex flex-col gap-md">
             {requests.map(req => (
-              <div key={req.id} className="card">
-                <div className="flex items-start justify-between mb-md" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div>
-                    <h3 className="text-lg font-semibold m-0">{req.userName || 'User'}</h3>
+                <div key={req.id} className="glass card">
+                  <div className="flex items-start justify-between mb-md" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                      <h3 className="text-lg font-semibold m-0 text-gradient">{req.userName || 'User'}</h3>
                     <p className="text-sm text-muted m-0 mt-xs">{req.userEmail}</p>
                   </div>
                   <span className="badge badge-warning">Plan: ₹{req.userPlan}</span>

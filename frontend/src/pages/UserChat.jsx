@@ -156,14 +156,14 @@ export default function UserChat() {
   }
 
   return (
-    <div className="page-wrap" style={{ display: 'flex', flexDirection: 'column', height: '100vh', maxWidth: '720px', margin: '0 auto' }}>
+    <div className="page-wrap animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', height: '100vh', maxWidth: '720px', margin: '0 auto' }}>
       {/* Chat Header */}
-      <div className="flex items-center gap mb-md" style={{ paddingTop: '1rem', flexShrink: 0 }}>
+      <div className="glass-strong flex items-center gap mb-md" style={{ padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)', flexShrink: 0 }}>
         <button className="btn-ghost btn-sm" onClick={() => navigate('/fb/dashboard')}>
           {'\u2190'} Dashboard
         </button>
         <div className="flex flex-col items-center" style={{ flex: 1 }}>
-          <div className="font-semibold text-sm">Admin Chat</div>
+          <div className="font-semibold text-sm text-gradient">Admin Chat</div>
           <div className="text-xs text-muted">{convo ? getLastSeen() : ''}</div>
         </div>
       </div>
@@ -188,7 +188,7 @@ export default function UserChat() {
       </div>
 
       {/* Input Area */}
-      <form onSubmit={handleSend} className="flex items-center gap-sm" style={{ padding: '0.75rem 0.5rem', flexShrink: 0, borderTop: '1px solid var(--border)' }}>
+      <form onSubmit={handleSend} className="glass-strong flex items-center gap-sm" style={{ padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)', flexShrink: 0 }}>
         <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: 'none' }} onChange={handleFileSelect} />
         <button type="button" className="btn-ghost btn-sm" title="Attach image" onClick={() => fileInputRef.current?.click()}
           style={{ color: attachPreview ? 'var(--accent)' : '' }}>

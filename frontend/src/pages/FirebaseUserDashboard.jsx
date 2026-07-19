@@ -368,7 +368,7 @@ export default function FirebaseUserDashboard() {
   return (
     <div className="page-wrap has-bottom-nav">
       {/* Top Bar */}
-      <div className="flex flex-between items-center mb-md" style={{ padding: '0.75rem 0' }}>
+      <div className="glass-strong flex flex-between items-center mb-md" style={{ padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)' }}>
         <div className="text-lg font-bold"><span className="text-gradient">StarlightAscent</span></div>
         <div className="flex items-center gap-md">
           <div style={{ position: 'relative' }}>
@@ -379,10 +379,10 @@ export default function FirebaseUserDashboard() {
               </svg>
               {unreadCount > 0 && <span className="badge badge-danger badge-xs" style={{ position: 'absolute', top: '-4px', right: '-4px' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
             </button>
-            {showBellDropdown && (
-              <>
-                <div className="modal-overlay" style={{ background: 'transparent' }} onClick={() => setShowBellDropdown(false)} />
-                <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, width: '340px', maxHeight: '420px', overflowY: 'auto', marginTop: '4px', padding: 0 }}>
+              {showBellDropdown && (
+                <>
+                  <div className="modal-overlay" style={{ background: 'transparent' }} onClick={() => setShowBellDropdown(false)} />
+                  <div className="glass-strong card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, width: '340px', maxHeight: '420px', overflowY: 'auto', marginTop: '4px', padding: 0 }}>
                   <div className="flex-between items-center" style={{ padding: '0.7rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
                     <span className="font-semibold text-sm">Notifications</span>
                     <Link to="/fb/messages" className="text-sm font-semibold" onClick={() => setShowBellDropdown(false)}>View all</Link>
@@ -415,7 +415,7 @@ export default function FirebaseUserDashboard() {
       )}
 
       {/* Profile Card */}
-      <div className="card mb-lg animate-fade-in-up stagger-1">
+      <div className="glass card mb-lg animate-fade-in-up stagger-1">
         <div className="flex flex-col gap-md">
           <div className="flex items-center gap" style={{ flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', width: '64px', height: '64px', flexShrink: 0 }}>
@@ -440,7 +440,7 @@ export default function FirebaseUserDashboard() {
               {uploadingProfilePic && <div className="skeleton" style={{ position: 'absolute', inset: 0, borderRadius: '50%' }} />}
             </div>
             <div style={{ flex: 1 }}>
-              <h2 className="text-lg font-bold mb-xs" style={{ letterSpacing: '-0.02em' }}>{user?.name || 'User'}</h2>
+              <h2 className="text-lg font-bold mb-xs text-gradient" style={{ letterSpacing: '-0.02em' }}>{user?.name || 'User'}</h2>
               <p className="text-muted text-sm">{user?.email || ''}</p>
               <div className="flex items-center gap-sm mt-sm" style={{ flexWrap: 'wrap' }}>
                 <span className={`badge ${user?.status === 'approved' ? 'badge-success' : user?.status === 'rejected' ? 'badge-danger' : 'badge-info'}`}>
@@ -481,28 +481,28 @@ export default function FirebaseUserDashboard() {
 
       {/* Quick Stats */}
       <div className="stats-grid mb-lg animate-fade-in-up stagger-2">
-        <div className="stat-card">
+        <div className="glass stat-card">
           <div className="stat-icon" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
           <div className="stat-value">{approvedReferralCount}</div>
           <div className="stat-label">Completed Referrals</div>
         </div>
-        <div className="stat-card">
+        <div className="glass stat-card">
           <div className="stat-icon" style={{ background: 'var(--success-light)', color: 'var(--success)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
           <div className="stat-value">₹{totalTopupIncome.toFixed(2)}</div>
           <div className="stat-label">Total Rewards</div>
         </div>
-        <div className="stat-card">
+        <div className="glass stat-card">
           <div className="stat-icon" style={{ background: 'var(--warning-light)', color: 'var(--warning)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 9v6"/><path d="M9 12h6"/></svg>
           </div>
           <div className="stat-value">₹{walletBalance.toFixed(2)}</div>
           <div className="stat-label">Wallet Balance</div>
         </div>
-        <div className="stat-card">
+        <div className="glass stat-card">
           <div className="stat-icon" style={{ background: 'var(--purple-glow)', color: 'var(--accent)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
@@ -514,8 +514,8 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {/* Contact Details */}
-      <div className="card mb-lg animate-fade-in-up stagger-3">
-        <h3 className="font-semibold mb-sm">Contact Details</h3>
+      <div className="glass card mb-lg animate-fade-in-up stagger-3">
+        <h3 className="font-semibold mb-sm text-gradient">Contact Details</h3>
         <div className="flex flex-col gap-sm">
           <div className="flex items-center gap-sm">
             <span className="text-muted text-sm" style={{ minWidth: '60px' }}>Email</span>
@@ -542,7 +542,7 @@ export default function FirebaseUserDashboard() {
 
       {/* Referral Section */}
       {user?.referral_code && (
-        <div className="card mb-lg animate-fade-in-up stagger-4">
+        <div className="glass card mb-lg animate-fade-in-up stagger-4">
           {isActive ? (
             <>
               <h3 className="text-gradient font-semibold mb-xs">Refer & Earn</h3>
@@ -600,8 +600,8 @@ export default function FirebaseUserDashboard() {
 
       {/* Referral Progress */}
       {!isQualified && !isActive && !user?.is_first_payment_done && (
-        <div className="card mb-lg animate-fade-in-up stagger-5">
-          <h3 className="font-semibold mb-sm">Complete Referrals to Unlock Payment</h3>
+        <div className="glass card mb-lg animate-fade-in-up stagger-5">
+          <h3 className="font-semibold mb-sm text-gradient">Complete Referrals to Unlock Payment</h3>
           <p className="text-muted text-sm mb-md">Sponsor benefits unlock after 2 completed referrals.</p>
           {pendingReferralCount > 0 && (
             <div className="card-dim mb-sm">
@@ -618,27 +618,27 @@ export default function FirebaseUserDashboard() {
       )}
 
       {/* Topup Section */}
-      <div className="card mb-lg animate-fade-in-up stagger-5">
-        <h3 className="font-semibold mb-xs flex items-center gap-sm">
+      <div className="glass card mb-lg animate-fade-in-up stagger-5">
+        <h3 className="font-semibold mb-xs flex items-center gap-sm text-gradient">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           Topup
         </h3>
         <p className="text-muted text-sm mb-md">Add funds to your wallet via UPI. Payment is verified automatically.</p>
 
         <div className="stats-grid mb-md" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-          <div className="stat-card text-center">
+          <div className="glass stat-card text-center">
             <div className="text-lg font-bold" style={{ color: 'var(--success)' }}>{approvedTopups.length}</div>
             <div className="text-sm text-muted">Approved</div>
           </div>
-          <div className="stat-card text-center">
+          <div className="glass stat-card text-center">
             <div className="text-lg font-bold" style={{ color: 'var(--warning)' }}>{pendingTopups.length}</div>
             <div className="text-sm text-muted">Pending</div>
           </div>
-          <div className="stat-card text-center">
+          <div className="glass stat-card text-center">
             <div className="text-lg font-bold" style={{ color: 'var(--danger)' }}>{rejectedTopups.length}</div>
             <div className="text-sm text-muted">Rejected</div>
           </div>
-          <div className="stat-card text-center">
+          <div className="glass stat-card text-center">
             <div className="text-lg font-bold text-gradient">₹{totalTopupIncome.toFixed(2)}</div>
             <div className="text-sm text-muted">Total Income</div>
           </div>
@@ -751,10 +751,10 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {/* Password */}
-      <div className="card mb-lg animate-fade-in-up stagger-5">
+      <div className="glass card mb-lg animate-fade-in-up stagger-5">
         <div className="flex-between items-center">
           <div>
-            <span className="font-semibold text-sm">Password</span>
+            <span className="font-semibold text-sm text-gradient">Password</span>
             <span className={`chip ml-sm ${user?.password ? 'badge-success' : 'badge-danger'}`}>
               {user?.password ? 'Set' : 'Not Set'}
             </span>
@@ -783,9 +783,9 @@ export default function FirebaseUserDashboard() {
 
       {/* Referrals List */}
       {(user?.payment_status === 'approved' || user?.payment_status === 'success') && (
-        <div className="card mb-lg animate-fade-in-up stagger-5">
+        <div className="glass card mb-lg animate-fade-in-up stagger-5">
           <div className="flex-between items-center mb-md">
-            <h3 className="font-semibold text-sm">My Referrals ({approvedReferralCount})</h3>
+            <h3 className="font-semibold text-sm text-gradient">My Referrals ({approvedReferralCount})</h3>
             <span className="badge badge-info">Views: {viewCount}</span>
           </div>
 
@@ -816,8 +816,8 @@ export default function FirebaseUserDashboard() {
       )}
 
       {/* Activity */}
-      <div className="card mb-lg animate-fade-in-up stagger-5">
-        <h3 className="font-semibold text-sm mb-sm flex items-center gap-sm">
+      <div className="glass card mb-lg animate-fade-in-up stagger-5">
+        <h3 className="font-semibold text-sm mb-sm flex items-center gap-sm text-gradient">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Recent Activity
         </h3>
@@ -841,8 +841,8 @@ export default function FirebaseUserDashboard() {
       </div>
 
       {/* Timeline */}
-      <div className="card mb-lg animate-fade-in-up stagger-5">
-        <h3 className="font-semibold text-sm mb-sm flex items-center gap-sm">
+      <div className="glass card mb-lg animate-fade-in-up stagger-5">
+        <h3 className="font-semibold text-sm mb-sm flex items-center gap-sm text-gradient">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Activity Timeline
         </h3>
