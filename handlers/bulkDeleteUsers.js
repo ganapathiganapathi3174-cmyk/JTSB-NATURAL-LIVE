@@ -1,4 +1,4 @@
-const { COL_DELETION_AUDIT_LOGS, COL_USERS, COL_UPI_PAYMENTS, COL_TOPUPS, COL_VERIFICATION_LOGS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_TOPUP_INCOME, COL_REFERRALS, COL_NOTIFICATIONS, COL_CHAT_MESSAGES, COL_CHAT_CONVOS, COL_UNIQUES, COL_PENDING_REGS, COL_SPONSOR_DATA, COL_PROCESSED_PAYMENTS } = require('../api/_shared.js');
+const { COL_DELETION_AUDIT_LOGS, COL_USERS, COL_UPI_PAYMENTS, COL_TOPUPS, COL_VERIFICATION_LOGS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_TOPUP_INCOME, COL_REFERRALS, COL_NOTIFICATIONS, COL_CHAT_MESSAGES, COL_CHAT_CONVOS, COL_UNIQUES, COL_PENDING_REGS, COL_SPONSOR_DATA, COL_PROCESSED_PAYMENTS, COL_SESSIONS, COL_AUDIT_LOGS, COL_SPONSOR_CLAIMS, COL_TOPUP_AUDIT_LOG, COL_SPONSOR_TRANSFERS } = require('../api/_shared.js');
 const { deleteDoc, getDoc, runQuery, addDoc, updateDoc } = require('../api/_supabase.js');
 const r2 = require('../api/_r2.js');
 
@@ -56,6 +56,10 @@ async function deleteUserCascade(userId, reason, adminInfo) {
   if (topupIncomeFrom.length) result.deletedRecords.push({ table: COL_TOPUP_INCOME + '(from_user_id)', ids: topupIncomeFrom });
   const notifications = await deleteMatching(COL_NOTIFICATIONS, 'user_id', userId);
   if (notifications.length) result.deletedRecords.push({ table: COL_NOTIFICATIONS, ids: notifications });
+  const notificationsByReceiver = await deleteMatching(COL_NOTIFICATIONS, 'receiverId', userId);
+  if (notificationsByReceiver.length) result.deletedRecords.push({ table: COL_NOTIFICATIONS + '(receiverId)', ids: notificationsByReceiver });
+  const notificationsBySender = await deleteMatching(COL_NOTIFICATIONS, 'senderId', userId);
+  if (notificationsBySender.length) result.deletedRecords.push({ table: COL_NOTIFICATIONS + '(senderId)', ids: notificationsBySender });
   const walletTx = await deleteMatching(COL_WALLET_TX, 'user_id', userId);
   if (walletTx.length) result.deletedRecords.push({ table: COL_WALLET_TX, ids: walletTx });
   const upiPayments = await deleteMatching(COL_UPI_PAYMENTS, 'user_id', userId);
@@ -68,6 +72,28 @@ async function deleteUserCascade(userId, reason, adminInfo) {
   if (sponsorData.length) result.deletedRecords.push({ table: COL_SPONSOR_DATA, ids: sponsorData });
   const pendingRegs = await deleteMatching(COL_PENDING_REGS, 'user_id', userId);
   if (pendingRegs.length) result.deletedRecords.push({ table: COL_PENDING_REGS, ids: pendingRegs });
+  const paymentSessions = await deleteMatching(COL_SESSIONS, 'user_id', userId);
+  if (paymentSessions.length) result.deletedRecords.push({ table: COL_SESSIONS, ids: paymentSessions });
+  const auditLogs = await deleteMatching(COL_AUDIT_LOGS, 'target_id', userId);
+  if (auditLogs.length) result.deletedRecords.push({ table: COL_AUDIT_LOGS, ids: auditLogs });
+  const deletionAuditLogs = await deleteMatching(COL_DELETION_AUDIT_LOGS, 'deleted_record_id', userId);
+  if (deletionAuditLogs.length) result.deletedRecords.push({ table: COL_DELETION_AUDIT_LOGS + '(deleted_record_id)', ids: deletionAuditLogs });
+  const sponsorClaims = await deleteMatching(COL_SPONSOR_CLAIMS, 'sponsor_id', userId);
+  if (sponsorClaims.length) result.deletedRecords.push({ table: COL_SPONSOR_CLAIMS, ids: sponsorClaims });
+  const sponsorTransfers = await deleteMatching(COL_SPONSOR_TRANSFERS, 'user_id', userId);
+  if (sponsorTransfers.length) result.deletedRecords.push({ table: COL_SPONSOR_TRANSFERS, ids: sponsorTransfers });
+  if (topups.length) {
+    try {
+      const topupAuditIds = [];
+      for (const tid of topups) {
+        const entries = await runQuery(COL_TOPUP_AUDIT_LOG, [{ field: 'topupId', op: 'EQUAL', value: tid }], { limit: 100 });
+        for (const e of entries) {
+          try { await deleteDoc(COL_TOPUP_AUDIT_LOG, e.id); topupAuditIds.push(e.id); } catch {}
+        }
+      }
+      if (topupAuditIds.length) result.deletedRecords.push({ table: COL_TOPUP_AUDIT_LOG, ids: topupAuditIds });
+    } catch (e) { console.error('[bulkDeleteUsers] Cascade delete topup_audit_log error:', e.message); }
+  }
   try { await deleteDoc(COL_WALLET_BALANCES, userId); result.deletedRecords.push({ table: COL_WALLET_BALANCES, ids: [userId] }); } catch {}
 
   const convoId = 'admin_' + userId;

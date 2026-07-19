@@ -385,7 +385,7 @@ export const SupabaseUser = {
       const { data } = await supabase.from(table).select('id').eq(field, val);
       return (data || []).map(r => r.id);
     };
-    const [refIds, topupIds, incIds1, incIds2, notifIds1, notifIds2, walTxIds, upiIds, sponIds, procIds, verLogIds, sessIds, auditIds, delAuditIds, claimIds, transferIds] = await Promise.all([
+    const [refIds, topupIds, incIds1, incIds2, notifIds1, notifIds2, walTxIds, upiIds, sponIds, procIds, verLogIds, sessIds, auditIds, delAuditIds, claimIds, transferIds, pendingRegIds] = await Promise.all([
       getRefs('referrals', 'user_id', id),
       getRefs('topups', 'userId', id),
       getRefs('topup_referral_income', 'userId', id),
@@ -402,6 +402,7 @@ export const SupabaseUser = {
       getRefs('deletion_audit_logs', 'deleted_record_id', id),
       getRefs('sponsor_claims', 'sponsor_id', id),
       getRefs('sponsor_transfers', 'user_id', id),
+      getRefs('pending_registrations', 'user_id', id),
     ]);
     const batchDel = async (table, ids) => { if (ids.length > 0) await supabase.from(table).delete().in('id', ids); };
     await Promise.all([
@@ -419,6 +420,7 @@ export const SupabaseUser = {
       batchDel('deletion_audit_logs', delAuditIds),
       batchDel('sponsor_claims', claimIds),
       batchDel('sponsor_transfers', transferIds),
+      batchDel('pending_registrations', pendingRegIds),
     ]);
     if (topupIds.length > 0) {
       await supabase.from('topup_audit_log').delete().in('topupId', topupIds);
