@@ -229,8 +229,23 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
         };
       }
       await updateDoc(COL_ORDERS, orderId, {
-        status: 'queued', verification_status: 'pending', verification_retries: newRetries, updated_at: now(),
+        status: 'queued', verification_status: 'pending', verification_retries: newRetries,
+        screenshot_url: screenshotUrl, utr: extra?.userEnteredUtr || null,
+        updated_at: now(),
       }).catch(() => {});
+      // Save screenshot + UTR on upi_payments so async retry can process it
+      try {
+        const existingPayments = await runQuery(COL_UPI_PAYMENTS, [
+          { field: extra?.pendingRegId ? 'pending_reg_id' : 'order_id', op: 'EQUAL', value: extra?.pendingRegId || orderId },
+        ], { limit: 5 });
+        for (const p of existingPayments) {
+          await updateDoc(COL_UPI_PAYMENTS, p.id, {
+            screenshot_url: screenshotUrl,
+            utr: extra?.userEnteredUtr || p.utr,
+            verification_locked: false,
+          }).catch(() => {});
+        }
+      } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
       T.mark('timeoutFallback');
       // Auto-trigger background retry (fire-and-forget)
       process.nextTick(() => {
