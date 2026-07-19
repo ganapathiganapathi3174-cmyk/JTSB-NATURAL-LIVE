@@ -92,20 +92,23 @@ module.exports = async (req, res) => {
     PH('Order Validation');
 
     const uploadedUrl = await uploadBase64Image(screenshot);
-    PH('Image Uploaded', { urlLength: (uploadedUrl || '').length, isBase64: uploadedUrl?.startsWith('data:') });
+    const isUrlUploaded = uploadedUrl && !uploadedUrl.startsWith('data:');
+    PH('Image Uploaded', { urlLength: (uploadedUrl || '').length, isBase64: !isUrlUploaded, uploaded: isUrlUploaded });
 
-    PH('Calling Verification Pipeline...');
+    PH('Step 1: Upload received — calling verification pipeline...');
     const result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null, userEnteredUpi: upiId });
-    PH('Verification Pipeline Complete', { status: result.status, score: result.verificationScore });
-
     const totalMs = Date.now() - reqStart;
-    PH('Total Duration', totalMs + 'ms');
+    PH('Step 8: Decision generated — status=' + result.status + ' score=' + (result.verificationScore || 0) + ' duration=' + totalMs + 'ms');
+
     sendJSON(200, {
       ...result,
       message: result.status === 'verified'
         ? 'Payment verified successfully'
-        : 'Payment verification failed',
+        : result.status === 'rejected'
+          ? 'Payment verification failed'
+          : 'Payment verification queued',
     });
+    PH('Step 9: Database updated — frontend notified');
   }
 
   try {
@@ -116,7 +119,30 @@ module.exports = async (req, res) => {
   } catch (err) {
     const totalMs = Date.now() - reqStart;
     PH('ERROR', err.message);
-    console.error('[submitPaymentProof ERROR STACK]', err.stack || err.message);
+    if (err.stack) console.error('[submitPaymentProof ERROR STACK]', err.stack);
+    // Mark the payment as failed so it doesn't stay stuck forever
+    const { orderId } = req.body || {};
+    if (orderId) {
+      try {
+        const { updateDoc, runQuery } = require('../api/_supabase.js');
+        const { COL_ORDERS, COL_UPI_PAYMENTS } = require('../api/_shared.js');
+        await updateDoc(COL_ORDERS, orderId, {
+          status: 'failed', verification_status: 'manual_review',
+          rejection_reasons: ['Verification timed out after ' + (PIPELINE_TIMEOUT_MS / 1000) + 's — awaiting admin review'],
+          updated_at: new Date().toISOString(),
+        }).catch(() => {});
+        // Mark upi_payments as manual_review too
+        const ups = await runQuery(COL_UPI_PAYMENTS, [
+          { field: 'id', op: 'EQUAL', value: orderId },
+        ], { limit: 3 }).catch(() => []);
+        for (const p of ups) {
+          await updateDoc(COL_UPI_PAYMENTS, p.id, {
+            status: 'manual_review', verification_locked: false,
+            rejection_reasons: ['Verification timed out, awaiting admin review'],
+          }).catch(() => {});
+        }
+      } catch (markErr) { console.error('[submitPaymentProof] Failed to mark payment as failed:', markErr.message); }
+    }
     sendJSON(504, { error: 'Verification timed out. Please try again or contact support.' });
   }
 };

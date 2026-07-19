@@ -445,8 +445,42 @@ function ManualReviewResult({ result, type, onContinue }) {
   );
 }
 
-function PendingResult({ result, onStartOver }) {
+function PendingResult({ result, orderId, onStatusUpdate, onStartOver }) {
   const displayStatus = getStatusDisplay('pending');
+  const [elapsed, setElapsed] = useState(0);
+  const pollRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  // Poll for status updates every 3 seconds, max 30 seconds
+  useEffect(() => {
+    const startTime = Date.now();
+    const INTERVAL = 3000;
+    const MAX_WAIT = 30000;
+
+    async function pollStatus() {
+      if (!orderId) return;
+      try {
+        const resp = await fetch(`${FUNCTIONS_BASE}/getPaymentOrderStatus?orderId=${encodeURIComponent(orderId)}`);
+        const data = await resp.json();
+        if (!mountedRef.current) return;
+        const finalStatus = data.status;
+        if (finalStatus === 'verified' || finalStatus === 'rejected' || finalStatus === 'failed') {
+          if (onStatusUpdate) {
+            onStatusUpdate({ status: finalStatus, verificationScore: data.verificationScore, verificationStatus: data.verificationStatus });
+          }
+          return;
+        }
+      } catch (_) {}
+      const soFar = Date.now() - startTime;
+      setElapsed(soFar);
+      if (soFar < MAX_WAIT && mountedRef.current) {
+        pollRef.current = setTimeout(pollStatus, INTERVAL);
+      }
+    }
+
+    pollRef.current = setTimeout(pollStatus, INTERVAL);
+    return () => { mountedRef.current = false; if (pollRef.current) clearTimeout(pollRef.current); };
+  }, [orderId, onStatusUpdate]);
 
   return (
     <div className="animate-fade-in-up" style={{ maxWidth: 700, margin: '0 auto', width: '100%' }}>
@@ -464,10 +498,10 @@ function PendingResult({ result, onStartOver }) {
           </div>
 
           <h2 style={{ margin: 0, fontSize: '1.375rem', color: 'var(--cyan-200)' }}>
-            Verification Queued
+            Verification In Progress
           </h2>
           <p className="text-muted mt-sm" style={{ lineHeight: 1.6, maxWidth: 400, margin: '0.5rem auto 0' }}>
-            Your payment has been queued for processing. This usually completes within a few minutes. You do not need to take any further action.
+            Your payment is being verified. This usually completes within a few seconds.
           </p>
 
           <div className="flex-center gap-sm mt-md" style={{ flexWrap: 'wrap' }}>
@@ -478,7 +512,7 @@ function PendingResult({ result, onStartOver }) {
               color: displayStatus.color, fontSize: '0.75rem', fontWeight: 700,
               letterSpacing: '0.05em',
             }}>
-              {displayStatus.label}
+              {displayStatus.label} {elapsed > 0 ? `(${Math.round(elapsed / 1000)}s)` : ''}
             </span>
           </div>
 
@@ -768,6 +802,13 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
     setStep('verify');
   }
 
+  function handleStatusUpdate(updatedStatus) {
+    setVerifyResult(prev => {
+      if (!prev) return prev;
+      return { ...prev, ...updatedStatus };
+    });
+  }
+
   function handleStartOver() {
     if (timerRef.current) clearInterval(timerRef.current);
     setStep('select');
@@ -819,6 +860,8 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
     return (
       <PendingResult
         result={verifyResult}
+        orderId={orderId}
+        onStatusUpdate={handleStatusUpdate}
         onStartOver={handleStartOver}
       />
     );

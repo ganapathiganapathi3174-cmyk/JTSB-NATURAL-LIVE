@@ -228,25 +228,122 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     }
   } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
 
-  // Return immediately — don't make user wait for OCR. Process in background.
-  await updateDoc(COL_ORDERS, orderId, {
-    status: 'queued', verification_status: 'pending',
-    screenshot_url: screenshotUrl, utr: extra?.userEnteredUtr || null,
-    updated_at: now(),
-  }).catch(() => {});
-  T.mark('queueImmediate');
+  // ── RUN VERIFICATION SYNCHRONOUSLY ──
+  // The caller (submitPaymentProof handler) has a 130s timeout.
+  // runBankSmsVerification has a 25s OCR watchdog + 90s total timeout.
+  // We await the result and return the actual status so the frontend
+  // gets APPROVED/REJECTED in the same HTTP response, not stuck on "Queued".
+  T.mark('startingSyncVerification');
+  try {
+    const order = await getDoc(COL_ORDERS, orderId).catch(() => null);
+    if (!order) {
+      log('Order vanished before verification for ' + orderId);
+      verifyingOrders.delete(orderId);
+      return { status: 'failed', reasons: ['Order not found'], verificationStatus: 'failed' };
+    }
 
-  scheduleAsyncVerification(orderId, screenshotUrl, extra);
-  verifyingOrders.delete(orderId);
-  return {
-    orderId, paymentId: orderId,
-    status: 'pending', verificationStatus: 'pending',
-    verificationScore: 0, ocrData: null, reasons: ['Verification queued for async processing'],
-    matchedAmount: false, matchedReceiver: false, matchedUtr: false,
-    matchedDate: false, userUtrMatched: false, userEnteredUtr: extra?.userEnteredUtr || null,
-    userUpiMatched: false, userEnteredUpi: extra?.userEnteredUpi || null,
-    fraudScore: 0, checks: [],
-  };
+    const v = await runBankSmsVerification(
+      order, screenshotUrl,
+      extra?.userId || order.user_id || null,
+      extra?.userEnteredUtr || null,
+      extra?.userEnteredUpi || null
+    );
+    T.mark('verificationComplete');
+
+    const isVerified = v.status === 'verified';
+    const finalStatus = isVerified ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'failed');
+
+    // Update payment_sessions order
+    await updateDoc(COL_ORDERS, orderId, {
+      status: finalStatus, verification_status: v.status,
+      verification_score: v.verificationScore || 0, ocr_result: v.ocrData || null,
+      rejection_reasons: v.reasons || [], verified_at: now(),
+      verification_completed_at: now(), updated_at: now(),
+    }).catch(() => {});
+
+    if (isVerified) {
+      log('Verification approved — executing post-approval for ' + orderId);
+      await executeVerifiedOrder(order, v, extra).catch(e => log('Post-approval exec err: ' + e.message));
+    }
+
+    // Also update upi_payments status so admin panel sees the result
+    try {
+      const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
+      const searchValue = order.pending_reg_id || order.user_id || extra?.userId;
+      if (searchValue) {
+        const ups = await runQuery(COL_UPI_PAYMENTS, [
+          { field: searchField, op: 'EQUAL', value: searchValue },
+        ], { limit: 5 });
+        for (const p of ups) {
+          await updateDoc(COL_UPI_PAYMENTS, p.id, {
+            status: isVerified ? 'verified' : 'rejected',
+            verification_locked: false,
+            ocr_result: v.ocrData || null,
+            final_score: v.verificationScore || 0,
+            fraud_score: v.fraudScore || 0,
+            rejection_reasons: v.reasons || [],
+            verified_at: now(),
+            verification_completed_at: now(),
+          }).catch(() => {});
+        }
+      }
+    } catch (upiErr) { log('Failed to update upi_payments: ' + (upiErr.message || upiErr)); }
+
+    try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type || 'unknown' }); } catch {}
+    T.mark('broadcastSent');
+
+    verifyingOrders.delete(orderId);
+    T.mark('done');
+
+    const result = {
+      orderId, paymentId: orderId,
+      status: finalStatus,
+      verificationStatus: v.status,
+      verificationScore: v.verificationScore || 0,
+      ocrData: v.ocrData || null,
+      reasons: v.reasons || [],
+      matchedAmount: v.matchedAmount || false,
+      matchedReceiver: v.matchedReceiver || false,
+      matchedUtr: v.matchedUtr || false,
+      matchedDate: v.matchedDate || false,
+      matchedStatus: v.matchedStatus || false,
+      userUtrMatched: v.userUtrMatched || false,
+      userEnteredUtr: extra?.userEnteredUtr || null,
+      userUpiMatched: v.userUpiMatched || false,
+      userEnteredUpi: extra?.userEnteredUpi || null,
+      fraudScore: v.fraudScore || 0,
+      fraudFlags: v.fraudFlags || [],
+      checks: v.checks || [],
+      imageQuality: v.imageQuality || null,
+      duplicateUtrDetected: v.duplicateUtrDetected || false,
+      screenshotHash: v.screenshotHash || '',
+      bankSmsDetected: v.bankSmsDetected || false,
+    };
+
+    log('Verification complete for ' + orderId + ': status=' + finalStatus + ' score=' + (v.verificationScore || 0) + ' duration=' + (v.verificationDuration || 0) + 'ms');
+    T.summary();
+    return result;
+  } catch (syncErr) {
+    log('Synchronous verification failed for ' + orderId + ': ' + syncErr.message);
+    log('Stack: ' + syncErr.stack);
+    // Fall back to async processing so the payment doesn't get lost
+    await updateDoc(COL_ORDERS, orderId, {
+      status: 'queued', verification_status: 'pending',
+      rejection_reasons: ['Sync verification failed: ' + syncErr.message + ' — falling back to async'],
+      updated_at: now(),
+    }).catch(() => {});
+    scheduleAsyncVerification(orderId, screenshotUrl, extra);
+    verifyingOrders.delete(orderId);
+    return {
+      orderId, paymentId: orderId,
+      status: 'pending', verificationStatus: 'pending',
+      verificationScore: 0, ocrData: null, reasons: ['Verification queued for background processing'],
+      matchedAmount: false, matchedReceiver: false, matchedUtr: false,
+      matchedDate: false, userUtrMatched: false, userEnteredUtr: extra?.userEnteredUtr || null,
+      userUpiMatched: false, userEnteredUpi: extra?.userEnteredUpi || null,
+      fraudScore: 0, checks: [],
+    };
+  }
 }
 
 function scheduleAsyncVerification(orderId, screenshotUrl, extra) {
@@ -254,7 +351,8 @@ function scheduleAsyncVerification(orderId, screenshotUrl, extra) {
     (async () => {
       try {
         const order = await getDoc(COL_ORDERS, orderId).catch(() => null);
-        if (!order) return;
+        if (!order) { log('scheduleAsyncVerification: order not found for ' + orderId); return; }
+        log('scheduleAsyncVerification: running verification for ' + orderId);
         const v = await Promise.race([
           runBankSmsVerification(order, screenshotUrl, extra?.userId || order.user_id, extra?.userEnteredUtr || null, extra?.userEnteredUpi || null),
           new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 25000 : 120000)),
@@ -270,7 +368,30 @@ function scheduleAsyncVerification(orderId, screenshotUrl, extra) {
         if (isVerified) {
           await executeVerifiedOrder(order, v, extra).catch(e => log('Async exec err: ' + e.message));
         }
+        // Update upi_payments status for all outcomes (not just failures)
+        try {
+          const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
+          const searchValue = order.pending_reg_id || order.user_id || extra?.userId;
+          if (searchValue) {
+            const ups = await runQuery(COL_UPI_PAYMENTS, [
+              { field: searchField, op: 'EQUAL', value: searchValue },
+            ], { limit: 5 });
+            for (const p of ups) {
+              await updateDoc(COL_UPI_PAYMENTS, p.id, {
+                status: finalStatus,
+                verification_locked: false,
+                ocr_result: v.ocrData || null,
+                final_score: v.verificationScore || 0,
+                fraud_score: v.fraudScore || 0,
+                rejection_reasons: v.reasons || [],
+                verified_at: now(),
+                verification_completed_at: now(),
+              }).catch(() => {});
+            }
+          }
+        } catch (upiErr) { log('scheduleAsyncVerification: upi_payments update failed: ' + (upiErr.message || upiErr)); }
         try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch {}
+        log('scheduleAsyncVerification: complete for ' + orderId + ' status=' + finalStatus);
       } catch (e) {
         log('Async verification failed for ' + orderId + ': ' + e.message);
         // Mark as manual_review so admin can handle it
