@@ -5,6 +5,7 @@ const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 const ADMIN_UPI = 'jayarajj126-3@okicici';
 const MERCHANT_NAME = 'StarlightAscent';
 const MOBILE_NUMBER = '9655897523';
+const SSE_URL = FUNCTIONS_BASE + '/sse/dashboard';
 
 const PROGRESS_STEPS = [
   'Uploading Screenshot',
@@ -559,9 +560,41 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
   const fileRef = useRef(null);
   const timerRef = useRef(null);
   const previewRef = useRef(null);
+  const sseRef = useRef(null);
+
+  // Subscribe to SSE progress events during verification
+  function connectSSE() {
+    if (sseRef.current) sseRef.current.close();
+    try {
+      const es = new EventSource(SSE_URL);
+      sseRef.current = es;
+      es.addEventListener('verificationProgress', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.orderId === orderId && data.percent != null) {
+            const stepIndex = Math.floor((data.percent / 100) * (PROGRESS_STEPS.length - 1));
+            setProgressIndex(Math.min(stepIndex, PROGRESS_STEPS.length - 1));
+          }
+          if (data.phase) {
+            const phaseMap = {
+              'fetching': 1, 'preprocessing': 2, 'ocr': 3, 'parsing': 4,
+              'checking': 5, 'fraud': 8, 'scoring': 9, 'complete': 10,
+            };
+            const idx = phaseMap[data.phase];
+            if (idx != null) setProgressIndex(idx);
+          }
+        } catch (_) {}
+      });
+      es.onerror = () => {};
+    } catch (_) {}
+  }
+  function disconnectSSE() {
+    if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+  }
 
   useEffect(() => {
     return () => {
+      disconnectSSE();
       if (timerRef.current) clearInterval(timerRef.current);
       if (previewRef.current) { URL.revokeObjectURL(previewRef.current); }
       if (autoRedirectTimer) clearTimeout(autoRedirectTimer);
@@ -667,10 +700,11 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
     setVerifying(true);
     setStep('progress');
     setProgressIndex(0);
+    connectSSE();
 
     timerRef.current = setInterval(() => {
       setProgressIndex(prev => Math.min(prev + 1, PROGRESS_STEPS.length - 1));
-    }, 1200);
+    }, 6000);
 
     try {
       const file = fileRef.current.files[0];
@@ -716,6 +750,7 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
       setProgressIndex(PROGRESS_STEPS.length - 1);
     } finally {
       if (timerRef.current) clearInterval(timerRef.current);
+      disconnectSSE();
       setVerifying(false);
     }
   }

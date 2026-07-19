@@ -141,34 +141,61 @@ function getWorkerFromPool() {
 }
 
 async function runTesseractOCR(imageBuffer) {
-  let wp = getWorkerFromPool();
-  if (!wp.worker) {
-    await initWorkerPool();
-    wp = getWorkerFromPool();
+  let retries = 0;
+  const maxRetries = 2;
+  while (retries <= maxRetries) {
+    let wp = getWorkerFromPool();
     if (!wp.worker) {
-      log('No worker available after pool init — returning empty OCR');
-      return { text: '', words: [], confidence: 0, wordConf: 0, topConf: 0 };
+      log('Worker pool empty — initializing...');
+      await initWorkerPool();
+      wp = getWorkerFromPool();
+    }
+    if (!wp.worker) {
+      retries++;
+      if (retries > maxRetries) {
+        log('No worker available after ' + maxRetries + ' retries — returning empty OCR');
+        return { text: '', words: [], confidence: 0, wordConf: 0, topConf: 0 };
+      }
+      await new Promise(r => setTimeout(r, 1000 * retries));
+      continue;
+    }
+    try {
+      const { data } = await wp.worker.recognize(imageBuffer);
+      const text = data.text || '';
+      const words = data.words || [];
+      const wordConf = words.length > 0
+        ? Math.round((words.reduce((s, w) => s + (w.confidence || 0), 0) / words.length) * 100) / 100
+        : 0;
+      const topConf = data.confidence !== undefined ? data.confidence : 0;
+      const effectiveConf = wordConf > 0 ? wordConf : topConf;
+      log('Tesseract: ' + text.length + ' chars, wordConf=' + wordConf + '%, topConf=' + topConf + '%, effectiveConf=' + effectiveConf + '%');
+
+      // Replace exhausted workers after recognition (never during — keeps pool non-empty)
+      if (wp.needsReplace && wp.poolEntry) {
+        log('Replacing exhausted worker (' + wp.poolEntry.uses + ' uses)');
+        wp.poolEntry.worker.terminate().catch(() => {});
+        workerPool = workerPool.filter(e => e !== wp.poolEntry);
+        workerPoolSize = workerPool.length;
+        initWorkerPool().catch(e => log('Worker replacement failed: ' + e.message));
+      }
+
+      return { text, words, confidence: effectiveConf, wordConf, topConf };
+    } catch (err) {
+      log('Tesseract recognition failed: ' + err.message + ' (retry ' + (retries + 1) + '/' + maxRetries + ')');
+      // Remove this worker from pool and retry
+      if (wp.poolEntry) {
+        wp.poolEntry.worker.terminate().catch(() => {});
+        workerPool = workerPool.filter(e => e !== wp.poolEntry);
+        workerPoolSize = workerPool.length;
+      }
+      retries++;
+      if (retries > maxRetries) {
+        return { text: '', words: [], confidence: 0, wordConf: 0, topConf: 0 };
+      }
+      await new Promise(r => setTimeout(r, 1000));
     }
   }
-  const { data } = await wp.worker.recognize(imageBuffer);
-  const text = data.text || '';
-  const words = data.words || [];
-  const wordConf = words.length > 0
-    ? Math.round((words.reduce((s, w) => s + (w.confidence || 0), 0) / words.length) * 100) / 100
-    : 0;
-  const topConf = data.confidence !== undefined ? data.confidence : 0;
-  const effectiveConf = wordConf > 0 ? wordConf : topConf;
-  log('Tesseract: ' + text.length + ' chars, wordConf=' + wordConf + '%, topConf=' + topConf + '%, effectiveConf=' + effectiveConf + '%');
-
-  // Replace exhausted workers after recognition (never during — keeps pool non-empty)
-  if (wp.needsReplace && wp.poolEntry) {
-    wp.poolEntry.worker.terminate().catch(() => {});
-    workerPool = workerPool.filter(e => e !== wp.poolEntry);
-    workerPoolSize = workerPool.length;
-    initWorkerPool().catch(e => log('Worker replacement failed: ' + e.message));
-  }
-
-  return { text, words, confidence: effectiveConf, wordConf, topConf };
+  return { text: '', words: [], confidence: 0, wordConf: 0, topConf: 0 };
 }
 
 async function shutdownWorker() {
@@ -179,18 +206,19 @@ async function shutdownWorker() {
   workerPoolSize = 0;
 }
 
-function preprocessForOcr(rawBuf) {
-  return Jimp.read(rawBuf).then(img => {
-    const maxDim = 2400;
-    if (img.bitmap.width > maxDim || img.bitmap.height > maxDim) {
-      if (img.bitmap.width > img.bitmap.height) {
-        img.resize(maxDim, Jimp.AUTO);
-      } else {
-        img.resize(Jimp.AUTO, maxDim);
-      }
+async function preprocessForOcr(rawBuf) {
+  const img = await Jimp.read(rawBuf);
+  if (!img || !img.bitmap) throw new Error('Could not parse image');
+  if (img.bitmap.width < 50 || img.bitmap.height < 50) throw new Error('Image too small: ' + img.bitmap.width + 'x' + img.bitmap.height);
+  const maxDim = 2400;
+  if (img.bitmap.width > maxDim || img.bitmap.height > maxDim) {
+    if (img.bitmap.width > img.bitmap.height) {
+      img.resize(maxDim, Jimp.AUTO);
+    } else {
+      img.resize(Jimp.AUTO, maxDim);
     }
-    return img.getBuffer('image/png');
-  }).catch(() => rawBuf);
+  }
+  return img.getBuffer('image/png');
 }
 
 const STRATEGIES = [
@@ -212,7 +240,7 @@ const STRATEGIES = [
 ];
 
 async function ocrWithRetry(rawBuf, orderId) {
-  log('Running OCR with up to ' + Math.min(STRATEGIES.length, MAX_OCR_STRATEGIES) + ' strategies...');
+  log('Running OCR sequentially (up to ' + Math.min(STRATEGIES.length, MAX_OCR_STRATEGIES) + ' strategies)...');
   await saveDebugImage(rawBuf, orderId + '_original');
   const resizedBuf = await preprocessForOcr(rawBuf);
   let bestResult = { text: '', confidence: 0, strategy: 'none' };
@@ -226,7 +254,7 @@ async function ocrWithRetry(rawBuf, orderId) {
     ]);
   }
 
-  const parallelResults = await Promise.all(usedStrategies.map(async (strategy) => {
+  for (const strategy of usedStrategies) {
     try {
       log('Strategy: ' + strategy.name + '...');
       const processedBuf = await withTimeout(strategy.fn(resizedBuf), OCR_STRATEGY_TIMEOUT_MS, strategy.name + ' preprocess');
@@ -237,17 +265,18 @@ async function ocrWithRetry(rawBuf, orderId) {
       const ocrText = data.text || '';
       const effectiveConf = data.confidence || 0;
       log('  ' + strategy.name + ': ' + ocrText.length + ' chars @ ' + effectiveConf + '% (wordConf=' + (data.wordConf || 0) + '%, topConf=' + (data.topConf || 0) + '%)');
-      return { strategy: strategy.name, text: ocrText, confidence: effectiveConf };
+      const result = { strategy: strategy.name, text: ocrText, confidence: effectiveConf };
+      results.push(result);
+      if (effectiveConf > bestResult.confidence || (effectiveConf === bestResult.confidence && ocrText.length > bestResult.text.length)) {
+        bestResult = result;
+      }
+      // Early exit: if confidence >= MIN_OCR_CONFIDENCE, don't bother with more strategies
+      if (effectiveConf >= MIN_OCR_CONFIDENCE && ocrText.length >= 20) {
+        log('  Early exit: ' + strategy.name + ' meets confidence threshold (' + effectiveConf + '% >= ' + MIN_OCR_CONFIDENCE + '%)');
+        break;
+      }
     } catch (e) {
       log('  ' + strategy.name + ' failed: ' + e.message);
-      return null;
-    }
-  }));
-  for (const r of parallelResults) {
-    if (!r) continue;
-    results.push(r);
-    if (r.confidence > bestResult.confidence || (r.confidence === bestResult.confidence && r.text.length > bestResult.text.length)) {
-      bestResult = r;
     }
   }
   log('Best strategy: ' + bestResult.strategy + ' (' + bestResult.confidence + '%, ' + bestResult.text.length + ' chars)');
@@ -444,8 +473,16 @@ async function checkFraud(imageHash, utr, ocrText, userId, excludeOrderId) {
   return { fraudScore, fraudFlags: [...new Set(fraudFlags)] };
 }
 
-function emitProgress(orderId, phase, pct) {
-  try { broadcast('verificationProgress', { orderId, phase, percent: pct }); } catch {}
+function emitProgress(orderId, phase, pct, detail) {
+  try { broadcast('verificationProgress', { orderId, phase, percent: pct, detail, timestamp: new Date().toISOString() }); } catch {}
+}
+
+function logStage(stage, orderId, status, detail) {
+  const elapsed = Date.now() - (global._stageStartTimes?.[orderId]?.[stage] || Date.now());
+  log('[STAGE ' + stage + '] ' + orderId + ' ' + status + ' ' + (detail || '') + ' (' + elapsed + 'ms)');
+  if (!global._stageStartTimes) global._stageStartTimes = {};
+  if (!global._stageStartTimes[orderId]) global._stageStartTimes[orderId] = {};
+  global._stageStartTimes[orderId][stage] = Date.now();
 }
 
 async function checkDuplicateUtr(utr, excludeOrderId) {
@@ -538,6 +575,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
 
   log('=== Bank SMS Verification for ' + orderId + ' ===');
   log('Type=' + type + ', Amount=' + expectedAmount + ', ExpectedUPI=' + expectedUpi + ', UserEnteredUTR=' + (userEnteredUtr || 'not provided'));
+  logStage('1_start', orderId, 'START', 'type=' + type + ' amount=' + expectedAmount);
   stageTiming('Request Received');
 
   const result = {
@@ -571,74 +609,11 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     timings: {},
   };
 
-  // ── AI Payment Screenshot Verification (Primary path) ──
-  try {
-    const healthOk = await checkHealth().catch(() => false);
-    if (healthOk) {
-      log('Python AI verifier available — using AI pipeline for ' + orderId);
-      const aiResult = await runAIVerification({
-        screenshotUrl,
-        expectedAmount,
-        expectedReceiverUpi: expectedUpi,
-        orderId,
-        createdAt: orderCreatedAt,
-        userEnteredUtr,
-        userEnteredUpi,
-      });
-      if (aiResult._aiVerified) {
-        log('AI verification complete: ' + aiResult._decision + ' for ' + orderId);
-        aiResult.verificationDuration = Date.now() - T.start;
-        return aiResult;
-      }
-      if (aiResult.reasons && aiResult.reasons.length > 0) {
-        log('AI verification result: ' + aiResult._decision + ' - ' + aiResult.reasons.join('; '));
-        if (aiResult._decision === 'AUTO_REJECT') {
-          aiResult.verificationDuration = Date.now() - T.start;
-          return aiResult;
-        }
-      }
-      log('AI result: ' + (aiResult._decision || 'inconclusive') + ' — using result as-is');
-      if (aiResult.status && aiResult.status !== 'pending') {
-        aiResult.verificationDuration = Date.now() - T.start;
-        return aiResult;
-      }
-    } else {
-      log('Python AI verifier not available — probing AI bridge (stdin/stdout)');
-      let bridgeResult = null;
-      try {
-        bridgeResult = await Promise.race([
-          analyzeWithAI(screenshotUrl, {
-            amount: expectedAmount,
-            receiverUpi: expectedUpi,
-            orderId,
-            date: orderCreatedAt,
-            utr: userEnteredUtr || '',
-          }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('AI_BRIDGE_PROBE_TIMEOUT')), 3000)),
-        ]);
-      } catch (probeErr) {
-        if (probeErr.message === 'AI_BRIDGE_PROBE_TIMEOUT') {
-          log('AI bridge probe timed out (3s) — Python not ready, using scoring pipeline');
-        } else {
-          log('AI bridge probe failed: ' + probeErr.message + ' — using scoring pipeline');
-        }
-      }
-      if (bridgeResult) {
-        try {
-          const mappedResult = mapAIResultToVerificationFormat(bridgeResult);
-          if (mappedResult._aiVerified || mappedResult.status !== 'pending') {
-            log('AI bridge verification complete: ' + mappedResult._decision + ' for ' + orderId);
-            mappedResult.verificationDuration = Date.now() - T.start;
-            return mappedResult;
-          }
-        } catch (bridgeError) {
-          log('AI bridge also failed: ' + bridgeError.message + ' — using scoring pipeline');
-        }
-      }
-    }
-  } catch (aiError) {
-    log('AI verification attempt failed: ' + aiError.message + ' — using scoring pipeline');
-  }
+  // ── Verification Pipeline (Bypass Python AI bridge — it causes cold start hangs) ──
+  // Python AI bridge takes 30-60s to load models on cold start.
+  // Tesseract.js scoring pipeline is reliable and completes in 10-30s.
+  // The AI bridge can be queried async for analytics, but should never block verification.
+  log('Starting Tesseract.js scoring pipeline for ' + orderId + ' (bypassing AI bridge cold start)');
 
   try {
     if (!expectedAmount || !ALLOWED_AMOUNTS.includes(expectedAmount)) {
@@ -685,6 +660,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     const imageHash = computeImageHash(rawBuf);
     result.screenshotHash = imageHash;
     log('Screenshot hash=' + imageHash.substring(0, 12));
+    logStage('1_image', orderId, 'OK', rawBuf.length + ' bytes, hash=' + imageHash.substring(0, 12));
 
     if (workerPool.length === 0) {
       const tInit = Date.now();
@@ -692,7 +668,8 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
       log('Worker pool initialized in ' + (Date.now() - tInit) + 'ms, pool size=' + workerPool.length);
     }
 
-    emitProgress(orderId, 'preprocessing', 10);
+    logStage('2_image', orderId, 'OK', rawBuf.length + ' bytes, hash=' + imageHash.substring(0, 12));
+    emitProgress(orderId, 'preprocessing', 10, 'Image validated (' + rawBuf.length + ' bytes)');
     const tPre = Date.now();
     const resizedBuf = await preprocessForOcr(rawBuf);
     T.preprocess = Date.now() - tPre;
@@ -758,7 +735,8 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     if (imageQuality.cropRatio < 0.5) log('Crop ratio low: ' + imageQuality.cropRatio);
     if (imageQuality.darkScore > 80) log('Dark image (score=' + imageQuality.darkScore + ')');
 
-    emitProgress(orderId, 'parsing', 50);
+    logStage('3_ocr', orderId, 'OK', ocrResult.strategy + ' ' + ocrText.length + ' chars @ ' + avgConfidence + '%');
+    emitProgress(orderId, 'parsing', 50, 'OCR complete (' + ocrText.length + ' chars, ' + avgConfidence + '%)');
 
     const ocrLevel = avgConfidence >= MIN_OCR_CONFIDENCE ? 'good' : 'low';
     log('OCR level: ' + ocrLevel + ' (' + avgConfidence + '% >= ' + MIN_OCR_CONFIDENCE + '% required)');
@@ -805,10 +783,14 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     };
     result.ocrData = ocrData;
 
+    logStage('4_amount', orderId, amountMatch ? 'PASS' : 'FAIL', 'expected=' + expectedAmount + ' extracted=' + ocrData.extractedAmount);
     const amountMatch = exactAmountMatch(ocrData.extractedAmount, expectedAmount);
     result.matchedAmount = amountMatch;
     result.checks.push({ name: 'amount_match', passed: amountMatch, extracted: ocrData.extractedAmount, expected: expectedAmount });
-    if (!amountMatch) log('Amount mismatch: found=' + ocrData.extractedAmount + ', expected=' + expectedAmount);
+    if (!amountMatch) {
+      log('Amount mismatch: found=' + ocrData.extractedAmount + ', expected=' + expectedAmount);
+      result.reasons.push('Amount mismatch: expected ₹' + expectedAmount + ', found ₹' + (ocrData.extractedAmount || 'unknown'));
+    }
 
     const validUtr = validateUtr(ocrData.extractedUtr);
     result.matchedUtr = !!validUtr;
@@ -842,6 +824,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
 
     emitProgress(orderId, 'checking', 65);
 
+    logStage('9_utr', orderId, utrDuplicate.isDuplicate ? 'DUPLICATE' : 'UNIQUE', 'utr=' + (validUtr || 'invalid') + ' dup=' + utrDuplicate.isDuplicate);
     const tDb = Date.now();
     let utrDuplicate = { isDuplicate: false };
     if (validUtr) {
@@ -865,6 +848,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     T.db = Date.now() - tDb;
     stageTiming('Database');
 
+    logStage('7_date', orderId, dateValid ? 'PASS' : 'FAIL', 'extracted=' + (dateStr || 'none') + ' isToday=' + dateIsToday + ' isFuture=' + dateIsFuture);
     const dateStr = ocrData.extractedDate;
     const dateIsToday = isToday(dateStr);
     const dateIsFuture = isFutureDate(dateStr);
@@ -874,6 +858,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     if (!dateIsToday) log('Date not today: ' + dateStr);
     if (dateIsFuture) log('Date is in the future: ' + dateStr);
 
+    logStage('8_time', orderId, timeValid ? 'PASS' : 'FAIL', 'extracted=' + (timeStr || 'none') + ' withinWindow=' + timeWithinWindow + ' isFuture=' + timeIsFuture);
     const timeStr = ocrData.extractedTime;
     const timeWithinWindow = isWithinSessionWindow(timeStr, orderCreatedAt, MAX_SESSION_AGE_MINUTES);
     const timeIsFuture = isFutureTime(timeStr);
@@ -882,6 +867,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     if (!timeWithinWindow) log('Time outside session window: ' + timeStr + ' (created=' + orderCreatedAt + ', max=' + MAX_SESSION_AGE_MINUTES + 'min)');
     if (timeIsFuture) log('Time is in the future: ' + timeStr);
 
+    logStage('5_receiver', orderId, receiverValid ? 'PASS' : 'FAIL', 'expected=' + EXPECTED_RECEIVER_UPI + ' extracted=' + (ocrData.extractedReceiverName || ocrData.extractedReceiverAccount || 'none'));
     const receiverValid = receiverExactMatch(ocrData.extractedReceiverName) || receiverExactMatch(ocrData.extractedReceiverAccount) || receiverExactMatch(ocrData.extractedSenderVpa) || receiverAccountMatch(ocrData.extractedReceiverAccount) || receiverNameMatch(ocrData.extractedReceiverName);
     result.matchedReceiver = receiverValid;
     result.checks.push({ name: 'receiver_validation', passed: receiverValid, extractedName: ocrData.extractedReceiverName, extractedAccount: ocrData.extractedReceiverAccount, expected: EXPECTED_RECEIVER_UPI });
@@ -916,6 +902,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     result.userUpiMatched = userUpiMatch;
     result.checks.push({ name: 'user_upi_match', passed: userUpiMatch, entered: userEnteredUpi || '', extracted: [ocrData.extractedReceiverName, ocrData.extractedSenderVpa, ocrData.extractedReceiverAccount].filter(Boolean).join(', ') });
 
+    logStage('6_status', orderId, statusValid ? 'PASS' : 'FAIL', 'extracted=' + (paymentStatusStr || 'none') + ' accepted=' + statusAccepted);
     const paymentStatusStr = ocrData.extractedPaymentStatus;
     const statusAccepted = paymentStatusAccepted(paymentStatusStr);
     const statusRejected = paymentStatusRejected(paymentStatusStr);
@@ -929,6 +916,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
 
     emitProgress(orderId, 'fraud', 80);
 
+    logStage('10_fraud', orderId, fraudClean ? 'PASS' : 'FAIL', 'score=' + fraud.fraudScore + ' flags=' + fraud.fraudFlags.join(','));
     const tFraud = Date.now();
     const fraud = await checkFraud(imageHash, validUtr, ocrText, userId, orderId);
     T.fraud = Date.now() - tFraud;
@@ -995,6 +983,7 @@ async function runBankSmsVerification(order, screenshotUrl, userId, userEnteredU
     result.verificationScore = verificationScore;
     log('Score: ' + verificationScore + '% (' + earned + '/' + totalWeight + ')');
 
+    logStage('11_decision', orderId, allPass ? 'APPROVED' : 'REJECTED', 'score=' + verificationScore + '% allPass=' + allPass);
     if (allPass) {
       result.status = APPROVED_STATUS;
       result.autoVerified = true;

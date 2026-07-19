@@ -13,6 +13,10 @@ const { runBankSmsVerification } = require('./_bankSmsVerificationEngine.js');
 const ORDER_TTL_MS = 30 * 60 * 1000;
 const VERIFY_TIMEOUT_MS = 180 * 1000;
 
+// In-flight verification tracker — prevents duplicate simultaneous verification of same order
+const verifyingOrders = new Set();
+const VERIFY_LOCK_TIMEOUT_MS = 180000; // 3 min max lock time
+
 function log(msg) {
   console.log(`[${new Date().toISOString().slice(0, 19).replace('T', ' ')}] [ORDER-MGR] ${msg}`);
 }
@@ -179,6 +183,11 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   if (order.status === 'expired') throw Object.assign(new Error('Order expired'), { status: 400 });
   if (order.status === 'verified') throw Object.assign(new Error('Order already verified'), { status: 400 });
   if (order.verification_status === 'processing') throw Object.assign(new Error('Verification already in progress'), { status: 409 });
+
+  // Duplicate request lock (in-memory)
+  if (verifyingOrders.has(orderId)) throw Object.assign(new Error('Verification already in progress'), { status: 409 });
+  verifyingOrders.add(orderId);
+  setTimeout(() => verifyingOrders.delete(orderId), VERIFY_LOCK_TIMEOUT_MS);
   T.mark('getPaymentOrder');
 
   await updateDoc(COL_ORDERS, orderId, {
@@ -208,6 +217,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
           updated_at: now(),
         }).catch(() => {});
         T.mark('maxRetriesReached');
+        verifyingOrders.delete(orderId);
         return {
           orderId, paymentId: orderId,
           status: 'failed', verificationStatus: 'failed',
@@ -231,6 +241,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
           }).catch(e2 => log('Auto-process error: ' + e2.message));
         } catch (e2) { log('Auto-process load error: ' + e2.message); }
       });
+      verifyingOrders.delete(orderId);
       return {
         orderId, paymentId: orderId,
         status: 'pending', verificationStatus: 'pending',
@@ -241,6 +252,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
         fraudScore: 0, checks: [],
       };
     }
+    verifyingOrders.delete(orderId);
     throw e;
   }
   T.mark('runBankSmsVerification');
@@ -311,6 +323,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   T.mark('syncPaymentStatus');
 
   T.summary();
+  verifyingOrders.delete(orderId);
   return {
     orderId,
     paymentId: syncedPaymentId || orderId,
@@ -331,6 +344,11 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     checks: verificationResult.checks,
   };
 }
+
+// Cleanup verifyingOrders on process exit
+process.once('exit', () => verifyingOrders.clear());
+process.once('SIGINT', () => { verifyingOrders.clear(); process.exit(); });
+process.once('SIGTERM', () => { verifyingOrders.clear(); process.exit(); });
 
 async function executeVerifiedOrder(order, verificationResult, extra) {
   const T = makeTimer();
