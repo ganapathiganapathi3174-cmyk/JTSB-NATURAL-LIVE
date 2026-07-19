@@ -118,16 +118,14 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
     expires_at: expiresAt,
   };
 
-  let saved = null;
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from(COL_ORDERS).insert(orderData).select('id').single();
-  if (!error && data) saved = data;
-  else {
-    log('Order insert failed, tracking in-memory');
-    saved = { id: orderId };
+  if (error || !data) {
+    log('Order insert to Supabase failed: ' + JSON.stringify(error));
+    throw Object.assign(new Error('Failed to create payment order: database insert error'), { status: 500 });
   }
 
-  const finalOrderId = saved.id || orderId;
+  const finalOrderId = data.id;
 
   let paymentUserId = null;
   let paymentPendingRegId = null;
@@ -150,7 +148,7 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
     payment_date: now(),
     verification_locked: false,
     created_at: now(),
-  }).catch(() => {});
+  }).catch(e => log('UPI_PAYMENTS insert failed (non-fatal): ' + e.message));
 
   log(`CREATE order=${finalOrderId} type=${type} amount=${amount} expectedUpi=${ADMIN_UPI_ID}`);
 
