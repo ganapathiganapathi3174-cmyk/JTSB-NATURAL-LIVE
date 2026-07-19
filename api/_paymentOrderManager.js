@@ -193,9 +193,29 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   await updateDoc(COL_ORDERS, orderId, {
     status: 'verifying',
     verification_status: 'processing',
+    screenshot_url: screenshotUrl,
+    utr: extra?.userEnteredUtr || null,
     updated_at: now(),
   });
   T.mark('updateOrderVerifying');
+
+  // Persist screenshot + UTR to upi_payments immediately so async retry can process it
+  try {
+    const searchField = extra?.pendingRegId ? 'pending_reg_id' : 'user_id';
+    const searchValue = extra?.pendingRegId || extra?.userId || order.user_id;
+    if (searchValue) {
+      const existingPayments = await runQuery(COL_UPI_PAYMENTS, [
+        { field: searchField, op: 'EQUAL', value: searchValue },
+      ], { limit: 5 });
+      for (const p of existingPayments) {
+        await updateDoc(COL_UPI_PAYMENTS, p.id, {
+          screenshot_url: screenshotUrl,
+          utr: extra?.userEnteredUtr || p.utr,
+          verification_locked: false,
+        }).catch(() => {});
+      }
+    }
+  } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
 
   let verificationResult;
   try {
@@ -325,6 +345,8 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       syncedPaymentId = target.id;
       await updateDoc(COL_UPI_PAYMENTS, target.id, {
         status: finalOrderStatus,
+        utr: extra?.userEnteredUtr || verificationResult.ocrData?.extractedUtr || target.utr,
+        screenshot_url: screenshotUrl,
         ocr_result: verificationResult.ocrData || null,
         final_score: verificationResult.verificationScore || 0,
         fraud_score: verificationResult.fraudScore || 0,
