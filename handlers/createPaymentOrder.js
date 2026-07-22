@@ -20,7 +20,9 @@ module.exports = async (req, res) => {
     res.writeHead(200); res.end(JSON.stringify(result));
   } catch (err) {
     const status = err.status || 500;
-    console.error('[createPaymentOrder] Error:', err.message);
-    res.writeHead(status); res.end(JSON.stringify({ error: err.status && err.status < 500 ? err.message : 'Internal server error' }));
+    console.error('[createPaymentOrder] Error:', err.message, err.stack || '');
+    console.error('[createPaymentOrder] Body:', JSON.stringify(req.body));
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.status && err.status < 500 ? err.message : 'Internal server error', _ref: 'CPO-' + Date.now() }));
   }
 };
