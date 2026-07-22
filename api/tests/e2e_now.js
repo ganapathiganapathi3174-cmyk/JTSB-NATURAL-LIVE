@@ -42,7 +42,7 @@ function httpRequest(method, path, body = null, token = null) {
         catch { resolve({ status: res.statusCode, body: data }); }
       });
     });
-    req.on('error', reject);
+    req.on('error', (err) => reject(err instanceof Error ? err : new Error(String(err))));
     req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
     if (body) req.write(JSON.stringify(body));
     req.end();
