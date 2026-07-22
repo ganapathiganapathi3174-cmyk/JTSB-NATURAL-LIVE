@@ -110,10 +110,33 @@ module.exports = async (req, res) => {
       'handlers/preRegister.js', 'module.exports', 79
     ).catch(() => []);
     STEP(4, 'After Supabase Query — phone check done');
-    if (existingPhoneUser || (existingPhonePending && existingPhonePending.length > 0)) {
-      res.writeHead(409); res.end(JSON.stringify({ error: 'Phone already registered. Please login.' }));
-      LOG(`Response: phone exists — total ${Date.now() - reqStart}ms`);
-      return;
+    if (existingPhoneUser) {
+      const uPhoneRaw = (existingPhoneUser.phone || '').trim();
+      if (uPhoneRaw === phone.trim()) {
+        res.writeHead(409); res.end(JSON.stringify({ error: 'Phone already registered. Please login.' }));
+        LOG(`Response: phone exists in users table — total ${Date.now() - reqStart}ms`);
+        return;
+      }
+    }
+    if (existingPhonePending && existingPhonePending.length > 0) {
+      const pend = existingPhonePending[0];
+      if (pend.user_id) {
+        try {
+          const owner = await getDoc(COL_USERS, pend.user_id);
+          if (owner) {
+            const oPhoneRaw = (owner.phone || '').trim();
+            if (oPhoneRaw === phone.trim()) {
+              res.writeHead(409); res.end(JSON.stringify({ error: 'Phone already registered. Please login.' }));
+              LOG(`Response: phone exists in users via pending_reg — total ${Date.now() - reqStart}ms`);
+              return;
+            }
+          }
+        } catch {}
+      }
+      try {
+        await deleteDoc(COL_PENDING_REGS, pend.id);
+        LOG(`Cleaned up stale pending_registration ${pend.id} for phone ${phone}`);
+      } catch {}
     }
 
     // Step 4: Validate Sponsor (referral code via targeted query — no full-table scan)

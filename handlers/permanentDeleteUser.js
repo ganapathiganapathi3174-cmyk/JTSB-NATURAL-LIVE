@@ -134,16 +134,19 @@ module.exports = async (req, res) => {
     if (sponsorData.length) result.deleted.sponsorData = sponsorData.length;
 
     const pendingRegsByUser = await deleteMatching(COL_PENDING_REGS, 'user_id', userId);
-    let pendingRegCount = pendingRegsByUser.length;
+    const pendingRegIds = new Set(pendingRegsByUser);
 
     const email = user.email || '';
     const phone = user.phone || '';
     if (email) {
       const pendingByEmail = await deleteMatching(COL_PENDING_REGS, 'email', email.toLowerCase().trim());
-      const newIds = pendingByEmail.filter(id => !pendingRegsByUser.includes(id));
-      pendingRegCount += newIds.length;
+      for (const id of pendingByEmail) pendingRegIds.add(id);
     }
-    if (pendingRegCount) result.deleted.pendingRegistrations = pendingRegCount;
+    if (phone) {
+      const pendingByPhone = await deleteMatching(COL_PENDING_REGS, 'phone', phone.trim());
+      for (const id of pendingByPhone) pendingRegIds.add(id);
+    }
+    if (pendingRegIds.size) result.deleted.pendingRegistrations = pendingRegIds.size;
 
     const paymentSessions = await deleteMatching(COL_SESSIONS, 'user_id', userId);
     if (paymentSessions.length) result.deleted.paymentSessions = paymentSessions.length;
