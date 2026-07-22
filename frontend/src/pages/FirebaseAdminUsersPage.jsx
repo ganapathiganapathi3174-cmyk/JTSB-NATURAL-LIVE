@@ -471,21 +471,18 @@ export default function FirebaseAdminUsersPage() {
   const handleDelete = async (userId, reason, deleteUser) => {
     const adminToken = localStorage.getItem('fb_admin_token');
     if (!adminToken) throw new Error('Admin session not found. Please re-login.');
-    const adminName = (() => {
-      try { return sessionStorage.getItem('fb_admin_name') || localStorage.getItem('fb_admin_name') || 'Admin'; } catch { return 'Admin'; }
-    })();
-    const recordType = deleteUser?._source === 'pending_registration' ? 'pending_registration' : 'user';
-    const res = await fetch(`${API_BASE}/adminDeleteRecord`, {
+    const res = await fetch(`${API_BASE}/permanentDeleteUser`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
-      body: JSON.stringify({ recordId: userId, recordType, reason, adminName }),
+      body: JSON.stringify({ userId, reason: reason.trim() }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Delete failed');
+    if (!res.ok) throw new Error(data.error || data.detail || 'Delete failed');
     setUsers(prev => prev.filter(u => u.id !== userId));
-    const recordCount = data.totalCount || 0;
-    const storageCount = data.deletedStorage?.length || 0;
-    setDeleteSuccessMsg(`${deleteUser?.name || 'User'} permanently deleted \u2014 ${recordCount} records removed${storageCount ? `, ${storageCount} storage files cleaned` : ''}`);
+    const recordCount = data.result ? Object.values(data.result.deleted).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0) : 0;
+    const storageCount = data.result?.storageCleaned?.length || 0;
+    const tableCount = data.result ? Object.keys(data.result.deleted).length : 0;
+    setDeleteSuccessMsg(`${deleteUser?.name || 'User'} permanently deleted \u2014 ${recordCount} records across ${tableCount} tables removed${storageCount ? `, ${storageCount} storage files cleaned` : ''}`);
     if (deleteSuccessTimeoutRef.current) clearTimeout(deleteSuccessTimeoutRef.current);
     deleteSuccessTimeoutRef.current = setTimeout(() => setDeleteSuccessMsg(''), 5000);
   };

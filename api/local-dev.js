@@ -125,6 +125,7 @@ const handlerCfg = [
   ['getPendingPaymentsQueue', true, '../handlers/getPendingPaymentsQueue.js'],
   ['fixSystemUsers', false, '../handlers/fixSystemUsers.js'],
   ['purgeAllUsers', true, '../handlers/purgeAllUsers.js'],
+  ['permanentDeleteUser', true, '../handlers/permanentDeleteUser.js'],
   // === NEW MODULES: AI Pipeline + Upgrade Requests ===
   ['runAIVerification', false, '../handlers/runAIVerification.js'],
   ['createUpgradeRequest', false, '../handlers/createUpgradeRequest.js'],
