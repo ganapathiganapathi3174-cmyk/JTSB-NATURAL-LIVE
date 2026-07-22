@@ -197,13 +197,19 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   setTimeout(() => verifyingOrders.delete(orderId), VERIFY_LOCK_TIMEOUT_MS);
 
   // Store screenshot + UTR — set to pending, worker picks it up
-  await updateDoc(COL_ORDERS, orderId, {
-    status: 'pending',
-    verification_status: 'pending',
-    screenshot_url: screenshotUrl,
-    utr: extra?.userEnteredUtr || null,
-    updated_at: now(),
-  });
+  try {
+    await updateDoc(COL_ORDERS, orderId, {
+      status: 'pending',
+      verification_status: 'pending',
+      screenshot_url: screenshotUrl,
+      utr: extra?.userEnteredUtr || null,
+      updated_at: now(),
+    });
+  } catch (dbErr) {
+    log('Failed to update order ' + orderId + ': ' + dbErr.message);
+    verifyingOrders.delete(orderId);
+    throw Object.assign(new Error('Failed to save payment proof. Please try again.'), { status: 500 });
+  }
 
   // Persist screenshot + UTR to upi_payments for admin visibility
   try {
@@ -281,7 +287,7 @@ async function runVerificationWorker() {
       log('Worker: processing order ' + orderId + ' type=' + order.type + ' amount=' + order.amount);
       const v = await Promise.race([
         runOfficerVerificationForWorker(order, order.screenshot_url, order.user_id || null, order.utr || null, null),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 25000 : 300000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 25000 : 30000)),
       ]);
       log('Worker: officer result — status=' + v.status + ' score=' + (v.verificationScore || 0) + ' checks=' + JSON.stringify(v.checks || []));
 

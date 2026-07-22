@@ -453,8 +453,9 @@ function PendingResult({ result, orderId, onStatusUpdate, onStartOver }) {
   const esRef = useRef(null);
   const pollRef = useRef(null);
   const startTimeRef = useRef(Date.now());
-  const MAX_WAIT = 60000;
+  const MAX_WAIT = 90000;
   const POLL_INTERVAL = 3000;
+  const pollTimedOut = elapsed >= MAX_WAIT;
 
   const checkFinalStatus = useCallback((status, data) => {
     if (!mountedRef.current) return false;
@@ -485,7 +486,7 @@ function PendingResult({ result, orderId, onStatusUpdate, onStartOver }) {
     return () => { es.close(); esRef.current = null; };
   }, [orderId, checkFinalStatus]);
 
-  // Polling fallback (every 3s, max 60s)
+  // Polling fallback (every 3s, max 90s)
   useEffect(() => {
     if (!orderId) return;
     async function poll() {
@@ -527,7 +528,9 @@ function PendingResult({ result, orderId, onStatusUpdate, onStartOver }) {
             Processing Payment
           </h2>
           <p className="text-muted mt-sm" style={{ lineHeight: 1.6, maxWidth: 400, margin: '0.5rem auto 0' }}>
-            Your payment is being verified in the background. The result will appear here automatically once processing completes.
+            {pollTimedOut
+              ? 'Your payment is taking longer than usual. The system is still working on it — we will update you once complete. If this persists, please contact support.'
+              : 'Your payment is being verified in the background. The result will appear here automatically once processing completes.'}
           </p>
 
           <div className="flex-center gap-sm mt-md" style={{ flexWrap: 'wrap' }}>
