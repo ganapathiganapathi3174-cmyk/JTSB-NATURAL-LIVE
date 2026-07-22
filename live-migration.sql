@@ -9,6 +9,7 @@ ALTER TABLE public.payment_sessions ADD COLUMN IF NOT EXISTS "final_score" numer
 ALTER TABLE public.payment_sessions ADD COLUMN IF NOT EXISTS "rejection_reasons" jsonb DEFAULT '[]';
 ALTER TABLE public.payment_sessions ADD COLUMN IF NOT EXISTS "ocr_result" jsonb DEFAULT '{}';
 ALTER TABLE public.payment_sessions ADD COLUMN IF NOT EXISTS "screenshot_url" text;
+ALTER TABLE public.payment_sessions ADD COLUMN IF NOT EXISTS "pending_reg_id" text;
 ALTER TABLE public.payment_sessions ADD COLUMN IF NOT EXISTS "expires_at" timestamptz;
 ALTER TABLE public.payment_sessions ADD COLUMN IF NOT EXISTS "completedAt" timestamptz;
 ALTER TABLE public.payment_sessions ADD COLUMN IF NOT EXISTS "createdAt" timestamptz DEFAULT now();

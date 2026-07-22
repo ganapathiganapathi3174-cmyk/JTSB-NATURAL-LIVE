@@ -119,13 +119,34 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
   };
 
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from(COL_ORDERS).insert(orderData).select('id').single();
-  if (error || !data) {
-    log('Order insert to Supabase failed: ' + JSON.stringify(error));
-    throw Object.assign(new Error('Failed to create payment order: database insert error'), { status: 500 });
+  let insertResult;
+  try {
+    const { data, error } = await supabase.from(COL_ORDERS).insert(orderData).select('id').single();
+    if (error) throw error;
+    insertResult = data;
+  } catch (insertErr) {
+    const code = insertErr?.code || '';
+    // Column missing (42703) — retry with only known-good columns
+    if (code === '42703') {
+      log('Order insert failed (missing column), retrying with reduced fields: ' + JSON.stringify(insertErr));
+      const reduced = (({ id, user_id, type, amount, status, expires_at }) => ({ id, user_id, type, amount, status, expires_at }))(orderData);
+      const { data, error } = await supabase.from(COL_ORDERS).insert(reduced).select('id').single();
+      if (error || !data) {
+        log('Order insert retry also failed: ' + JSON.stringify(error));
+        throw Object.assign(new Error('Failed to create payment order'), { status: 500 });
+      }
+      insertResult = data;
+    } else {
+      log('Order insert to Supabase failed: ' + JSON.stringify(insertErr));
+      throw Object.assign(new Error('Failed to create payment order: database insert error'), { status: 500 });
+    }
+  }
+  if (!insertResult) {
+    log('Order insert returned no data');
+    throw Object.assign(new Error('Failed to create payment order: no data returned'), { status: 500 });
   }
 
-  const finalOrderId = data.id;
+  const finalOrderId = insertResult.id;
 
   let paymentUserId = null;
   let paymentPendingRegId = null;
