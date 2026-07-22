@@ -133,8 +133,17 @@ module.exports = async (req, res) => {
     const sponsorData = await deleteMatching(COL_SPONSOR_DATA, 'user_id', userId);
     if (sponsorData.length) result.deleted.sponsorData = sponsorData.length;
 
-    const pendingRegs = await deleteMatching(COL_PENDING_REGS, 'user_id', userId);
-    if (pendingRegs.length) result.deleted.pendingRegistrations = pendingRegs.length;
+    const pendingRegsByUser = await deleteMatching(COL_PENDING_REGS, 'user_id', userId);
+    let pendingRegCount = pendingRegsByUser.length;
+
+    const email = user.email || '';
+    const phone = user.phone || '';
+    if (email) {
+      const pendingByEmail = await deleteMatching(COL_PENDING_REGS, 'email', email.toLowerCase().trim());
+      const newIds = pendingByEmail.filter(id => !pendingRegsByUser.includes(id));
+      pendingRegCount += newIds.length;
+    }
+    if (pendingRegCount) result.deleted.pendingRegistrations = pendingRegCount;
 
     const paymentSessions = await deleteMatching(COL_SESSIONS, 'user_id', userId);
     if (paymentSessions.length) result.deleted.paymentSessions = paymentSessions.length;
@@ -181,8 +190,6 @@ module.exports = async (req, res) => {
       result.deleted.chatConversation = 1;
     } catch {}
 
-    const email = user.email || '';
-    const phone = user.phone || '';
     if (email) {
       try { await deleteDoc(COL_UNIQUES, 'email:' + email.toLowerCase().trim()); result.deleted.emailUnique = 1; } catch {}
     }
