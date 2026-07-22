@@ -243,6 +243,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   pendingVerificationQueue.add(orderId);
   if (!verificationWorkerRunning) runVerificationWorker();
 
+  log('[QUEUE_STARTED] order ' + orderId + ' enqueued');
   log('Payment enqueued for background verification: ' + orderId);
 
   // Return immediately — frontend gets final status via SSE push + polling
@@ -294,12 +295,14 @@ async function runVerificationWorker() {
       const isVerified = v.status === 'verified';
       const finalStatus = isVerified ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
 
-      await updateDoc(COL_ORDERS, orderId, {
+      log('[STATUS_CHANGED] payment_sessions -> ' + finalStatus + ' for order ' + orderId);
+      const dbResult = await updateDoc(COL_ORDERS, orderId, {
         status: finalStatus, verification_status: v.status,
         verification_score: v.verificationScore || 0, ocr_result: v.ocrData || null,
-        rejection_reasons: v.reasons || [], verified_at: now(),
-        verification_completed_at: now(), updated_at: now(),
-      }).catch(() => {});
+        rejection_reasons: v.reasons || [], updated_at: now(),
+      });
+      if (!dbResult) log('[ERROR_OCCURRED] COL_ORDERS update returned falsy for ' + orderId);
+      log('[DATABASE_UPDATED] payment_sessions updated for ' + orderId);
 
       if (isVerified) {
         log('Worker: approved — executing post-approval for ' + orderId);
@@ -327,14 +330,19 @@ async function runVerificationWorker() {
       } catch (upiErr) { log('Worker: upi_payments update failed: ' + (upiErr.message || upiErr)); }
 
       // Broadcast SSE for real-time frontend update
-      try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type || 'unknown' }); } catch {}
+      try {
+        broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type || 'unknown' });
+        log('[NOTIFICATION_SENT] SSE paymentUpdated for ' + orderId + ' status=' + finalStatus);
+      } catch {}
 
-      log('Worker: completed ' + orderId + ' status=' + finalStatus + ' score=' + (v.verificationScore || 0));
+      log('[PROCESS_COMPLETED] Worker finished ' + orderId + ' status=' + finalStatus + ' score=' + (v.verificationScore || 0));
     } catch (e) {
-      log('Worker: verification failed for ' + orderId + ': ' + e.message);
+      log('[ERROR_OCCURRED] Worker failed for ' + orderId + ': ' + e.message);
       try {
         await updateDoc(COL_ORDERS, orderId, { status: 'manual_review', verification_status: 'manual_review', rejection_reasons: ['Auto-verification failed: ' + e.message], updated_at: now() }).catch(() => {});
         broadcast('paymentUpdated', { orderId, status: 'manual_review' }).catch(() => {});
+        log('[STATUS_CHANGED] payment_sessions -> manual_review for ' + orderId + ' (fallback)');
+        log('[NOTIFICATION_SENT] SSE paymentUpdated manual_review for ' + orderId);
       } catch {}
     }
     verifyingOrders.delete(orderId);

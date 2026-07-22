@@ -205,6 +205,7 @@ async function analyzeWithAI(imageUrl, expected) {
   let tempPath = null;
   try {
     const rawBuf = await fetchBufferFromURL(imageUrl);
+    log('[OCR_STARTED] Image fetched: ' + rawBuf.length + ' bytes from ' + imageUrl.substring(0, 80));
     const ext = guessExtension(rawBuf);
     const tempDir = os.tmpdir();
     const tempName = 'ai_' + crypto.randomBytes(8).toString('hex') + ext;

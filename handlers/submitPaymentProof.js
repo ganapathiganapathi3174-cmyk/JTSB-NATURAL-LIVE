@@ -70,6 +70,7 @@ module.exports = async (req, res) => {
     if (!upiId) { sendJSON(400, { error: 'UPI ID is required' }); return; }
 
     const uploadedUrl = await uploadBase64Image(screenshot);
+    console.log('[UPLOAD_STARTED] order=' + orderId + ' url=' + (uploadedUrl || '').substring(0, 80));
     const result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null, userEnteredUpi: upiId });
 
     sendJSON(200, {

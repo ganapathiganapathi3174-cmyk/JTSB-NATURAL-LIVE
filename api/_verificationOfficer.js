@@ -123,7 +123,7 @@ async function runOfficerVerification(screenshotUrl, expected) {
   let aiResult = null;
   let aiOutput = null;
   try {
-    log('Calling AI engine...');
+    log('[AI_STARTED] for ' + (expected.orderId || 'unknown'));
     aiOutput = await analyzeWithAI(screenshotUrl, {
       amount: String(expected.amount || ''),
       receiver_upi: expected.receiverUpi || ADMIN_UPI_ID,
@@ -174,6 +174,7 @@ async function runOfficerVerification(screenshotUrl, expected) {
   fields.fraudFlags = fraudFlags;
 
   // Step 3: Run each mandatory validation
+  log('[RULE_ENGINE_STARTED] Running validation checks...');
   const failedChecks = [];
 
   // Check 1: App identified
