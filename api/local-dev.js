@@ -126,6 +126,7 @@ const handlerCfg = [
   ['fixSystemUsers', false, '../handlers/fixSystemUsers.js'],
   ['purgeAllUsers', true, '../handlers/purgeAllUsers.js'],
   ['permanentDeleteUser', true, '../handlers/permanentDeleteUser.js'],
+  ['cascadeDeleteUser', true, '../handlers/cascadeDeleteUser.js'],
   // === NEW MODULES: AI Pipeline + Upgrade Requests ===
   ['runAIVerification', false, '../handlers/runAIVerification.js'],
   ['createUpgradeRequest', false, '../handlers/createUpgradeRequest.js'],

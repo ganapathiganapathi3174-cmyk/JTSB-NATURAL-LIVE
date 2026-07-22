@@ -97,6 +97,7 @@ try { handlers.getPendingPaymentsQueue = requireAdmin(safeHandler('getPendingPay
 try { handlers.fixSystemUsers = safeHandler('fixSystemUsers', require('../handlers/fixSystemUsers.js')); } catch (e) { handlers.fixSystemUsers = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'fixSystemUsers load failed',detail:e.message})); }; }
 try { handlers.purgeAllUsers = requireAdmin(safeHandler('purgeAllUsers', require('../handlers/purgeAllUsers.js'))); } catch (e) { handlers.purgeAllUsers = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'purgeAllUsers load failed',detail:e.message})); }; }
 try { handlers.permanentDeleteUser = requireAdmin(safeHandler('permanentDeleteUser', require('../handlers/permanentDeleteUser.js'))); } catch (e) { handlers.permanentDeleteUser = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'permanentDeleteUser load failed',detail:e.message})); }; }
+try { handlers.cascadeDeleteUser = requireAdmin(safeHandler('cascadeDeleteUser', require('../handlers/cascadeDeleteUser.js'))); } catch (e) { handlers.cascadeDeleteUser = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'cascadeDeleteUser load failed',detail:e.message})); }; }
 
 // === NEW MODULES: AI Pipeline + Upgrade Requests ===
 try { handlers.runAIVerification = safeHandler('runAIVerification', require('../handlers/runAIVerification.js')); } catch (e) { handlers.runAIVerification = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'runAIVerification load failed',detail:e.message})); }; }
