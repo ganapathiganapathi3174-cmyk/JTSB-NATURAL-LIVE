@@ -90,11 +90,15 @@ module.exports = async (req, res) => {
             }
           }
         } catch {}
+        try {
+          await deleteDoc(COL_PENDING_REGS, pend.id);
+          LOG(`Cleaned up stale pending_registration ${pend.id} for email ${email}`);
+        } catch {}
+      } else {
+        res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered. Please login.' }));
+        LOG(`Response: email already in pending_reg — total ${Date.now() - reqStart}ms`);
+        return;
       }
-      try {
-        await deleteDoc(COL_PENDING_REGS, pend.id);
-        LOG(`Cleaned up stale pending_registration ${pend.id} for email ${email}`);
-      } catch {}
     }
 
     // Step 3: Check existing phone (DB query via hash index — no full-table scan)
@@ -132,11 +136,15 @@ module.exports = async (req, res) => {
             }
           }
         } catch {}
+        try {
+          await deleteDoc(COL_PENDING_REGS, pend.id);
+          LOG(`Cleaned up stale pending_registration ${pend.id} for phone ${phone}`);
+        } catch {}
+      } else {
+        res.writeHead(409); res.end(JSON.stringify({ error: 'Phone already registered. Please login.' }));
+        LOG(`Response: phone already in pending_reg — total ${Date.now() - reqStart}ms`);
+        return;
       }
-      try {
-        await deleteDoc(COL_PENDING_REGS, pend.id);
-        LOG(`Cleaned up stale pending_registration ${pend.id} for phone ${phone}`);
-      } catch {}
     }
 
     // Step 4: Validate Sponsor (referral code via targeted query — no full-table scan)
