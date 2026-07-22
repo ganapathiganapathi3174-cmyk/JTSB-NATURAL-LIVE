@@ -68,10 +68,33 @@ module.exports = async (req, res) => {
       'handlers/preRegister.js', 'module.exports', 64
     ).catch(() => []);
     STEP(3, 'After Supabase Query — email check done');
-    if (existingEmailUser || (existingEmailPending && existingEmailPending.length > 0)) {
-      res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered. Please login.' }));
-      LOG(`Response: email exists — total ${Date.now() - reqStart}ms`);
-      return;
+    if (existingEmailUser) {
+      const uEmailRaw = (existingEmailUser.email || '').toLowerCase().trim();
+      if (uEmailRaw === email.toLowerCase().trim()) {
+        res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered. Please login.' }));
+        LOG(`Response: email exists in users table — total ${Date.now() - reqStart}ms`);
+        return;
+      }
+    }
+    if (existingEmailPending && existingEmailPending.length > 0) {
+      const pend = existingEmailPending[0];
+      if (pend.user_id) {
+        try {
+          const owner = await getDoc(COL_USERS, pend.user_id);
+          if (owner) {
+            const oEmailRaw = (owner.email || '').toLowerCase().trim();
+            if (oEmailRaw === email.toLowerCase().trim()) {
+              res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered. Please login.' }));
+              LOG(`Response: email exists in users via pending_reg — total ${Date.now() - reqStart}ms`);
+              return;
+            }
+          }
+        } catch {}
+      }
+      try {
+        await deleteDoc(COL_PENDING_REGS, pend.id);
+        LOG(`Cleaned up stale pending_registration ${pend.id} for email ${email}`);
+      } catch {}
     }
 
     // Step 3: Check existing phone (DB query via hash index — no full-table scan)
