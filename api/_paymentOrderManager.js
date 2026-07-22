@@ -108,38 +108,23 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
   const orderId = 'ORD-' + randomString(12);
   const expiresAt = new Date(Date.now() + ORDER_TTL_MS).toISOString();
 
-  const orderData = {
-    id: orderId,
-    user_id: userId || null,
-    pending_reg_id: pendingRegId || null,
-    type,
-    amount: Number(amount),
-    status: 'pending',
-    expires_at: expiresAt,
-  };
-
   const supabase = getSupabaseClient();
   let insertResult;
   try {
-    const { data, error } = await supabase.from(COL_ORDERS).insert(orderData).select('id').single();
+    const { data, error } = await supabase.from(COL_ORDERS).insert({
+      id: orderId,
+      user_id: userId || null,
+      type,
+      amount: Number(amount),
+      status: 'pending',
+      expires_at: expiresAt,
+    }).select('id').single();
     if (error) throw error;
     insertResult = data;
   } catch (insertErr) {
-    const code = insertErr?.code || '';
-    // Column missing (42703) — retry with only known-good columns
-    if (code === '42703') {
-      log('Order insert failed (missing column), retrying with reduced fields: ' + JSON.stringify(insertErr));
-      const reduced = (({ id, user_id, type, amount, status, expires_at }) => ({ id, user_id, type, amount, status, expires_at }))(orderData);
-      const { data, error } = await supabase.from(COL_ORDERS).insert(reduced).select('id').single();
-      if (error || !data) {
-        log('Order insert retry also failed: ' + JSON.stringify(error));
-        throw Object.assign(new Error('Failed to create payment order'), { status: 500 });
-      }
-      insertResult = data;
-    } else {
-      log('Order insert to Supabase failed: ' + JSON.stringify(insertErr));
-      throw Object.assign(new Error('Failed to create payment order: database insert error'), { status: 500 });
-    }
+    log('Order insert failed: ' + (insertErr?.message || JSON.stringify(insertErr)));
+    console.error('[ORDER-INSERT] Full error:', insertErr);
+    throw Object.assign(new Error('Failed to create payment order'), { status: 500 });
   }
   if (!insertResult) {
     log('Order insert returned no data');
