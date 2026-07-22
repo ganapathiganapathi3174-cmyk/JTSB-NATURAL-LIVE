@@ -1,5 +1,5 @@
 const { COL_PENDING_REGS, hashPassword, isSystemReferralCode, getPackageByReferral, getReferrerPackage, validatePackageAmount } = require('../api/_shared.js');
-const { addDoc, writeDoc, findUserByEmail, findUserByPhone, findUserBySponsorCode, getDoc, runQuery } = require('../api/_supabase.js');
+const { addDoc, writeDoc, findUserByEmail, findUserByPhone, findUserBySponsorCode, getDoc, runQuery, deleteDoc } = require('../api/_supabase.js');
 
 // OCR is NOT imported here — preRegister never triggers OCR (Requirement #4)
 // OCR runs ONLY when user uploads payment proof via submitPaymentProof
