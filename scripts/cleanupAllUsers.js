@@ -96,6 +96,21 @@ async function main() {
     }
   }
 
+  // Clean up orphaned pending registrations (user_id is null)
+  try {
+    const { data: orphanedPendings, error: pendError } = await supabase
+      .from('pending_registrations')
+      .select('id, email')
+      .is('user_id', null);
+    if (!pendError && orphanedPendings?.length > 0) {
+      console.log(`[CLEANUP] Cleaning ${orphanedPendings.length} orphaned pending registrations (user_id=null)...`);
+      for (const p of orphanedPendings) {
+        await supabase.from('pending_registrations').delete().eq('id', p.id);
+        console.log(`  Deleted pending_registration ${p.id} (${p.email || 'no email'})`);
+      }
+    }
+  } catch (e) { console.error('[CLEANUP] Failed to clean orphaned pendings:', e.message); }
+
   console.log(`[CLEANUP] Done. Deleted ${userIds.length} users and all associated data.`);
   process.exit(0);
 }
