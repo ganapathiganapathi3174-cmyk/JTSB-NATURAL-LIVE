@@ -79,6 +79,7 @@ const SponsorMarketplacePage = lazy(() => import('./pages/SponsorMarketplacePage
 const SponsorRequestsPage = lazy(() => import('./pages/SponsorRequestsPage.jsx'));
 const AdminSponsorTransfersPage = lazy(() => import('./pages/AdminSponsorTransfersPage.jsx'));
 const AdminPendingPaymentsPage = lazy(() => import('./pages/AdminPendingPaymentsPage.jsx'));
+const AdminUpgradeRequestsPage = lazy(() => import('./pages/AdminUpgradeRequestsPage.jsx'));
 
 const SESSION_DURATION = 24 * 3600 * 1000;
 
@@ -195,6 +196,7 @@ export default function App() {
             <Route path="/fb-admin/queue" element={<ProtectedFirebaseAdmin><AnimatedPage><FirebaseAdminQueuePage /></AnimatedPage></ProtectedFirebaseAdmin>} />
             <Route path="/fb-admin/sponsor-transfers" element={<ProtectedFirebaseAdmin><AnimatedPage><AdminSponsorTransfersPage /></AnimatedPage></ProtectedFirebaseAdmin>} />
             <Route path="/fb-admin/pending-queue" element={<ProtectedFirebaseAdmin><AnimatedPage><AdminPendingPaymentsPage /></AnimatedPage></ProtectedFirebaseAdmin>} />
+            <Route path="/fb-admin/upgrade-requests" element={<ProtectedFirebaseAdmin><AnimatedPage><AdminUpgradeRequestsPage /></AnimatedPage></ProtectedFirebaseAdmin>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

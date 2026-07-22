@@ -483,6 +483,63 @@ begin
 end;
 $$;
 
+-- ==================== UPGRADE REQUESTS ====================
+create table if not exists public.upgrade_requests (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete cascade,
+  user_name text,
+  user_email text,
+  user_phone text,
+  current_plan text,
+  requested_plan text not null,
+  amount numeric(12,2) not null,
+  referral_code text,
+  status text default 'pending',
+  admin_id text,
+  rejection_reason text,
+  reviewed_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_upgrade_req_user on public.upgrade_requests(user_id);
+create index if not exists idx_upgrade_req_status on public.upgrade_requests(status);
+create index if not exists idx_upgrade_req_created on public.upgrade_requests(created_at);
+
+-- ==================== PAYMENT AI LOGS ====================
+create table if not exists public.payment_ai_logs (
+  id uuid primary key default uuid_generate_v4(),
+  payment_id text,
+  user_id text,
+  utr text,
+  image_score numeric(5,2),
+  vision_score numeric(5,2),
+  paddle_confidence numeric(5,2),
+  easyocr_confidence numeric(5,2),
+  tesseract_confidence numeric(5,2),
+  voted_amount text,
+  voted_utr text,
+  voted_upi text,
+  voted_date text,
+  voted_time text,
+  voted_status text,
+  fraud_score numeric(5,2),
+  fraud_flags jsonb default '[]',
+  final_decision text,
+  confidence numeric(5,2),
+  reasons jsonb default '[]',
+  matched_fields jsonb default '{}',
+  processing_time_ms integer,
+  ai_model_used text,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_payment_ai_logs_payment on public.payment_ai_logs(payment_id);
+create index if not exists idx_payment_ai_logs_created on public.payment_ai_logs(created_at);
+
+alter table public.upgrade_requests enable row level security;
+alter table public.payment_ai_logs enable row level security;
+
 -- ==================== BACKFILL: HASH COLUMNS (Run ONCE after adding columns) ====================
 -- email_hash / phone_hash columns are populated automatically for NEW inserts
 -- via encryptSensitive() in _supabase.js.

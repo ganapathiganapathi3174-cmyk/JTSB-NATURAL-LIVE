@@ -8,7 +8,7 @@ const {
 } = require('./_shared.js');
 const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet, getSupabaseClient } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
-const { runBankSmsVerification } = require('./_bankSmsVerificationEngine.js');
+const { runOfficerVerificationForWorker } = require('./_verificationOfficer.js');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;
 const VERIFY_TIMEOUT_MS = 180 * 1000;
@@ -274,9 +274,10 @@ async function runVerificationWorker() {
 
       log('Worker: processing order ' + orderId + ' type=' + order.type + ' amount=' + order.amount);
       const v = await Promise.race([
-        runBankSmsVerification(order, order.screenshot_url, order.user_id || null, order.utr || null, null),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 25000 : 120000)),
+        runOfficerVerificationForWorker(order, order.screenshot_url, order.user_id || null, order.utr || null, null),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 25000 : 300000)),
       ]);
+      log('Worker: officer result — status=' + v.status + ' score=' + (v.verificationScore || 0) + ' checks=' + JSON.stringify(v.checks || []));
 
       const isVerified = v.status === 'verified';
       const finalStatus = isVerified ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');

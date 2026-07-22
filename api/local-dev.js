@@ -125,6 +125,13 @@ const handlerCfg = [
   ['getPendingPaymentsQueue', true, '../handlers/getPendingPaymentsQueue.js'],
   ['fixSystemUsers', false, '../handlers/fixSystemUsers.js'],
   ['purgeAllUsers', true, '../handlers/purgeAllUsers.js'],
+  // === NEW MODULES: AI Pipeline + Upgrade Requests ===
+  ['runAIVerification', false, '../handlers/runAIVerification.js'],
+  ['createUpgradeRequest', false, '../handlers/createUpgradeRequest.js'],
+  ['getUpgradeRequests', true, '../handlers/getUpgradeRequests.js'],
+  ['approveUpgradeRequest', true, '../handlers/approveUpgradeRequest.js'],
+  ['rejectUpgradeRequest', true, '../handlers/rejectUpgradeRequest.js'],
+  ['getUserUpgradeStatus', false, '../handlers/getUserUpgradeStatus.js'],
 ];
 const handlerModules = {};
 const handlers = {};

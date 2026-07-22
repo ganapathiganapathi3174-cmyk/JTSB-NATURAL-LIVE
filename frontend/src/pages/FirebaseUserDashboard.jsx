@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FirebaseUser, FirebaseStorage, FirebaseAuth, MAX_REFERRALS, FirebaseTopup, FirebaseTopupReferral, FirebaseNotification, FirebaseWallet } from '../db/firebase-db.js';
+import UpgradeModal from '../components/UpgradeModal.jsx';
 const QUOTA_KEY = 'fb_quota_exhausted';
 
 function getLastActiveStatus(dateStr) {
@@ -54,6 +55,7 @@ export default function FirebaseUserDashboard() {
   const [profilePicPreview, setProfilePicPreview] = useState(null);
   const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const userId = localStorage.getItem('fb_user_id');
 
@@ -461,6 +463,10 @@ export default function FirebaseUserDashboard() {
               <Link to="/fb/chat" className="quick-btn">Chat</Link>
               <Link to="/fb/sponsor-marketplace" className="quick-btn">Sponsor</Link>
               <Link to="/fb/sponsor-requests" className="quick-btn">Requests</Link>
+              <button className="btn btn-sm btn-primary" onClick={() => setShowUpgradeModal(true)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '0.25rem' }}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                Upgrade
+              </button>
             </div>
           </div>
 
@@ -865,6 +871,15 @@ export default function FirebaseUserDashboard() {
           </div>
         )}
       </div>
+
+      {showUpgradeModal && (
+        <UpgradeModal
+          userId={userId}
+          currentPlan={user?.membership_type || user?.membership_paid || '0'}
+          onClose={() => setShowUpgradeModal(false)}
+          onSuccess={() => {}}
+        />
+      )}
 
       {/* Mobile Bottom Nav */}
       <nav className="mobile-bottom-nav">

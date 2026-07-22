@@ -97,6 +97,14 @@ try { handlers.getPendingPaymentsQueue = requireAdmin(safeHandler('getPendingPay
 try { handlers.fixSystemUsers = safeHandler('fixSystemUsers', require('../handlers/fixSystemUsers.js')); } catch (e) { handlers.fixSystemUsers = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'fixSystemUsers load failed',detail:e.message})); }; }
 try { handlers.purgeAllUsers = requireAdmin(safeHandler('purgeAllUsers', require('../handlers/purgeAllUsers.js'))); } catch (e) { handlers.purgeAllUsers = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'purgeAllUsers load failed',detail:e.message})); }; }
 
+// === NEW MODULES: AI Pipeline + Upgrade Requests ===
+try { handlers.runAIVerification = safeHandler('runAIVerification', require('../handlers/runAIVerification.js')); } catch (e) { handlers.runAIVerification = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'runAIVerification load failed',detail:e.message})); }; }
+try { handlers.createUpgradeRequest = safeHandler('createUpgradeRequest', require('../handlers/createUpgradeRequest.js')); } catch (e) { handlers.createUpgradeRequest = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'createUpgradeRequest load failed',detail:e.message})); }; }
+try { handlers.getUpgradeRequests = requireAdmin(safeHandler('getUpgradeRequests', require('../handlers/getUpgradeRequests.js'))); } catch (e) { handlers.getUpgradeRequests = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUpgradeRequests load failed',detail:e.message})); }; }
+try { handlers.approveUpgradeRequest = requireAdmin(safeHandler('approveUpgradeRequest', require('../handlers/approveUpgradeRequest.js'))); } catch (e) { handlers.approveUpgradeRequest = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'approveUpgradeRequest load failed',detail:e.message})); }; }
+try { handlers.rejectUpgradeRequest = requireAdmin(safeHandler('rejectUpgradeRequest', require('../handlers/rejectUpgradeRequest.js'))); } catch (e) { handlers.rejectUpgradeRequest = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'rejectUpgradeRequest load failed',detail:e.message})); }; }
+try { handlers.getUserUpgradeStatus = safeHandler('getUserUpgradeStatus', require('../handlers/getUserUpgradeStatus.js')); } catch (e) { handlers.getUserUpgradeStatus = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUserUpgradeStatus load failed',detail:e.message})); }; }
+
 console.error('[INDEX] ' + Object.keys(handlers).length + ' handlers loaded');
 
 module.exports = async (req, res) => {

@@ -116,7 +116,7 @@ export default function FirebaseAdminDashboardPage() {
   const [showClaimHistory, setShowClaimHistory] = useState(null);
   const actionMsgTimeoutRef = useRef(null);
   const [sseConnected, setSseConnected] = useState(false);
-  const [sseCounts, setSseCounts] = useState({ pending_payments: 0, pending_registrations: 0 });
+  const [sseCounts, setSseCounts] = useState({ pending_payments: 0, pending_registrations: 0, pending_upgrade_requests: 0 });
   const [sseTime, setSseTime] = useState(null);
   const sseRef = useRef(null);
 
@@ -390,7 +390,7 @@ export default function FirebaseAdminDashboardPage() {
     eventSource.addEventListener('initialState', (e) => {
       try {
         const data = JSON.parse(e.data);
-        setSseCounts({ pending_payments: data.pending_payments, pending_registrations: data.pending_registrations });
+        setSseCounts({ pending_payments: data.pending_payments || 0, pending_registrations: data.pending_registrations || 0, pending_upgrade_requests: data.pending_upgrade_requests || 0 });
         setSseTime(data.timestamp);
       } catch (_) {}
     });
@@ -503,6 +503,12 @@ export default function FirebaseAdminDashboardPage() {
                 <div>{'\u{1F4E4}'}</div>
                 <div className="stat-value" style={{ color: 'var(--accent)' }}>{stats.pendingTopups}</div>
                 <div className="stat-label">Pending Topups</div>
+                <span className="priority-link">View {'\u2192'}</span>
+              </Link>
+              <Link to="/fb-admin/upgrade-requests" className="priority-card" style={{ textDecoration: 'none' }}>
+                <div>{'\u{1F51D}'}</div>
+                <div className="stat-value" style={{ color: 'var(--warning)' }}>{sseCounts.pending_upgrade_requests}</div>
+                <div className="stat-label">Upgrade Requests</div>
                 <span className="priority-link">View {'\u2192'}</span>
               </Link>
               <Link to="/fb-admin/payments?status=approved" className="priority-card" style={{ textDecoration: 'none' }}>

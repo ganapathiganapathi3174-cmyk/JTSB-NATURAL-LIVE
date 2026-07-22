@@ -1,6 +1,7 @@
 const { addClient, broadcast } = require('../api/_sse.js');
 const { runQuery } = require('../api/_supabase.js');
 const { COL_PENDING_REGS, COL_UPI_PAYMENTS } = require('../api/_shared.js');
+const COL_UPGRADE_REQUESTS = 'upgrade_requests';
 const { verifyAdminToken } = require('../api/_auth.js');
 
 module.exports = async (req, res) => {
@@ -18,14 +19,16 @@ module.exports = async (req, res) => {
 
   // Send initial state
   try {
-    const [pendingReg, pendingPayments] = await Promise.all([
+    const [pendingReg, pendingPayments, pendingUpgrades] = await Promise.all([
       runQuery(COL_PENDING_REGS, [{ field: 'payment_status', op: 'EQUAL', value: 'pending' }]),
       runQuery(COL_UPI_PAYMENTS, [{ field: 'status', op: 'EQUAL', value: 'pending' }]),
+      runQuery(COL_UPGRADE_REQUESTS, [{ field: 'status', op: 'EQUAL', value: 'pending' }]),
     ]);
 
     client.res.write(`event: initialState\ndata: ${JSON.stringify({
       pending_registrations: (pendingReg || []).length,
       pending_payments: (pendingPayments || []).length,
+      pending_upgrade_requests: (pendingUpgrades || []).length,
       timestamp: new Date().toISOString(),
     })}\n\n`);
   } catch (err) {
