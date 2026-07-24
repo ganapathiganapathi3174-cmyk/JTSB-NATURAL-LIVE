@@ -1,4 +1,4 @@
-const { COL_DELETION_AUDIT_LOGS, COL_USERS, COL_UPI_PAYMENTS, COL_TOPUPS, COL_VERIFICATION_LOGS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_TOPUP_INCOME, COL_REFERRALS, COL_NOTIFICATIONS, COL_CHAT_MESSAGES, COL_CHAT_CONVOS, COL_UNIQUES, COL_PENDING_REGS, COL_SPONSOR_DATA, COL_PROCESSED_PAYMENTS, COL_SESSIONS, COL_AUDIT_LOGS, COL_SPONSOR_CLAIMS, COL_TOPUP_AUDIT_LOG, COL_SPONSOR_TRANSFERS } = require('../api/_shared.js');
+const { COL_DELETION_AUDIT_LOGS, COL_USERS, COL_UPI_PAYMENTS, COL_TOPUPS, COL_VERIFICATION_LOGS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_TOPUP_INCOME, COL_REFERRALS, COL_NOTIFICATIONS, COL_CHAT_MESSAGES, COL_CHAT_CONVOS, COL_UNIQUES, COL_PENDING_REGS, COL_SPONSOR_DATA, COL_PROCESSED_PAYMENTS, COL_SESSIONS, COL_AUDIT_LOGS, COL_SPONSOR_CLAIMS, COL_TOPUP_AUDIT_LOG, COL_SPONSOR_TRANSFERS, COL_UPGRADE_REQUESTS, COL_PAYMENT_AI_LOGS } = require('../api/_shared.js');
 const { deleteDoc, getDoc, runQuery, addDoc, updateDoc } = require('../api/_supabase.js');
 const r2 = require('../api/_r2.js');
 
@@ -72,6 +72,22 @@ async function deleteUserCascade(userId, reason, adminInfo) {
   if (sponsorData.length) result.deletedRecords.push({ table: COL_SPONSOR_DATA, ids: sponsorData });
   const pendingRegs = await deleteMatching(COL_PENDING_REGS, 'user_id', userId);
   if (pendingRegs.length) result.deletedRecords.push({ table: COL_PENDING_REGS, ids: pendingRegs });
+
+  // CRITICAL: Also delete pending_registrations by email and phone (orphaned records block re-registration)
+  if (email) {
+    const pendingByEmail = await deleteMatching(COL_PENDING_REGS, 'email', email.toLowerCase().trim());
+    if (pendingByEmail.length) result.deletedRecords.push({ table: COL_PENDING_REGS + '(email)', ids: pendingByEmail });
+  }
+  if (phone) {
+    const pendingByPhone = await deleteMatching(COL_PENDING_REGS, 'phone', phone.trim());
+    if (pendingByPhone.length) result.deletedRecords.push({ table: COL_PENDING_REGS + '(phone)', ids: pendingByPhone });
+  }
+
+  // Clean upgrade_requests and payment_ai_logs
+  const upgradeRequests = await deleteMatching(COL_UPGRADE_REQUESTS, 'user_id', userId);
+  if (upgradeRequests.length) result.deletedRecords.push({ table: COL_UPGRADE_REQUESTS, ids: upgradeRequests });
+  const paymentAiLogs = await deleteMatching(COL_PAYMENT_AI_LOGS, 'user_id', userId);
+  if (paymentAiLogs.length) result.deletedRecords.push({ table: COL_PAYMENT_AI_LOGS, ids: paymentAiLogs });
   const paymentSessions = await deleteMatching(COL_SESSIONS, 'user_id', userId);
   if (paymentSessions.length) result.deletedRecords.push({ table: COL_SESSIONS, ids: paymentSessions });
   const auditLogs = await deleteMatching(COL_AUDIT_LOGS, 'target_id', userId);
