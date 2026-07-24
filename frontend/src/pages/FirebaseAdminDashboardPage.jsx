@@ -603,6 +603,9 @@ export default function FirebaseAdminDashboardPage() {
         )}
 
         <div className="stats-grid">
+          <div className="card glass-card">
+            <div className="card-header">
+              <h2 className="card-title">{'\u26A1'} Quick Actions</h2>
             </div>
             <div className="card-body">
               <div className="quick-actions-grid">
