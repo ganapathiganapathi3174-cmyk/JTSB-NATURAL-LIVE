@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser } from '../db/firebase-db.js';
-import UpiPayment from '../components/UpiPayment.jsx';
+import PaymentFlow from '../components/PaymentFlow.jsx';
 
 export default function PaymentPage() {
   const navigate = useNavigate();
@@ -10,34 +9,18 @@ export default function PaymentPage() {
   const isTopup = urlMode === 'topup';
 
   const [topupUserId] = useState(() => localStorage.getItem('fb_user_id') || '');
-  const [allowedPackage, setAllowedPackage] = useState(null);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  useEffect(() => {
-    if (isTopup && topupUserId) {
-      FirebaseUser.findById(topupUserId).then(user => {
-        if (user && user.membership_type) setAllowedPackage(Number(user.membership_type));
-      }).catch(() => {});
-    }
-  }, [isTopup, topupUserId]);
-
   if (!isTopup) { navigate('/fb/register', { replace: true }); return null; }
   if (isTopup && !topupUserId) { navigate('/fb/login', { replace: true }); return null; }
-
-  function handleUpiSuccess() { setSubmitted(true); }
 
   if (submitted) {
     return (
       <div className="flex flex-center" style={{ minHeight: '100vh' }}>
         <div className="glass card text-center animate-fade-in-up" style={{ maxWidth: 440, width: '100%' }}>
-          <div className="badge" style={{
-            width: 64, height: 64, borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--success), #4ADE80)', color: 'var(--text)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.75rem', margin: '0 auto 1.25rem', boxShadow: '0 0 30px rgba(34,197,94,0.3)'
-          }}>✓</div>
-          <h2 className="text-lg font-bold mb-sm text-gradient-success" style={{ margin: 0 }}>Topup Submitted!</h2>
+          <div className="result-icon success" style={{ width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.75rem', margin: '0 auto 1.25rem' }}>✓</div>
+          <h2 className="text-lg font-bold mb-sm" style={{ margin: 0 }}>Topup Submitted!</h2>
           <p className="text-muted text-sm mb-md" style={{ lineHeight: 1.6 }}>Your topup request has been submitted. Wallet will be updated after verification.</p>
           <Link to="/fb/dashboard" className="btn btn-primary mt-lg" style={{ display: 'inline-flex' }}>Back to Dashboard</Link>
         </div>
@@ -54,7 +37,7 @@ export default function PaymentPage() {
         <p className="text-muted text-sm">Premium FinTech Platform</p>
       </div>
 
-      <div className="glass card animate-fade-in-up stagger-1" style={{ width: '100%', maxWidth: 480 }}>
+      <div className="glass card animate-fade-in-up" style={{ width: '100%', maxWidth: 480 }}>
         <h1 className="text-xl font-bold mb-xs text-gradient">Wallet Topup</h1>
         <p className="text-muted text-sm mb-lg">Add funds to your wallet via UPI</p>
 
@@ -62,11 +45,10 @@ export default function PaymentPage() {
           <div className="alert-error mb-md">{error}</div>
         )}
 
-        <UpiPayment
+        <PaymentFlow
           type="topup"
           userId={topupUserId}
-          allowedPackage={allowedPackage}
-          onSuccess={handleUpiSuccess}
+          onSuccess={() => setSubmitted(true)}
           onError={(msg) => setError(msg)}
         />
       </div>

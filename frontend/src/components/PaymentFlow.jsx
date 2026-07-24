@@ -1,37 +1,68 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
 
 const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
+const AMOUNTS = [120, 500, 1000];
+const UPI_ID = 'jayarajj126-3@okicici';
+const UPI_NAME = 'JEYARAJ ALAG';
 
-export default function PaymentFlow({ orderId, amount, upiId, upiName, onSuccess, onError }) {
-  const [step, setStep] = useState(1); // 1=pay, 2=utr, 3=result
-  const [utr, setUtr] = useState('');
+export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onError }) {
+  const [step, setStep] = useState('amount'); // amount | pay | upload | processing | result
+  const [selectedAmount, setSelectedAmount] = useState(null);
+  const [orderId, setOrderId] = useState(null);
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [copied, setCopied] = useState(false);
   const [screenshotFile, setScreenshotFile] = useState(null);
   const [screenshotPreview, setScreenshotPreview] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [qrDataUrl, setQrDataUrl] = useState(null);
   const [result, setResult] = useState(null);
+  const [pollCount, setPollCount] = useState(0);
   const fileRef = useRef(null);
+  const pollRef = useRef(null);
 
-  const displayUpiId = upiId || 'jayarajj126-3@okicici';
-  const displayUpiName = upiName || 'JEYARAJ ALAG';
-  const displayAmount = amount || 1;
-
-  const upiUrl = `upi://pay?pa=${encodeURIComponent(displayUpiId)}&pn=${encodeURIComponent(displayUpiName)}&am=${displayAmount}&cu=INR`;
-
-  useState(() => {
-    QRCode.toDataURL(upiUrl, { width: 200, margin: 1, color: { dark: '#000000', light: '#ffffff' } })
-      .then(setQrDataUrl)
-      .catch(() => {});
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
   const copyUpiId = useCallback(() => {
-    navigator.clipboard.writeText(displayUpiId).then(() => {
+    navigator.clipboard.writeText(UPI_ID).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {});
-  }, [displayUpiId]);
+  }, []);
+
+  async function handleSelectAmount(amount) {
+    setSelectedAmount(amount);
+    setStep('pay');
+
+    // Generate QR
+    const upiUrl = `upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(UPI_NAME)}&am=${amount}&cu=INR`;
+    QRCode.toDataURL(upiUrl, { width: 200, margin: 1, color: { dark: '#000000', light: '#ffffff' } })
+      .then(setQrDataUrl)
+      .catch(() => {});
+
+    // Create payment order
+    try {
+      const body = { type, amount };
+      if (type === 'registration') body.pendingRegId = pendingRegId;
+      else body.userId = userId;
+
+      const resp = await fetch(`${API_BASE}/createPaymentOrder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create order');
+      }
+      const order = await resp.json();
+      setOrderId(order.orderId);
+    } catch (err) {
+      onError?.(err.message);
+      setStep('amount');
+    }
+  }
 
   function handleFileChange(e) {
     const file = e.target.files?.[0];
@@ -52,44 +83,74 @@ export default function PaymentFlow({ orderId, amount, upiId, upiName, onSuccess
     if (fileRef.current) fileRef.current.value = '';
   }
 
-  const utrValid = /^[A-Za-z0-9]{8,30}$/.test(utr.trim());
-  const canSubmit = utrValid && !submitting;
+  const canSubmit = screenshotFile && orderId && !submitting;
 
-  async function handleSubmit() {
+  async function handleSubmitScreenshot() {
     if (!canSubmit) return;
     setSubmitting(true);
-    try {
-      let screenshotUrl = null;
-      if (screenshotFile) {
-        screenshotUrl = screenshotPreview;
-      }
+    setStep('processing');
 
-      const resp = await fetch(`${API_BASE}/submitUtrVerification`, {
+    try {
+      const resp = await fetch(`${API_BASE}/submitPaymentProof`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId,
-          utr: utr.trim(),
-          screenshotUrl,
+          screenshot: screenshotPreview,
+          upiId: UPI_ID,
         }),
       });
 
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Verification failed');
+      if (!resp.ok) throw new Error(data.error || 'Submission failed');
 
-      setResult(data);
-      setStep(3);
+      // If already verified, show result
       if (data.status === 'verified') {
+        setResult(data);
+        setStep('result');
         onSuccess?.(data);
+        return;
       }
+
+      // Otherwise poll for result
+      setResult(data);
+      startPolling(orderId);
     } catch (err) {
-      onError?.(err.message || 'Submission failed');
-    } finally {
+      onError?.(err.message);
+      setStep('upload');
       setSubmitting(false);
     }
   }
 
-  if (step === 3 && result) {
+  function startPolling(oid) {
+    let count = 0;
+    pollRef.current = setInterval(async () => {
+      count++;
+      setPollCount(count);
+      if (count > 30) {
+        clearInterval(pollRef.current);
+        setStep('result');
+        setSubmitting(false);
+        return;
+      }
+      try {
+        const resp = await fetch(`${API_BASE}/getPaymentOrderStatus?orderId=${oid}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.status === 'verified' || data.status === 'rejected' || data.status === 'manual_review') {
+            clearInterval(pollRef.current);
+            setResult(data);
+            setStep('result');
+            setSubmitting(false);
+            if (data.status === 'verified') onSuccess?.(data);
+          }
+        }
+      } catch {}
+    }, 3000);
+  }
+
+  // ── RESULT VIEW ──
+  if (step === 'result' && result) {
     const isApproved = result.status === 'verified';
     const isRejected = result.status === 'rejected';
     return (
@@ -101,138 +162,140 @@ export default function PaymentFlow({ orderId, amount, upiId, upiName, onSuccess
           {isApproved ? 'Payment Verified!' : isRejected ? 'Verification Failed' : 'Under Review'}
         </h2>
         <p className="text-sm text-muted" style={{ marginBottom: '1rem' }}>
-          {result.message}
+          {isApproved
+            ? 'Your payment has been automatically verified and approved.'
+            : isRejected
+              ? 'Screenshot could not be verified. Please contact support.'
+              : 'Your payment is being reviewed by our team.'}
         </p>
-        {result.checks && (
+        {result.verificationScore != null && (
+          <div className="mb-sm" style={{ padding: '0.5rem', background: 'var(--bg-alt)', borderRadius: 'var(--radius-md)' }}>
+            <span className="text-xs text-muted">Verification Score: </span>
+            <span className={`text-sm font-bold ${result.verificationScore >= 80 ? 'text-gradient-success' : result.verificationScore >= 50 ? '' : 'text-gradient-danger'}`}>
+              {result.verificationScore}%
+            </span>
+          </div>
+        )}
+        {result.checks && result.checks.length > 0 && (
           <div className="result-checks">
             {result.checks.map((c, i) => (
               <div className="result-check" key={i}>
                 <span className={`check-icon ${c.passed ? 'pass' : 'fail'}`}>{c.passed ? '✓' : '✗'}</span>
-                <span className="text-sm">{c.name.replace(/_/g, ' ')}</span>
+                <span className="text-sm">{c.name?.replace(/_/g, ' ') || c.label || 'Check'}</span>
               </div>
             ))}
-          </div>
-        )}
-        {result.utr && (
-          <div className="mt-md" style={{ padding: '0.625rem', background: 'var(--bg-alt)', borderRadius: 'var(--radius-md)' }}>
-            <span className="text-xs text-muted">UTR: </span>
-            <span className="text-sm font-mono font-semibold">{result.utr}</span>
           </div>
         )}
       </div>
     );
   }
 
+  // ── PROCESSING VIEW ──
+  if (step === 'processing') {
+    return (
+      <div className="result-card animate-fade-in-scale">
+        <div className="loading-spinner loading-spinner-lg" style={{ margin: '0 auto 1rem' }} />
+        <h2 className="font-bold mb-xs" style={{ fontSize: '1.125rem' }}>Verifying Payment...</h2>
+        <p className="text-sm text-muted">
+          Analyzing your screenshot with OCR. This usually takes 10-30 seconds.
+        </p>
+        {pollCount > 0 && (
+          <p className="text-xs text-muted mt-sm">Checking status... ({pollCount}/30)</p>
+        )}
+      </div>
+    );
+  }
+
+  // ── AMOUNT SELECTION ──
+  if (step === 'amount') {
+    return (
+      <div className="animate-fade-in-up">
+        <p className="text-sm text-muted mb-md text-center">Select payment amount</p>
+        <div className="amount-grid">
+          {AMOUNTS.map(amt => (
+            <div
+              key={amt}
+              className={`amount-option ${selectedAmount === amt ? 'selected' : ''}`}
+              onClick={() => handleSelectAmount(amt)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') handleSelectAmount(amt); }}
+            >
+              <div className="amount-value">₹{amt}</div>
+              <div className="amount-label">{amt === 120 ? 'Basic' : amt === 500 ? 'Standard' : 'Premium'}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── PAYMENT + SCREENSHOT UPLOAD ──
   return (
-    <div className="payment-flow">
-      <div className="payment-step-indicator">
-        <div className="step active">
-          <span className="step-number">1</span>
-          <span>Pay</span>
+    <div className="animate-fade-in-up">
+      {/* QR Code */}
+      <div className="upi-card">
+        <p className="text-sm text-muted mb-sm">Scan QR or pay to UPI ID</p>
+        {qrDataUrl && (
+          <div className="qr-container">
+            <img src={qrDataUrl} alt="UPI QR Code" width={200} height={200} style={{ borderRadius: 'var(--radius-sm)' }} />
+          </div>
+        )}
+        <div className="upi-info">
+          <div style={{ flex: 1, textAlign: 'left' }}>
+            <div className="upi-id">{UPI_ID}</div>
+            <div className="upi-name">{UPI_NAME}</div>
+          </div>
+          <button className={`copy-btn ${copied ? 'copied' : ''}`} onClick={copyUpiId} type="button">
+            {copied ? '✓ Copied' : 'Copy'}
+          </button>
         </div>
-        <div className="step-line" />
-        <div className={`step ${step >= 2 ? 'active' : ''}`}>
-          <span className="step-number">2</span>
-          <span>UTR</span>
-        </div>
-        <div className="step-line" />
-        <div className={`step ${step === 3 ? 'active' : ''}`}>
-          <span className="step-number">3</span>
-          <span>Done</span>
+        <div style={{ padding: '0.75rem', background: 'var(--bg-alt)', borderRadius: 'var(--radius-md)' }}>
+          <span className="text-xs text-muted">Amount: </span>
+          <span className="text-lg font-bold text-gradient">₹{selectedAmount}</span>
         </div>
       </div>
 
-      {step === 1 && (
-        <div className="animate-fade-in-up">
-          <div className="upi-card">
-            <p className="text-sm text-muted mb-sm">Scan QR or pay to UPI ID</p>
-            {qrDataUrl && (
-              <div className="qr-container">
-                <img src={qrDataUrl} alt="UPI QR Code" width={200} height={200} style={{ borderRadius: 'var(--radius-sm)' }} />
-              </div>
-            )}
-            <div className="upi-info">
-              <div style={{ flex: 1, textAlign: 'left' }}>
-                <div className="upi-id">{displayUpiId}</div>
-                <div className="upi-name">{displayUpiName}</div>
-              </div>
-              <button className={`copy-btn ${copied ? 'copied' : ''}`} onClick={copyUpiId} type="button">
-                {copied ? '✓ Copied' : 'Copy'}
-              </button>
-            </div>
-            <div style={{ padding: '0.75rem', background: 'var(--bg-alt)', borderRadius: 'var(--radius-md)', marginBottom: '0.5rem' }}>
-              <span className="text-xs text-muted">Amount: </span>
-              <span className="text-lg font-bold text-gradient">₹{displayAmount}</span>
-            </div>
-            <p className="text-xs text-muted" style={{ marginTop: '0.75rem' }}>
-              After payment, you'll need to enter the UTR number from your payment app
-            </p>
-          </div>
-          <button className="btn-primary btn-lg w-full mt-md" onClick={() => setStep(2)} type="button">
-            I've Paid — Enter UTR →
-          </button>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="animate-fade-in-up">
-          <div className="mb-md">
-            <label className="text-sm font-semibold" style={{ display: 'block', marginBottom: '0.5rem' }}>UTR Number *</label>
-            <div className="utr-input-group">
-              <input
-                className="utr-input"
-                placeholder="Enter 12-digit UTR number"
-                value={utr}
-                onChange={e => setUtr(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 30))}
-                maxLength={30}
-                autoComplete="off"
-              />
-            </div>
-            <p className="utr-hint">
-              Find this in your UPI app under Payment Details → UTR / Reference Number
-            </p>
-          </div>
-
-          <div className="mb-md">
-            <label className="text-sm font-semibold" style={{ display: 'block', marginBottom: '0.5rem' }}>
-              Screenshot <span className="text-xs text-muted">(optional)</span>
-            </label>
-            {screenshotPreview ? (
-              <div style={{ position: 'relative' }}>
-                <img src={screenshotPreview} alt="Screenshot" style={{ width: '100%', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
-                <button
-                  className="btn-ghost btn-icon-sm"
-                  onClick={removeScreenshot}
-                  type="button"
-                  style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: 'var(--bg-alt)', border: '1px solid var(--border)' }}
-                >✕</button>
-              </div>
-            ) : (
-              <div className="upload-zone" onClick={() => fileRef.current?.click()} role="button" tabIndex={0}>
-                <span className="upload-icon">📷</span>
-                <span className="upload-text">Tap to upload screenshot</span>
-                <span className="upload-hint">JPG, PNG up to 10MB</span>
-              </div>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
-          </div>
-
-          <div className="flex gap-sm">
-            <button className="btn-secondary btn-lg" onClick={() => setStep(1)} type="button" style={{ flex: '0 0 auto' }}>
-              ← Back
-            </button>
+      {/* Screenshot Upload */}
+      <div className="mt-md">
+        <label className="text-sm font-semibold" style={{ display: 'block', marginBottom: '0.5rem' }}>
+          Upload Payment Screenshot *
+        </label>
+        {screenshotPreview ? (
+          <div style={{ position: 'relative' }}>
+            <img src={screenshotPreview} alt="Screenshot" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
             <button
-              className={`btn-primary btn-lg${submitting ? ' btn-loading' : ''}`}
-              onClick={handleSubmit}
+              className="btn-ghost btn-icon-sm"
+              onClick={removeScreenshot}
               type="button"
-              disabled={!canSubmit}
-              style={{ flex: 1 }}
-            >
-              {submitting ? 'Verifying...' : 'Submit UTR'}
-            </button>
+              style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: 'var(--bg-alt)', border: '1px solid var(--border)' }}
+            >✕</button>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="upload-zone" onClick={() => fileRef.current?.click()} role="button" tabIndex={0}>
+            <span className="upload-icon">📷</span>
+            <span className="upload-text">Tap to upload payment screenshot</span>
+            <span className="upload-hint">JPG, PNG up to 10MB</span>
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-sm mt-md">
+        <button className="btn-secondary btn-lg" onClick={() => { setStep('amount'); removeScreenshot(); }} type="button" style={{ flex: '0 0 auto' }}>
+          ← Back
+        </button>
+        <button
+          className={`btn-primary btn-lg${submitting ? ' btn-loading' : ''}`}
+          onClick={handleSubmitScreenshot}
+          type="button"
+          disabled={!canSubmit}
+          style={{ flex: 1 }}
+        >
+          {submitting ? 'Uploading...' : 'Submit Screenshot'}
+        </button>
+      </div>
     </div>
   );
 }

@@ -25,8 +25,7 @@ export default function FirebaseRegisterPage() {
   const [checkingPhone, setCheckingPhone] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
-  const [orderId, setOrderId] = useState(null);
-  const [orderAmount, setOrderAmount] = useState(null);
+  const [pendingRegId, setPendingRegId] = useState(null);
 
   const emailTimer = useRef(null);
   const phoneTimer = useRef(null);
@@ -119,18 +118,7 @@ export default function FirebaseRegisterPage() {
       if (!preResp.ok) { const b = await preResp.json().catch(() => ({})); throw new Error(b.error || `Backend error (${preResp.status})`); }
       const session = await preResp.json();
 
-      // Step 2: Create payment order
-      const amount = session.allowedPackage || 500;
-      const orderResp = await fetch(`${API_BASE}/createPaymentOrder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'registration', amount, pendingRegId: session.pendingRegId }),
-      });
-      if (!orderResp.ok) { const b = await orderResp.json().catch(() => ({})); throw new Error(b.error || 'Failed to create payment order'); }
-      const order = await orderResp.json();
-
-      setOrderId(order.orderId);
-      setOrderAmount(order.amount);
+      setPendingRegId(session.pendingRegId);
       setLoading(false);
       setStep('payment');
     } catch (err) {
@@ -221,16 +209,16 @@ export default function FirebaseRegisterPage() {
             </form>
           )}
 
-          {step === 'payment' && orderId && (
+          {step === 'payment' && pendingRegId && (
             <PaymentFlow
-              orderId={orderId}
-              amount={orderAmount}
+              type="registration"
+              pendingRegId={pendingRegId}
               onSuccess={() => setStep('done')}
               onError={(msg) => setError(msg)}
             />
           )}
 
-          {step === 'payment' && !orderId && (
+          {step === 'payment' && !pendingRegId && (
             <div className="alert-error mb-md">
               <p className="text-sm" style={{ color: 'var(--danger)' }}>Session expired. Please refresh and try again.</p>
             </div>
@@ -245,7 +233,7 @@ export default function FirebaseRegisterPage() {
 
           {step === 'payment' && (
             <div className="text-center mt-md">
-              <button className="btn-ghost text-sm" onClick={() => { setStep('form'); setOrderId(null); }} type="button">
+              <button className="btn-ghost text-sm" onClick={() => { setStep('form'); setPendingRegId(null); }} type="button">
                 ← Back to Form
               </button>
             </div>
