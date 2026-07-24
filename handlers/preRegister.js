@@ -95,9 +95,18 @@ module.exports = async (req, res) => {
           LOG(`Cleaned up stale pending_registration ${pend.id} for email ${email}`);
         } catch {}
       } else {
-        res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered. Please login.' }));
-        LOG(`Response: email already in pending_reg — total ${Date.now() - reqStart}ms`);
-        return;
+        // No user_id on pending_reg — check if the actual user still exists
+        const realUser = await findUserByEmail(email).catch(() => null);
+        if (realUser) {
+          res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered. Please login.' }));
+          LOG(`Response: email exists in users table (pending_reg has no user_id) — total ${Date.now() - reqStart}ms`);
+          return;
+        }
+        // User was deleted but orphaned pending_reg remains — clean it up
+        try {
+          await deleteDoc(COL_PENDING_REGS, pend.id);
+          LOG(`Cleaned up orphaned pending_registration ${pend.id} (no user_id, user deleted) for email ${email}`);
+        } catch {}
       }
     }
 
@@ -141,9 +150,18 @@ module.exports = async (req, res) => {
           LOG(`Cleaned up stale pending_registration ${pend.id} for phone ${phone}`);
         } catch {}
       } else {
-        res.writeHead(409); res.end(JSON.stringify({ error: 'Phone already registered. Please login.' }));
-        LOG(`Response: phone already in pending_reg — total ${Date.now() - reqStart}ms`);
-        return;
+        // No user_id on pending_reg — check if the actual user still exists
+        const realUser = await findUserByPhone(phone).catch(() => null);
+        if (realUser) {
+          res.writeHead(409); res.end(JSON.stringify({ error: 'Phone already registered. Please login.' }));
+          LOG(`Response: phone exists in users table (pending_reg has no user_id) — total ${Date.now() - reqStart}ms`);
+          return;
+        }
+        // User was deleted but orphaned pending_reg remains — clean it up
+        try {
+          await deleteDoc(COL_PENDING_REGS, pend.id);
+          LOG(`Cleaned up orphaned pending_registration ${pend.id} (no user_id, user deleted) for phone ${phone}`);
+        } catch {}
       }
     }
 
