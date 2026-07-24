@@ -71,6 +71,7 @@ const handlerCfg = [
   ['createTopupSessionHttp', false, '../handlers/createTopupSessionHttp.js'],
   ['createPaymentOrder', false, '../handlers/createPaymentOrder.js'],
   ['submitPaymentProof', false, '../handlers/submitPaymentProof.js'],
+  ['fastVerifyPayment', false, '../handlers/fastVerifyPayment.js'],
   ['getPaymentOrderStatus', false, '../handlers/getPaymentOrderStatus.js'],
   ['retryPaymentOrder', false, '../handlers/retryPaymentOrder.js'],
   ['verifyUPIPayment', false, '../handlers/verifyUPIPayment.js'],

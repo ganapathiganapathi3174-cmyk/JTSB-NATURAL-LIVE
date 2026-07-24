@@ -8,16 +8,15 @@ const MOBILE_NUMBER = '9655897523';
 const SSE_URL = FUNCTIONS_BASE + '/sse/dashboard';
 
 const PROGRESS_STEPS = [
-  'Uploading Screenshot',
-  'Reading Payment Details',
+  'Reading Payment Screenshot',
   'Extracting Amount',
   'Extracting UTR',
+  'Extracting UPI Details',
   'Checking Receiver',
-  'Checking Date',
-  'Checking Time',
+  'Checking Date & Time',
+  'Server Validation',
   'Duplicate Check',
-  'Fraud Detection',
-  'AI Decision',
+  'Final Decision',
 ];
 
 function upiParam(val, keepAt) {
@@ -757,28 +756,58 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
     setVerifying(true);
     setStep('progress');
     setProgressIndex(0);
-    connectSSE();
-
-    timerRef.current = setInterval(() => {
-      setProgressIndex(prev => Math.min(prev + 1, PROGRESS_STEPS.length - 1));
-    }, 6000);
 
     try {
       const file = fileRef.current.files[0];
+
+      // Step 1: Read screenshot as data URL
       const reader = new FileReader();
       const dataUrl = await new Promise((resolve, reject) => {
         reader.onload = () => resolve(reader.result);
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
+      setProgressIndex(0);
 
-      setProgressIndex(1);
+      // Step 2: Client-side OCR with real progress
+      const { runClientOcr } = await import('../utils/clientOcr.js');
+      let ocrProgressTimer = null;
+      let fakeStep = 0;
+      ocrProgressTimer = setInterval(() => {
+        fakeStep = Math.min(fakeStep + 1, 5);
+        setProgressIndex(fakeStep);
+      }, 2000);
 
-      const resp = await fetch(`${FUNCTIONS_BASE}/submitPaymentProof`, {
+      let ocrResult;
+      try {
+        ocrResult = await runClientOcr(dataUrl, (p) => {
+          if (p.stage === 'ocr' && p.progress != null) {
+            const mapped = Math.floor(1 + (p.progress / 100) * 4);
+            setProgressIndex(Math.min(mapped, 5));
+          }
+        });
+      } finally {
+        if (ocrProgressTimer) clearInterval(ocrProgressTimer);
+      }
+
+      setProgressIndex(5);
+
+      // Step 3: Send client OCR data to server for instant validation
+      const resp = await fetch(`${FUNCTIONS_BASE}/fastVerifyPayment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, screenshot: dataUrl, utr: utr.trim(), upiId: enteredUpiId.trim() }),
-        signal: AbortSignal.timeout(120000),
+        body: JSON.stringify({
+          orderId,
+          screenshot: dataUrl,
+          utr: utr.trim(),
+          upiId: enteredUpiId.trim(),
+          clientOcr: {
+            rawText: ocrResult.rawText,
+            confidence: ocrResult.confidence,
+            extracted: ocrResult.extracted,
+          },
+        }),
+        signal: AbortSignal.timeout(30000),
       });
 
       let data;
@@ -786,14 +815,12 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
       if (contentType.includes('application/json')) {
         data = await resp.json();
       } else {
-        const textBody = await resp.text();
-        console.error('[UPI-PAYMENT] Non-JSON response:', resp.status, textBody.substring(0, 200));
         throw new Error('Unable to verify payment. Please try again.');
       }
       if (!resp.ok) throw new Error(data.error || 'Verification failed');
 
-      setVerifyResult(data);
       setProgressIndex(PROGRESS_STEPS.length - 1);
+      setVerifyResult(data);
 
       if (data.status === 'verified') {
         handleAutoRedirect();
@@ -807,7 +834,6 @@ export default function UpiPayment({ type, pendingRegId, userId, allowedPackage,
       setProgressIndex(PROGRESS_STEPS.length - 1);
     } finally {
       if (timerRef.current) clearInterval(timerRef.current);
-      disconnectSSE();
       setVerifying(false);
     }
   }
