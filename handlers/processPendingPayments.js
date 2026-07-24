@@ -1,6 +1,6 @@
 const { COL_UPI_PAYMENTS } = require('../api/_shared.js');
 const { runQuery, updateDoc } = require('../api/_supabase.js');
-const { runBankSmsVerification } = require('../api/_bankSmsVerificationEngine.js');
+const verificationEngine = require('../api/_verification/index.js');
 
 const IS_VERCEL = !!process.env.VERCEL;
 const PER_PAYMENT_TIMEOUT = IS_VERCEL ? 22000 : 90000;
@@ -18,7 +18,7 @@ async function processNextPayment() {
     result.processed++;
     try {
       const v = await Promise.race([
-        runBankSmsVerification(payment, payment.screenshot_url, payment.user_id),
+        verificationEngine.run(payment, payment.screenshot_url, payment.user_id, payment.utr),
         new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), PER_PAYMENT_TIMEOUT)),
       ]);
       const finalStatus = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');

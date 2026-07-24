@@ -1,9 +1,15 @@
-const { createClient } = require('@libsql/client');
+let createClient = null;
+try {
+  ({ createClient } = require('@libsql/client'));
+} catch (_) {
+  console.warn('[TURSO] @libsql/client native module not available — backup disabled');
+}
 
 let client = null;
 
 function getClient() {
   if (client) return client;
+  if (!createClient) return null;
   const url = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL;
   const authToken = process.env.TURSO_AUTH_TOKEN;
   if (!url) {

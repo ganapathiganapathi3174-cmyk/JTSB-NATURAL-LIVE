@@ -110,6 +110,7 @@ export default function FirebaseAdminDashboardPage() {
   const [approveSponsorUser, setApproveSponsorUser] = useState(null);
   const [approveSponsorLoading, setApproveSponsorLoading] = useState(false);
   const [sponsorClaims, setSponsorClaims] = useState([]);
+  const [verificationMetrics, setVerificationMetrics] = useState(null);
   const [rejectSponsorUser, setRejectSponsorUser] = useState(null);
   const [rejectSponsorReason, setRejectSponsorReason] = useState('');
   const [rejectSponsorLoading, setRejectSponsorLoading] = useState(false);
@@ -343,6 +344,7 @@ export default function FirebaseAdminDashboardPage() {
         setUsers(result.users || []);
         setTopups(result.topups || []);
         setSponsorClaims(result.sponsorClaims || []);
+        setVerificationMetrics(result.verificationMetrics || null);
       }
     } catch (err) {
       console.error('[ADMIN DASHBOARD] Failed to fetch data:', err);
@@ -526,10 +528,81 @@ export default function FirebaseAdminDashboardPage() {
           </div>
         </div>
 
-        <div className="stats-grid">
+        {verificationMetrics && (
           <div className="card glass-card">
             <div className="card-header">
-              <h2 className="card-title">{'\u26A1'} Quick Actions</h2>
+              <h2 className="card-title">{'\u{1F50D}'} Verification Engine</h2>
+            </div>
+            <div className="card-body">
+              <div className="stats-grid">
+                <div className="stat-card accent-info">
+                  <div className="stat-bg-icon">{'\u{1F4CA}'}</div>
+                  <div className="stat-value">{verificationMetrics.totalPayments}</div>
+                  <div className="stat-label">Total Payments</div>
+                  <div className="stat-sub">All submissions</div>
+                </div>
+                <div className="stat-card accent-success">
+                  <div className="stat-bg-icon">{'\u2705'}</div>
+                  <div className="stat-value">{verificationMetrics.verified}</div>
+                  <div className="stat-label">Auto-Approved</div>
+                  <div className="stat-sub">{verificationMetrics.approvalRate}% rate</div>
+                </div>
+                <div className="stat-card accent-warning">
+                  <div className="stat-bg-icon">{'\u{1F504}'}</div>
+                  <div className="stat-value">{verificationMetrics.manualReview}</div>
+                  <div className="stat-label">Manual Review</div>
+                  <div className="stat-sub">{verificationMetrics.autoReviewRate}% rate</div>
+                </div>
+                <div className="stat-card" style={{ borderLeft: '3px solid var(--danger)' }}>
+                  <div className="stat-bg-icon">{'\u274C'}</div>
+                  <div className="stat-value" style={{ color: 'var(--danger)' }}>{verificationMetrics.rejected}</div>
+                  <div className="stat-label">Rejected</div>
+                  <div className="stat-sub">{verificationMetrics.rejectionRate}% rate</div>
+                </div>
+              </div>
+              <div className="stats-grid mt-md" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                <div className="card-dim text-center">
+                  <div className="text-xs text-muted mb-xs">Avg OCR Confidence</div>
+                  <div className="stat-value" style={{ color: verificationMetrics.avgOcrConfidence > 80 ? 'var(--success)' : verificationMetrics.avgOcrConfidence > 50 ? 'var(--warning)' : 'var(--danger)' }}>
+                    {verificationMetrics.avgOcrConfidence}%
+                  </div>
+                </div>
+                <div className="card-dim text-center">
+                  <div className="text-xs text-muted mb-xs">Avg Final Score</div>
+                  <div className="stat-value" style={{ color: verificationMetrics.avgFinalScore > 80 ? 'var(--success)' : verificationMetrics.avgFinalScore > 50 ? 'var(--warning)' : 'var(--danger)' }}>
+                    {verificationMetrics.avgFinalScore}%
+                  </div>
+                </div>
+                <div className="card-dim text-center">
+                  <div className="text-xs text-muted mb-xs">Avg Fraud Score</div>
+                  <div className="stat-value" style={{ color: verificationMetrics.avgFraudScore < 20 ? 'var(--success)' : verificationMetrics.avgFraudScore < 50 ? 'var(--warning)' : 'var(--danger)' }}>
+                    {verificationMetrics.avgFraudScore}/100
+                  </div>
+                </div>
+                <div className="card-dim text-center">
+                  <div className="text-xs text-muted mb-xs">Fraud Detected</div>
+                  <div className="stat-value" style={{ color: verificationMetrics.fraudDetected > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                    {verificationMetrics.fraudDetected}
+                  </div>
+                </div>
+              </div>
+              <div className="stats-grid mt-sm" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                <div className="card-dim text-center">
+                  <div className="text-xs text-muted mb-xs">Pending Queue</div>
+                  <div className="stat-value" style={{ color: verificationMetrics.pending > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                    {verificationMetrics.pending}
+                  </div>
+                </div>
+                <div className="card-dim text-center">
+                  <div className="text-xs text-muted mb-xs">Avg Verification Time</div>
+                  <div className="stat-value">{verificationMetrics.avgVerificationDuration > 1000 ? (verificationMetrics.avgVerificationDuration / 1000).toFixed(1) + 's' : verificationMetrics.avgVerificationDuration + 'ms'}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="stats-grid">
             </div>
             <div className="card-body">
               <div className="quick-actions-grid">

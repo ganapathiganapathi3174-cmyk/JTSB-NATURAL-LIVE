@@ -174,6 +174,23 @@ module.exports = async (req, res) => {
 
     const companionState = getCompanionStatus();
 
+    // Verification metrics
+    const verifiedPayments = upiPayments.filter(p => p.status === 'verified');
+    const rejectedPayments = upiPayments.filter(p => p.status === 'rejected');
+    const manualReviewPayments = upiPayments.filter(p => p.status === 'manual_review');
+    const pendingPaymentsOnly = upiPayments.filter(p => p.status === 'pending');
+    const totalProcessed = verifiedPayments.length + rejectedPayments.length + manualReviewPayments.length;
+    const avgOcrConfidence = totalProcessed > 0
+      ? Math.round(upiPayments.reduce((sum, p) => sum + ((p.ocr_result || {}).confidence || 0), 0) / totalProcessed)
+      : 0;
+    const avgFinalScore = totalProcessed > 0
+      ? Math.round(upiPayments.reduce((sum, p) => sum + (p.final_score || 0), 0) / totalProcessed)
+      : 0;
+    const avgFraudScore = totalProcessed > 0
+      ? Math.round(upiPayments.reduce((sum, p) => sum + (p.fraud_score || 0), 0) / totalProcessed)
+      : 0;
+    const fraudDetected = upiPayments.filter(p => (p.fraud_score || 0) >= 50).length;
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       success: true,
@@ -181,6 +198,24 @@ module.exports = async (req, res) => {
       topups,
       pendingPayments,
       sponsorClaims,
+      verificationMetrics: {
+        totalPayments: upiPayments.length,
+        verified: verifiedPayments.length,
+        rejected: rejectedPayments.length,
+        manualReview: manualReviewPayments.length,
+        pending: pendingPaymentsOnly.length,
+        totalProcessed,
+        approvalRate: totalProcessed > 0 ? Math.round((verifiedPayments.length / totalProcessed) * 100) : 0,
+        rejectionRate: totalProcessed > 0 ? Math.round((rejectedPayments.length / totalProcessed) * 100) : 0,
+        autoReviewRate: totalProcessed > 0 ? Math.round((manualReviewPayments.length / totalProcessed) * 100) : 0,
+        avgOcrConfidence,
+        avgFinalScore,
+        avgFraudScore,
+        fraudDetected,
+        avgVerificationDuration: totalProcessed > 0
+          ? Math.round(upiPayments.reduce((sum, p) => sum + (p.verification_duration || 0), 0) / totalProcessed)
+          : 0,
+      },
       _diagnostics: diagnostics,
       _companion: companionState,
       _testMode: TEST_MODE ? { enabled: true, amount: TEST_PAYMENT_AMOUNT, upiId: TEST_UPI_ID, payeeName: TEST_PAYEE_NAME } : { enabled: false },

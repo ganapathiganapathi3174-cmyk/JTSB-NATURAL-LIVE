@@ -22,16 +22,11 @@ function rateLimit(key, maxRequests = 60, windowMs = 60000) {
 // Silence expected dev warnings
 const origWarn = console.warn; console.warn = (...a) => { const m = a.join(' '); if (m.includes('not set') || m.includes('unhealthy') || m.includes('Connection failed') || m.includes('[HEALTH]') || m.includes('[TURSO]') || m.includes('[NEON]') || m.includes('[R2]')) return; origWarn(...a); };
 const origLog = console.log; console.log = (...a) => { const m = a.join(' '); if (m.includes('[HEALTH]') || m.includes('[TURSO]') || m.includes('[NEON]') || m.includes('[R2]')) return; origLog(...a); };
-require('./_turso.js').ensureBackupTables().catch(() => {});
+try { require('./_turso.js').ensureBackupTables().catch(() => {}); } catch (_) { console.log('[TURSO] Skipped — native module not available'); }
 require('./_queue.js').ensureQueueTables().then(() => require('./_queue.js').recoverPending()).catch(() => {});
 require('./_health.js').startHealthChecks();
 require('./_cleanup.js').startDailyTasks();
 require('./_upiPaymentMonitor.js').startMonitor();
-// Pre-initialize OCR worker pool so first payment request skips cold start
-require('./_bankSmsVerificationEngine.js').initWorkerPool().then(() => {
-  console.log('[BANK-SMS] OCR worker pool pre-initialized at startup');
-}).catch(() => {});
-// Initialize system users on first startup (idempotent — skips if already exist)
 require('./_systemInit.js').initSystemUsers().then(created => {
   console.log('[SYSTEM-INIT] Startup initialization complete: ' + created + ' users created');
 }).catch(err => {
