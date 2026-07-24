@@ -104,15 +104,16 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Submission failed');
 
-      // If already verified, show result
-      if (data.status === 'verified') {
+      // Inline verification complete — show result immediately
+      if (data.status === 'verified' || data.status === 'rejected' || data.status === 'manual_review') {
         setResult(data);
         setStep('result');
-        onSuccess?.(data);
+        setSubmitting(false);
+        if (data.status === 'verified') onSuccess?.(data);
         return;
       }
 
-      // Otherwise poll for result
+      // Still pending (OCR timed out) — poll for background worker result
       setResult(data);
       startPolling(orderId);
     } catch (err) {

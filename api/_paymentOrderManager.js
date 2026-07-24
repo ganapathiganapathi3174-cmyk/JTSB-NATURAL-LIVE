@@ -239,27 +239,98 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     }
   } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
 
-  // Enqueue for background verification
-  pendingVerificationQueue.add(orderId);
-  if (!verificationWorkerRunning) runVerificationWorker();
+  // Run verification inline with a timeout — return real result to frontend
+  const OCR_TIMEOUT_MS = IS_VERCEL ? 22000 : 60000;
+  try {
+    log('[INLINE_VERIFY] order ' + orderId + ' running OCR inline (timeout ' + OCR_TIMEOUT_MS + 'ms)');
+    const v = await Promise.race([
+      runOfficerVerificationForWorker(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('OCR_TIMEOUT')), OCR_TIMEOUT_MS)),
+    ]);
 
-  log('[QUEUE_STARTED] order ' + orderId + ' enqueued');
-  log('Payment enqueued for background verification: ' + orderId);
+    const finalStatus = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
 
-  // Return immediately — frontend gets final status via SSE push + polling
-  return {
-    orderId, paymentId: orderId,
-    status: 'pending',
-    verificationStatus: 'pending',
-    verificationScore: 0,
-    reasons: [],
-    matchedAmount: false, matchedReceiver: false, matchedUtr: false,
-    matchedDate: false, userUtrMatched: false,
-    userEnteredUtr: extra?.userEnteredUtr || null,
-    userUpiMatched: false,
-    userEnteredUpi: extra?.userEnteredUpi || null,
-    fraudScore: 0, checks: [],
-  };
+    // Update order with real verification result
+    await updateDoc(COL_ORDERS, orderId, {
+      status: finalStatus,
+      verification_status: v.status,
+      verification_score: v.verificationScore || 0,
+      ocr_result: v.ocrData || null,
+      rejection_reasons: v.reasons || [],
+      updated_at: now(),
+    }).catch(e => log('DB update after inline verify failed: ' + e.message));
+
+    // Execute post-approval actions if verified
+    if (finalStatus === 'verified') {
+      log('[INLINE_VERIFY] order ' + orderId + ' approved, executing post-approval');
+      await executeVerifiedOrder(order, v, {
+        userId: order.user_id,
+        pendingRegId: order.pending_reg_id,
+        userEnteredUtr: extra?.userEnteredUtr || order.utr || null,
+        userEnteredUpi: extra?.userEnteredUpi || null,
+      }).catch(e => log('Post-approval exec err: ' + e.message));
+    }
+
+    // Update upi_payments status
+    try {
+      const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
+      const searchValue = order.pending_reg_id || order.user_id;
+      if (searchValue) {
+        const ups = await runQuery(COL_UPI_PAYMENTS, [
+          { field: searchField, op: 'EQUAL', value: searchValue },
+        ], { limit: 5 });
+        for (const p of ups) {
+          await updateDoc(COL_UPI_PAYMENTS, p.id, {
+            status: finalStatus, verification_locked: false,
+            ocr_result: v.ocrData || null, final_score: v.verificationScore || 0,
+            fraud_score: v.fraudScore || 0, rejection_reasons: v.reasons || [],
+            verified_at: now(), verification_completed_at: now(),
+          }).catch(() => {});
+        }
+      }
+    } catch (upiErr) { log('upi_payments update after inline verify failed: ' + upiErr.message); }
+
+    try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch {}
+
+    log('[INLINE_VERIFY] order ' + orderId + ' completed: status=' + finalStatus + ' score=' + (v.verificationScore || 0));
+    verifyingOrders.delete(orderId);
+
+    return {
+      orderId, paymentId: orderId,
+      status: finalStatus,
+      verificationStatus: v.status,
+      verificationScore: v.verificationScore || 0,
+      reasons: v.reasons || [],
+      matchedAmount: v.matchedAmount || false, matchedReceiver: v.matchedReceiver || false,
+      matchedUtr: v.matchedUtr || false, matchedDate: v.matchedDate || false,
+      userUtrMatched: v.userUtrMatched || false,
+      userEnteredUtr: extra?.userEnteredUtr || null,
+      userUpiMatched: v.userUpiMatched || false,
+      userEnteredUpi: extra?.userEnteredUpi || null,
+      fraudScore: v.fraudScore || 0, checks: v.checks || [],
+      ocrData: v.ocrData || null,
+    };
+  } catch (ocrErr) {
+    log('[INLINE_VERIFY] order ' + orderId + ' OCR failed/timed out: ' + ocrErr.message + ', falling back to background worker');
+    // Fall back to background worker
+    pendingVerificationQueue.add(orderId);
+    if (!verificationWorkerRunning) runVerificationWorker();
+
+    verifyingOrders.delete(orderId);
+    return {
+      orderId, paymentId: orderId,
+      status: 'pending',
+      verificationStatus: 'pending',
+      verificationScore: 0,
+      reasons: [],
+      matchedAmount: false, matchedReceiver: false, matchedUtr: false,
+      matchedDate: false, userUtrMatched: false,
+      userEnteredUtr: extra?.userEnteredUtr || null,
+      userUpiMatched: false,
+      userEnteredUpi: extra?.userEnteredUpi || null,
+      fraudScore: 0, checks: [],
+    };
+  }
 }
 
 // ── Background Verification Worker ──
