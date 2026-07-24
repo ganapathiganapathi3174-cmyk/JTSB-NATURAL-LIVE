@@ -1,59 +1,7 @@
-import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ToastProvider } from './components/ToastProvider.jsx';
-
-function GalaxyOverlay() {
-  const stars = useMemo(() => {
-    const arr = [];
-    for (let i = 0; i < 120; i++) {
-      arr.push({
-        left: Math.random() * 100 + '%',
-        top: Math.random() * 100 + '%',
-        size: Math.random() * 2.5 + 0.5 + 'px',
-        duration: (Math.random() * 4 + 2) + 's',
-        delay: (Math.random() * 5) + 's',
-      });
-    }
-    return arr;
-  }, []);
-
-  const [shootingStars, setShootingStars] = useState([]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const id = Date.now();
-      setShootingStars(prev => [...prev, {
-        id,
-        left: Math.random() * 60 + 10 + '%',
-        top: Math.random() * 30 + 5 + '%',
-      }]);
-      setTimeout(() => {
-        setShootingStars(prev => prev.filter(s => s.id !== id));
-      }, 1200);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="galaxy-overlay" aria-hidden="true">
-      {stars.map((s, i) => (
-        <div key={i} className="star" style={{
-          left: s.left, top: s.top,
-          width: s.size, height: s.size,
-          '--duration': s.duration,
-          animationDelay: s.delay,
-        }} />
-      ))}
-      {shootingStars.map(s => (
-        <div key={s.id} className="shooting-star" style={{
-          left: s.left, top: s.top,
-          transform: `rotate(${Math.random() * 60 - 30}deg)`,
-        }} />
-      ))}
-    </div>
-  );
-}
 
 const HomePage = lazy(() => import('./pages/HomePage.jsx'));
 const TestPage = lazy(() => import('./pages/TestPage.jsx'));
@@ -167,7 +115,6 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <GalaxyOverlay />
       <AnimatePresence mode="wait">
         <Suspense fallback={<LoadingFallback />} key={location.pathname}>
           <Routes location={location}>

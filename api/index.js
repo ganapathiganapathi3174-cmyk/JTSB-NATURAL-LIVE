@@ -107,6 +107,7 @@ try { handlers.getUpgradeRequests = requireAdmin(safeHandler('getUpgradeRequests
 try { handlers.approveUpgradeRequest = requireAdmin(safeHandler('approveUpgradeRequest', require('../handlers/approveUpgradeRequest.js'))); } catch (e) { handlers.approveUpgradeRequest = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'approveUpgradeRequest load failed',detail:e.message})); }; }
 try { handlers.rejectUpgradeRequest = requireAdmin(safeHandler('rejectUpgradeRequest', require('../handlers/rejectUpgradeRequest.js'))); } catch (e) { handlers.rejectUpgradeRequest = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'rejectUpgradeRequest load failed',detail:e.message})); }; }
 try { handlers.getUserUpgradeStatus = safeHandler('getUserUpgradeStatus', require('../handlers/getUserUpgradeStatus.js')); } catch (e) { handlers.getUserUpgradeStatus = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUserUpgradeStatus load failed',detail:e.message})); }; }
+try { handlers.submitUtrVerification = safeHandler('submitUtrVerification', require('../handlers/submitUtrVerification.js')); } catch (e) { handlers.submitUtrVerification = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'submitUtrVerification load failed',detail:e.message})); }; }
 
 console.error('[INDEX] ' + Object.keys(handlers).length + ' handlers loaded');
 

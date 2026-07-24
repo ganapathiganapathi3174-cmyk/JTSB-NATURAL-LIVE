@@ -130,6 +130,7 @@ const handlerCfg = [
   ['approveUpgradeRequest', true, '../handlers/approveUpgradeRequest.js'],
   ['rejectUpgradeRequest', true, '../handlers/rejectUpgradeRequest.js'],
   ['getUserUpgradeStatus', false, '../handlers/getUserUpgradeStatus.js'],
+  ['submitUtrVerification', false, '../handlers/submitUtrVerification.js'],
 ];
 const handlerModules = {};
 const handlers = {};
