@@ -1,5 +1,6 @@
 const { COL_USERS, COL_WALLET_BALANCES, COL_WALLET_TX, COL_PENDING_REGS, randomString, crypto, MAX_REFERRALS, isSystemReferralCode, getReferrerPackage, getPackageByReferral } = require('../api/_shared.js');
 const { runQuery, writeDoc, updateDoc, addDoc, deleteDoc } = require('../api/_supabase.js');
+const cycleEngine = require('../api/_cycleEngine.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -71,6 +72,9 @@ module.exports = async (req, res) => {
             try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been deactivated.', type: 'referral_limit_reached', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
             try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: req.admin?.email || 'system', details: { referralCode: referredByCode, referralCount: currentCount, reason: 'Auto-deactivated after ' + MAX_REFERRALS + ' referrals', registrationPlan: 'Direct Admin', paymentMethod: 'Admin' }, created_at: now }); } catch {}
           }
+
+          // Cycle engine — track referral cycle progress
+          try { await cycleEngine.onReferralApproved(referredByUserId, newUserId, referredByCode, req.admin?.email); } catch (e) { console.error('[approvePendingRegistration] Cycle engine referral error:', e.message); }
         }
       } catch (e) { console.error('[approvePendingRegistration] Referral count increment error:', e.message); }
     }

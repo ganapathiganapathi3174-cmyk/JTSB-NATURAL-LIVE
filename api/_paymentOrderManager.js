@@ -9,6 +9,7 @@ const {
 const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet, getSupabaseClient } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
 const { runOfficerVerificationForWorker } = require('./_verificationOfficer.js');
+const cycleEngine = require('./_cycleEngine.js');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;
 const VERIFY_TIMEOUT_MS = 180 * 1000;
@@ -505,6 +506,9 @@ async function executeVerifiedOrder(order, verificationResult, extra) {
             await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: 'system', details: { referralCode: referredByCode, referralCount: currentCount }, created_at: completedAt });
           } catch {}
         }
+
+        // Cycle engine — track referral cycle progress
+        try { await cycleEngine.onReferralApproved(referredByUserId, newUserId, referredByCode, 'system'); } catch (e) { console.error('[paymentOrderManager] Cycle engine referral error:', e?.message); }
       }
     }
 
@@ -589,6 +593,9 @@ async function executeVerifiedOrder(order, verificationResult, extra) {
         for (const inc of lockedIncome) await updateDoc(COL_TOPUP_INCOME, inc.id, { status: 'eligible' });
       } catch (e) { log('Sponsor topup unlock failed: ' + e.message); }
     }
+
+    // Cycle engine — track topup cycle (downline monitoring + sponsor deactivation)
+    try { await cycleEngine.onTopupApproved(userId, topupId, amount, 'system'); } catch (e) { console.error('[paymentOrderManager] Cycle engine topup error:', e?.message); }
 
     await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Your topup of ₹' + amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(() => {});
     try {

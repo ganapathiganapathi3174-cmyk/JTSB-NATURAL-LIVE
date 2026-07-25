@@ -1,6 +1,7 @@
 const { randomString, crypto, MAX_REFERRALS, COL_TOPUP_INCOME, generateIdempotencyKey, isSystemReferralCode, getReferrerPackage, getPackageByReferral } = require('../api/_shared.js');
 const { getDoc, runQuery, writeDoc, updateDoc, addDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet } = require('../api/_supabase.js');
 const { broadcast } = require('../api/_sse.js');
+const cycleEngine = require('../api/_cycleEngine.js');
 
 const COL_UPI_PAYMENTS = 'upi_payments';
 const COL_USERS = 'users';
@@ -130,6 +131,9 @@ module.exports = async (req, res) => {
               try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been deactivated.', type: 'referral_limit_reached', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
               try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: req.admin?.email || 'system', details: { referralCode: referredByCode, referralCount: currentCount, reason: 'Auto-deactivated after ' + MAX_REFERRALS + ' referrals', registrationPlan: 'UPI', paymentMethod: 'UPI' }, created_at: now }); } catch {}
             }
+
+            // Cycle engine — track referral cycle progress
+            try { await cycleEngine.onReferralApproved(referredByUserId, newUserId, referredByCode, req.admin?.email); } catch (e) { console.error('[approveUPIPayment] Cycle engine referral error:', e?.message); }
           }
         }
 
@@ -195,7 +199,7 @@ module.exports = async (req, res) => {
         // Audit log
         try { await addDoc('audit_logs', { action: 'approve_topup_payment', target_id: payment.id, target_type: 'upi_payment', admin_id: req.admin?.email || 'unknown', details: { userId, amount: amountNum, topupId, referredBy: referredByCode }, created_at: now }); } catch {}
 
-        // Sponsor topup completion — unlock locked incomes
+        // Sponsor topup completion — unlock locked incomes (legacy)
           try {
             if (userDoc.topup_referral_qualified && !userDoc.sponsor_topup_completed) {
               await updateDoc(COL_USERS, userId, { account_status: 'inactive', inactive_reason: 'Sponsor Claim Pending Admin Approval', sponsor_topup_completed: true, sponsor_awaiting_credit: true });
@@ -208,6 +212,9 @@ module.exports = async (req, res) => {
               }
             }
           } catch (e) { console.error('[MANUAL-APPROVE] Sponsor topup completion error:', e?.message); }
+
+        // Cycle engine — track topup cycle (downline monitoring + sponsor deactivation)
+        try { await cycleEngine.onTopupApproved(userId, topupId, amountNum, req.admin?.email); } catch (e) { console.error('[approveUPIPayment] Cycle engine topup error:', e?.message); }
 
         try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Your topup of ₹' + amountNum + ' has been approved and added to your wallet.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
 

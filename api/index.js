@@ -109,6 +109,11 @@ try { handlers.rejectUpgradeRequest = requireAdmin(safeHandler('rejectUpgradeReq
 try { handlers.getUserUpgradeStatus = safeHandler('getUserUpgradeStatus', require('../handlers/getUserUpgradeStatus.js')); } catch (e) { handlers.getUserUpgradeStatus = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUserUpgradeStatus load failed',detail:e.message})); }; }
 try { handlers.submitUtrVerification = safeHandler('submitUtrVerification', require('../handlers/submitUtrVerification.js')); } catch (e) { handlers.submitUtrVerification = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'submitUtrVerification load failed',detail:e.message})); }; }
 
+// === CYCLE MANAGEMENT ===
+try { handlers.reactivateUser = requireAdmin(safeHandler('reactivateUser', require('../handlers/reactivateUser.js'))); } catch (e) { handlers.reactivateUser = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'reactivateUser load failed',detail:e.message})); }; }
+try { handlers.getCycleDashboard = requireAdmin(safeHandler('getCycleDashboard', require('../handlers/getCycleDashboard.js'))); } catch (e) { handlers.getCycleDashboard = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getCycleDashboard load failed',detail:e.message})); }; }
+try { handlers.getUserCycleData = safeHandler('getUserCycleData', require('../handlers/getUserCycleData.js')); } catch (e) { handlers.getUserCycleData = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUserCycleData load failed',detail:e.message})); }; }
+
 console.error('[INDEX] ' + Object.keys(handlers).length + ' handlers loaded');
 
 module.exports = async (req, res) => {

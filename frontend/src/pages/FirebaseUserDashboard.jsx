@@ -56,6 +56,7 @@ export default function FirebaseUserDashboard() {
   const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [cycleData, setCycleData] = useState(null);
 
   const userId = localStorage.getItem('fb_user_id');
 
@@ -160,6 +161,15 @@ export default function FirebaseUserDashboard() {
       if (data) setWalletBalance(data.balance || 0);
     });
     return () => { if (unsub) unsub(); };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
+    fetch(API_BASE + '/getUserCycleData?userId=' + userId)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setCycleData(data); })
+      .catch(() => {});
   }, [userId]);
 
   async function handleLogout() {
@@ -484,6 +494,54 @@ export default function FirebaseUserDashboard() {
           )}
         </div>
       </div>
+
+      {/* Cycle Status */}
+      {cycleData && (
+        <div className="glass card mb-lg animate-fade-in-up">
+          <h3 className="font-semibold mb-xs text-gradient" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Cycle Status
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.6rem', marginTop: '0.75rem' }}>
+            <div className="card-dim text-center">
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #6B7280)', marginBottom: '0.15rem' }}>Account</div>
+              <div style={{ fontWeight: 700, color: cycleData.account_status === 'active' ? '#059669' : '#d97706', textTransform: 'capitalize' }}>{cycleData.account_status || 'inactive'}</div>
+            </div>
+            <div className="card-dim text-center">
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #6B7280)', marginBottom: '0.15rem' }}>Referral Cycle</div>
+              <div style={{ fontWeight: 700, color: 'var(--accent, #4F46E5)' }}>#{cycleData.referral_cycle_number || 1}</div>
+            </div>
+            <div className="card-dim text-center">
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #6B7280)', marginBottom: '0.15rem' }}>Referrals This Cycle</div>
+              <div style={{ fontWeight: 700, color: cycleData.current_cycle_referral_count >= 2 ? '#059669' : 'var(--text, #1a1d26)' }}>{cycleData.current_cycle_referral_count || 0}/2</div>
+            </div>
+            <div className="card-dim text-center">
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #6B7280)', marginBottom: '0.15rem' }}>Remaining Slots</div>
+              <div style={{ fontWeight: 700, color: cycleData.remaining_referral_slots === 0 ? '#dc2626' : '#059669' }}>{cycleData.remaining_referral_slots || 0}</div>
+            </div>
+            <div className="card-dim text-center">
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #6B7280)', marginBottom: '0.15rem' }}>Total Referrals</div>
+              <div style={{ fontWeight: 700 }}>{cycleData.total_referrals || 0}</div>
+            </div>
+            <div className="card-dim text-center">
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted, #6B7280)', marginBottom: '0.15rem' }}>Topup Cycle</div>
+              <div style={{ fontWeight: 700, color: 'var(--accent, #7C3AED)' }}>#{cycleData.topup_cycle_number || 1}</div>
+            </div>
+          </div>
+          {cycleData.inactive_reason && (
+            <div className="card-dim mt-sm" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--warning, #d97706)', fontWeight: 600 }}>
+                {cycleData.inactive_reason === 'REFERRAL_LIMIT_COMPLETED' ? 'Referral cycle complete — waiting for admin reactivation' :
+                 cycleData.inactive_reason === 'TOPUP_CYCLE_COMPLETED' ? 'Topup cycle complete — waiting for admin reactivation' :
+                 cycleData.inactive_reason}
+              </div>
+            </div>
+          )}
+          {cycleData.reactivated_at && (
+            <div className="text-xs text-muted mt-sm" style={{ textAlign: 'center' }}>Last reactivated: {new Date(cycleData.reactivated_at).toLocaleString()}</div>
+          )}
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="stats-grid mb-lg animate-fade-in-up stagger-2">

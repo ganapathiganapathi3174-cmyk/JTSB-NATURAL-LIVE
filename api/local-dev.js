@@ -131,6 +131,10 @@ const handlerCfg = [
   ['rejectUpgradeRequest', true, '../handlers/rejectUpgradeRequest.js'],
   ['getUserUpgradeStatus', false, '../handlers/getUserUpgradeStatus.js'],
   ['submitUtrVerification', false, '../handlers/submitUtrVerification.js'],
+  // === CYCLE MANAGEMENT ===
+  ['reactivateUser', true, '../handlers/reactivateUser.js'],
+  ['getCycleDashboard', true, '../handlers/getCycleDashboard.js'],
+  ['getUserCycleData', false, '../handlers/getUserCycleData.js'],
 ];
 const handlerModules = {};
 const handlers = {};
