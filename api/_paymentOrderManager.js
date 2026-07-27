@@ -241,7 +241,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
 
   // Run verification inline with a timeout — return real result to frontend
-  const OCR_TIMEOUT_MS = IS_VERCEL ? 22000 : 60000;
+  const OCR_TIMEOUT_MS = IS_VERCEL ? 28000 : 60000;
   try {
     log('[INLINE_VERIFY] order ' + orderId + ' running OCR inline (timeout ' + OCR_TIMEOUT_MS + 'ms)');
     const v = await Promise.race([
@@ -360,7 +360,7 @@ async function runVerificationWorker() {
       log('Worker: processing order ' + orderId + ' type=' + order.type + ' amount=' + order.amount);
       const v = await Promise.race([
         runOfficerVerification(order, order.screenshot_url, order.user_id || null, order.utr || null, null),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 25000 : 30000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 28000 : 30000)),
       ]);
       log('Worker: officer result — status=' + v.status + ' score=' + (v.verificationScore || 0) + ' checks=' + JSON.stringify(v.checks || []));
 

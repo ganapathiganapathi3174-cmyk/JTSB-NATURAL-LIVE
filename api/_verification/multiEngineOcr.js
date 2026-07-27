@@ -9,8 +9,11 @@ async function runTesseractWorker(buffer, lang) {
     worker = await Tesseract.createWorker(lang || 'eng', 1, {
       logger: () => {},
     });
-    const { data } = await worker.recognize(buffer);
-    return data;
+    const result = await Promise.race([
+      worker.recognize(buffer),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TESSERACT_TIMEOUT')), C.OCR_ENGINE_TIMEOUT_MS)),
+    ]);
+    return result.data;
   } finally {
     try { if (worker) await worker.terminate(); } catch (_) {}
   }
@@ -67,8 +70,10 @@ async function run(strategies) {
     ? strategies
     : [{ name: 'default', buf: null }];
 
-  for (const strat of stratArr) {
-    if (!strat.buf) continue;
+  const maxStrategies = 2;
+  const toRun = stratArr.filter(s => s.buf).slice(0, maxStrategies);
+
+  for (const strat of toRun) {
     try {
       const data = await runTesseractWorker(strat.buf);
       const avgConf = wordConfidence(data);
@@ -82,6 +87,7 @@ async function run(strategies) {
         words: (data.words || []).map(w => ({ text: w.text, confidence: w.confidence || 0, bbox: w.bbox || null })),
       });
       log.info('', strat.name + ': ' + (data.text || '').length + ' chars, conf=' + Math.round(avgConf) + '%');
+      if (avgConf >= 60 && results.length >= 1) break;
     } catch (e) {
       log.error('', strat.name + ' failed: ' + e.message);
     }

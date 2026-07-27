@@ -134,7 +134,7 @@ async function enhanceGrayscale(buffer) {
   try {
     image.greyscale();
     image.contrast(0.35);
-    if (image.bitmap.width < 2000) image.resize(image.bitmap.width * 2, Jimp.AUTO);
+    if (image.bitmap.width < 800) image.resize(1200, Jimp.AUTO);
     return await image.getBuffer('image/png');
   } catch (_) { return buffer; }
 }
@@ -176,14 +176,14 @@ function analyzeImageQuality(image, buffer) {
     }
   }
   const avgBrightness = samples > 0 ? totalBright / samples : 127;
-  const darkScore = avgBrightness < 30 ? 100 : avgBrightness < 60 ? 80 : avgBrightness < 90 ? 50 : avgBrightness < 120 ? 20 : 0;
+  const darkScore = avgBrightness < 15 ? 100 : avgBrightness < 30 ? 60 : avgBrightness < 50 ? 30 : 0;
 
   let passed = true;
   const issues = [];
   if (blurScore > 80) { passed = false; issues.push('Very blurry screenshot'); }
   else if (blurScore > 60) { issues.push('Moderate blur'); }
   if (lowRes) { passed = false; issues.push('Low resolution: ' + w + 'x' + h); }
-  if (darkScore > 70) { passed = false; issues.push('Very dark image'); }
+  if (darkScore > 90) { passed = false; issues.push('Very dark image'); }
   return { passed, blurScore, lowRes, avgBrightness: Math.round(avgBrightness), darkScore, w, h, issues };
 }
 

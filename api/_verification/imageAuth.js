@@ -142,7 +142,7 @@ async function detectCameraPhoto(image) {
     }
   }
 
-  return { score: Math.min(score, 100), isCameraPhoto: score > 60, issues };
+  return { score: Math.min(score, 100), isCameraPhoto: score > 80, issues };
 }
 
 function variance(arr) {
@@ -157,12 +157,15 @@ async function detectEditing(image) {
   try {
     const { Jimp: J } = require('jimp');
     const pilImg = image.clone();
-    const buf = await pilImg.getBuffer('image/jpeg', { quality: 75 });
+    const buf = await pilImg.getBuffer('image/jpeg', { quality: 92 });
     const resaved = await J.read(buf);
     const w = pilImg.bitmap.width;
     const h = pilImg.bitmap.height;
     const origData = pilImg.bitmap.data;
     const resavedData = resaved.bitmap.data;
+    const rw = resaved.bitmap.width;
+    const rh = resaved.bitmap.height;
+    if (rw !== w || rh !== h) return { score: 0, isEdited: false, issues: [] };
     let anomalousCount = 0;
     let totalPixels = 0;
     const step = Math.max(1, Math.floor(Math.min(w, h) / 200));
@@ -177,17 +180,18 @@ async function detectEditing(image) {
         totalPixels++;
       }
     }
+    if (diffs.length === 0) return { score: 0, isEdited: false, issues: [] };
     const meanDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
     const stdDiff = Math.sqrt(diffs.reduce((s, d) => s + (d - meanDiff) ** 2, 0) / diffs.length);
-    const threshold = meanDiff + 2 * stdDiff;
+    const threshold = meanDiff + 3 * stdDiff;
     anomalousCount = diffs.filter(d => d > threshold).length;
     const anomalyPct = (anomalousCount / totalPixels) * 100;
-    score = Math.min(anomalyPct * 3, 100);
-    if (score > 30) issues.push('ELA analysis detected ' + anomalyPct.toFixed(1) + '% anomalous regions');
-    if (score > 60) issues.push('High tamper probability');
+    score = Math.min(anomalyPct * 2, 100);
+    if (score > 50) issues.push('ELA analysis detected ' + anomalyPct.toFixed(1) + '% anomalous regions');
+    if (score > 70) issues.push('High tamper probability');
   } catch (_) {}
 
-  return { score, isEdited: score > 30, issues };
+  return { score, isEdited: score > 50, issues };
 }
 
 async function detectCrop(image) {
@@ -224,7 +228,7 @@ async function detectCrop(image) {
     if (rightContent > h * 0.8) { score += 10; break; }
   }
 
-  return { score: Math.min(score, 100), isCropped: score > 40, issues };
+  return { score: Math.min(score, 100), isCropped: score > 60, issues };
 }
 
 async function detectOverlay(image) {
@@ -282,7 +286,7 @@ async function detectOverlay(image) {
     issues.push('Large black region detected (possible overlay mask)');
   }
 
-  return { score: Math.min(score, 100), isOverlay: score > 40, issues };
+  return { score: Math.min(score, 100), isOverlay: score > 60, issues };
 }
 
 function detectScreenshotType(image) {
