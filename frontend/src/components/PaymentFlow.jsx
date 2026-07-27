@@ -98,7 +98,7 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
 
     try {
       const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 25000);
+      const fetchTimeout = setTimeout(() => controller.abort(), 12000);
 
       const resp = await fetch(`${API_BASE}/submitPaymentProof`, {
         method: 'POST',

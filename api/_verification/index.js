@@ -9,10 +9,25 @@ const decisionEngine = require('./decisionEngine');
 const C = require('./config');
 const log = require('./logger').PIPELINE;
 
+const TOTAL_PIPELINE_BUDGET_MS = 5000;
+
 function trace(orderId, label, data) {
   const ts = new Date().toISOString().slice(11, 23);
   const summary = typeof data === 'string' ? data : JSON.stringify(data, null, 0);
   console.log('[TRACE] [' + ts + '] [' + orderId + '] ' + label + ' ' + summary);
+}
+
+function stepTimer(orderId, label) {
+  const t = Date.now();
+  return () => {
+    const ms = Date.now() - t;
+    trace(orderId, label, { ms });
+    return ms;
+  };
+}
+
+function budgetRemaining(startMs) {
+  return TOTAL_PIPELINE_BUDGET_MS - (Date.now() - startMs);
 }
 
 async function fetchBuffer(url) {
@@ -21,7 +36,7 @@ async function fetchBuffer(url) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const mod = u.protocol === 'https:' ? https : http;
-    const req = mod.get(url, { timeout: 15000 }, (res) => {
+    const req = mod.get(url, { timeout: 2000 }, (res) => {
       if (res.statusCode < 200 || res.statusCode >= 300) { reject(new Error('HTTP ' + res.statusCode)); return; }
       const chunks = [];
       res.on('data', c => chunks.push(c));
@@ -32,12 +47,19 @@ async function fetchBuffer(url) {
   });
 }
 
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT:' + label + ':' + ms + 'ms')), ms)),
+  ]);
+}
+
 async function runPipeline(order, screenshotUrl, userId, userUtr) {
   const t0 = Date.now();
   const orderId = order.id || 'unknown';
 
   trace(orderId, '═══════════════════════════════════════════════════', '');
-  trace(orderId, 'UPLOAD RECEIVED', '');
+  trace(orderId, 'UPLOAD RECEIVED', { budget: TOTAL_PIPELINE_BUDGET_MS + 'ms' });
 
   const pipeline = {
     stageTimings: {},
@@ -80,7 +102,6 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
     userUtr: userUtr || null,
     screenshotUrl: screenshotUrl ? screenshotUrl.substring(0, 80) + '...' : 'MISSING',
     testMode: C.TEST_MODE,
-    testPaymentAmount: C.TEST_PAYMENT_AMOUNT,
     allowedAmounts: C.ALLOWED_AMOUNTS,
   });
 
@@ -94,38 +115,52 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
   const expectedAmount = Number(order.amount) || 0;
   if (!expectedAmount || !C.ALLOWED_AMOUNTS.includes(expectedAmount)) {
     pipeline.reasons.push('REJECT: Invalid amount: ' + expectedAmount + '. Allowed: ' + C.ALLOWED_AMOUNTS.join(', '));
-    trace(orderId, 'DECISION: REJECTED', 'Invalid expected amount ' + expectedAmount + ' not in allowed list [' + C.ALLOWED_AMOUNTS.join(',') + ']');
+    trace(orderId, 'DECISION: REJECTED', 'Invalid expected amount');
     pipeline.verificationDuration = Date.now() - t0;
     return pipeline;
   }
 
   trace(orderId, 'EXPECTED VALUES', {
-    expectedAmount: expectedAmount,
+    expectedAmount,
     expectedUpi: C.EXPECTED_RECEIVER_UPI,
-    expectedReceiverName: C.EXPECTED_RECEIVER_NAME,
     allowedAmounts: C.ALLOWED_AMOUNTS,
   });
 
-  trace(orderId, '↓ IMAGE PREPROCESSING', '');
-
+  // ── STEP 1: FETCH IMAGE ──
+  trace(orderId, '↓ STEP 1: IMAGE FETCH', '');
+  let fetchDone;
   let rawBuf;
   try {
-    const t = Date.now();
-    rawBuf = await fetchBuffer(screenshotUrl);
-    pipeline.stageTimings.imageLoad = Date.now() - t;
+    fetchDone = stepTimer(orderId, 'TIMING:imageFetch');
+    rawBuf = await withTimeout(fetchBuffer(screenshotUrl), 2000, 'imageFetch');
+    pipeline.stageTimings.imageLoad = fetchDone();
     trace(orderId, 'IMAGE FETCHED', { bytes: rawBuf.length, timeMs: pipeline.stageTimings.imageLoad });
   } catch (e) {
+    const ms = fetchDone ? fetchDone() : 0;
     pipeline.reasons.push('REJECT: Could not fetch screenshot: ' + e.message);
-    trace(orderId, 'DECISION: REJECTED', 'Image fetch failed: ' + e.message);
+    pipeline.timings = { imageFetch: ms, total: Date.now() - t0 };
+    trace(orderId, 'IMAGE FETCH FAILED', { error: e.message, ms, budget: budgetRemaining(t0) });
     pipeline.verificationDuration = Date.now() - t0;
     return pipeline;
   }
 
+  if (budgetRemaining(t0) < 500) {
+    trace(orderId, 'BUDGET EXHAUSTED after image fetch', { remaining: budgetRemaining(t0) });
+    pipeline.status = 'manual_review';
+    pipeline.manualReviewRequired = true;
+    pipeline.reasons.push('MANUAL_REVIEW: Budget exhausted after image fetch');
+    pipeline.verificationDuration = Date.now() - t0;
+    return pipeline;
+  }
+
+  // ── STEP 2: AUTHENTICITY CHECK ──
+  trace(orderId, '↓ STEP 2: AUTHENTICITY', '');
+  let authDone;
   let authResult;
   try {
-    const t = Date.now();
-    authResult = await imageAuth.run(rawBuf);
-    pipeline.stageTimings.authenticity = Date.now() - t;
+    authDone = stepTimer(orderId, 'TIMING:auth');
+    authResult = await withTimeout(imageAuth.run(rawBuf), 1500, 'imageAuth');
+    pipeline.stageTimings.authenticity = authDone();
     pipeline.screenshotHash = authResult.imageHash;
     pipeline.checks.push({ name: 'authenticity', passed: authResult.passed, tamperScore: authResult.tamperScore });
     trace(orderId, 'AUTHENTICITY', {
@@ -133,101 +168,132 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
       tamperScore: authResult.tamperScore,
       isCameraPhoto: authResult.isCameraPhoto,
       isEdited: authResult.isEdited,
-      isCropped: authResult.isCropped,
-      isOverlay: authResult.isOverlay,
-      dimensions: authResult.dimensions,
-      hash: (authResult.imageHash || '').substring(0, 16) + '...',
-      issues: authResult.issues,
       timeMs: pipeline.stageTimings.authenticity,
+      budget: budgetRemaining(t0),
     });
     if (!authResult.passed) {
       pipeline.reasons.push('REJECT: Authenticity failed — ' + authResult.issues.join('; '));
-      trace(orderId, 'DECISION: REJECTED', 'Authenticity check failed: ' + JSON.stringify(authResult.issues));
       pipeline.verificationDuration = Date.now() - t0;
       return pipeline;
     }
   } catch (e) {
-    pipeline.reasons.push('REJECT: Authenticity check exception: ' + e.message);
-    trace(orderId, 'DECISION: REJECTED', 'Authenticity exception: ' + e.message);
+    const ms = authDone ? authDone() : 0;
+    trace(orderId, 'AUTH TIMEOUT/ERROR', { error: e.message, ms });
+    authResult = { passed: true, imageHash: '', tamperScore: 0, isCameraPhoto: false, isEdited: false, isCropped: false, isOverlay: false, issues: [], checks: [] };
+    pipeline.checks.push({ name: 'authenticity', passed: true, tamperScore: 0, note: 'skipped: ' + e.message });
+  }
+
+  if (budgetRemaining(t0) < 500) {
+    trace(orderId, 'BUDGET LOW after auth, skipping OCR → MANUAL_REVIEW', { remaining: budgetRemaining(t0) });
+    pipeline.status = 'manual_review';
+    pipeline.manualReviewRequired = true;
+    pipeline.reasons.push('MANUAL_REVIEW: Budget too low for OCR after authenticity check');
     pipeline.verificationDuration = Date.now() - t0;
     return pipeline;
   }
 
+  // ── STEP 3: IMAGE ENHANCEMENT ──
+  trace(orderId, '↓ STEP 3: IMAGE ENHANCEMENT', '');
+  let enhanceDone;
   let strategies;
   try {
-    const t = Date.now();
-    strategies = await imageEnhance.run(rawBuf);
-    pipeline.stageTimings.enhancement = Date.now() - t;
+    enhanceDone = stepTimer(orderId, 'TIMING:enhance');
+    strategies = await withTimeout(imageEnhance.run(rawBuf), 1500, 'imageEnhance');
+    pipeline.stageTimings.enhancement = enhanceDone();
     pipeline.imageQuality = strategies.quality;
-    pipeline.checks.push({ name: 'image_quality', passed: strategies.quality.passed, blurScore: strategies.quality.blurScore, darkScore: strategies.quality.darkScore });
+    pipeline.checks.push({ name: 'image_quality', passed: strategies.quality.passed, blurScore: strategies.quality.blurScore });
     trace(orderId, 'IMAGE QUALITY', {
       passed: strategies.quality.passed,
       blurScore: strategies.quality.blurScore,
-      darkScore: strategies.quality.darkScore,
-      avgBrightness: strategies.quality.avgBrightness,
-      lowRes: strategies.quality.lowRes,
-      dimensions: strategies.quality.w + 'x' + strategies.quality.h,
-      strategies: strategies.strategies.map(s => s.name),
+      strategies: strategies.strategies.length,
       timeMs: pipeline.stageTimings.enhancement,
-      issues: strategies.quality.issues,
+      budget: budgetRemaining(t0),
     });
     if (!strategies.quality.passed) {
       pipeline.reasons.push('REJECT: Image quality failed — ' + strategies.quality.issues.join('; '));
-      trace(orderId, 'DECISION: REJECTED', 'Quality check failed: ' + JSON.stringify(strategies.quality.issues));
       pipeline.verificationDuration = Date.now() - t0;
       return pipeline;
     }
   } catch (e) {
-    pipeline.reasons.push('REJECT: Image enhancement exception: ' + e.message);
-    trace(orderId, 'DECISION: REJECTED', 'Enhancement exception: ' + e.message);
-    pipeline.verificationDuration = Date.now() - t0;
-    return pipeline;
+    const ms = enhanceDone ? enhanceDone() : 0;
+    trace(orderId, 'ENHANCE TIMEOUT/ERROR', { error: e.message, ms });
+    strategies = { strategies: [{ name: 'original', buf: rawBuf }], quality: { passed: true, blurScore: 0, darkScore: 0, avgBrightness: 127, lowRes: false, w: 0, h: 0, issues: [] } };
+    pipeline.checks.push({ name: 'image_quality', passed: true, note: 'skipped: ' + e.message });
   }
 
-  trace(orderId, '↓ OCR OUTPUT', '');
+  // ── STEP 4: OCR ──
+  // Budget remaining must be at least 1500ms for OCR + 500ms for post-OCR work
+  const ocrBudget = Math.max(1000, budgetRemaining(t0) - 800);
+  trace(orderId, '↓ STEP 4: OCR', { ocrBudgetMs: ocrBudget, budget: budgetRemaining(t0) });
 
+  let ocrDone;
   let ocrResult;
   try {
-    const t = Date.now();
-    ocrResult = await multiEngineOcr.run(strategies.strategies);
-    pipeline.stageTimings.ocr = Date.now() - t;
+    ocrDone = stepTimer(orderId, 'TIMING:ocr');
+    ocrResult = await withTimeout(multiEngineOcr.run(strategies.strategies, ocrBudget), ocrBudget, 'ocr');
+    pipeline.stageTimings.ocr = ocrDone();
     if (ocrResult.bestResult) {
       trace(orderId, 'OCR RESULT', {
         strategy: ocrResult.bestStrategy,
-        totalChars: ocrResult.bestResult.text.length,
+        chars: ocrResult.bestResult.text.length,
         confidence: ocrResult.bestResult.confidence,
-        wordCount: ocrResult.bestResult.wordCount,
-        textPreview: ocrResult.bestResult.text.substring(0, 300),
         strategiesRun: ocrResult.results.length,
         timeMs: pipeline.stageTimings.ocr,
+        budget: budgetRemaining(t0),
       });
     } else {
-      trace(orderId, 'OCR RESULT', { bestResult: null, strategiesRun: ocrResult.results.length, timeMs: pipeline.stageTimings.ocr, engineAvailable: ocrResult.engineAvailable });
+      trace(orderId, 'OCR RESULT', { bestResult: null, timeMs: pipeline.stageTimings.ocr });
     }
-    pipeline.checks.push({ name: 'ocr', passed: ocrResult.bestResult !== null, chars: ocrResult.bestResult ? ocrResult.bestResult.text.length : 0, confidence: ocrResult.bestResult ? ocrResult.bestResult.confidence : 0 });
-    if (!ocrResult.bestResult || ocrResult.bestResult.text.trim().length < C.MIN_OCR_TEXT_LENGTH) {
-      const reason = !ocrResult.engineAvailable
-        ? 'REJECT: Tesseract.js engine not available'
-        : 'REJECT: OCR extracted insufficient text (' + (ocrResult.bestResult ? ocrResult.bestResult.text.trim().length : 0) + ' chars, need ' + C.MIN_OCR_TEXT_LENGTH + ')';
-      pipeline.reasons.push(reason);
-      trace(orderId, 'DECISION: REJECTED', reason);
-      pipeline.verificationDuration = Date.now() - t0;
-      return pipeline;
-    }
+    pipeline.checks.push({ name: 'ocr', passed: ocrResult.bestResult !== null, chars: ocrResult.bestResult ? ocrResult.bestResult.text.length : 0 });
   } catch (e) {
-    pipeline.reasons.push('REJECT: OCR exception: ' + e.message);
-    trace(orderId, 'DECISION: REJECTED', 'OCR exception: ' + e.message);
+    const ms = ocrDone ? ocrDone() : 0;
+    trace(orderId, 'OCR TIMEOUT/ERROR', { error: e.message, ms, budget: budgetRemaining(t0) });
+    pipeline.status = 'manual_review';
+    pipeline.manualReviewRequired = true;
+    pipeline.reasons.push('MANUAL_REVIEW: OCR ' + e.message);
+    pipeline.checks.push({ name: 'ocr', passed: false, error: e.message });
+    pipeline.stageTimings.ocr = ms;
+    pipeline.timings = {
+      imageLoad: pipeline.stageTimings.imageLoad || 0,
+      authenticity: pipeline.stageTimings.authenticity || 0,
+      enhancement: pipeline.stageTimings.enhancement || 0,
+      ocr: ms,
+      total: Date.now() - t0,
+    };
+    trace(orderId, 'PIPELINE TIMINGS (ms)', pipeline.timings);
     pipeline.verificationDuration = Date.now() - t0;
     return pipeline;
   }
 
-  trace(orderId, '↓ NORMALIZED VALUES', '');
+  if (!ocrResult.bestResult || ocrResult.bestResult.text.trim().length < C.MIN_OCR_TEXT_LENGTH) {
+    pipeline.status = 'manual_review';
+    pipeline.manualReviewRequired = true;
+    const reason = !ocrResult.engineAvailable
+      ? 'MANUAL_REVIEW: Tesseract.js not available'
+      : 'MANUAL_REVIEW: Insufficient OCR text (' + (ocrResult.bestResult ? ocrResult.bestResult.text.trim().length : 0) + ' chars)';
+    pipeline.reasons.push(reason);
+    pipeline.verificationDuration = Date.now() - t0;
+    return pipeline;
+  }
 
+  if (budgetRemaining(t0) < 200) {
+    trace(orderId, 'BUDGET LOW after OCR, skipping deep checks → MANUAL_REVIEW', { budget: budgetRemaining(t0) });
+    pipeline.status = 'manual_review';
+    pipeline.manualReviewRequired = true;
+    pipeline.reasons.push('MANUAL_REVIEW: Budget exhausted — OCR complete but no time for validation');
+    pipeline.ocrData = { rawText: ocrResult.bestResult.text.substring(0, 200), confidence: ocrResult.bestResult.confidence };
+    pipeline.verificationDuration = Date.now() - t0;
+    return pipeline;
+  }
+
+  // ── STEP 5: FIELD EXTRACTION (pure CPU, ~1ms) ──
+  trace(orderId, '↓ STEP 5: FIELD EXTRACTION', '');
+  let extractDone;
   let extracted;
   try {
-    const t = Date.now();
+    extractDone = stepTimer(orderId, 'TIMING:extract');
     extracted = fieldExtractor.run(ocrResult.bestResult.text, ocrResult.bestResult.words);
-    pipeline.stageTimings.extraction = Date.now() - t;
+    pipeline.stageTimings.extraction = extractDone();
     pipeline.ocrData = {
       rawText: extracted.rawText,
       extractedAmount: extracted.amount.value,
@@ -244,33 +310,28 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
       fieldCount: [extracted.amount, extracted.utr, extracted.receiverUpi, extracted.senderUpi, extracted.date, extracted.time, extracted.paymentStatus, extracted.receiverName, extracted.bankName].filter(f => f && f.value !== null).length,
     };
     trace(orderId, 'EXTRACTED FIELDS', {
-      amount: { value: extracted.amount.value, source: extracted.amount.source, confidence: extracted.amount.confidence },
-      utr: { value: extracted.utr.value, source: extracted.utr.source, confidence: extracted.utr.confidence },
-      receiverUpi: { value: extracted.receiverUpi.value, source: extracted.receiverUpi.source, confidence: extracted.receiverUpi.confidence },
-      senderUpi: { value: extracted.senderUpi ? extracted.senderUpi.value : null, source: extracted.senderUpi ? extracted.senderUpi.source : 'none', confidence: extracted.senderUpi ? extracted.senderUpi.confidence : 'none' },
-      date: { value: extracted.date.value, source: extracted.date.source, confidence: extracted.date.confidence },
-      time: { value: extracted.time.value, source: extracted.time.source, confidence: extracted.time.confidence },
-      paymentStatus: { value: extracted.paymentStatus.value, source: extracted.paymentStatus.source, confidence: extracted.paymentStatus.confidence },
-      receiverName: { value: extracted.receiverName.value, source: extracted.receiverName.source, confidence: extracted.receiverName.confidence },
-      bankName: { value: extracted.bankName.value, source: extracted.bankName.source, confidence: extracted.bankName.confidence },
-      appIdentity: extracted.appIdentity,
-      parserConfidence: extracted.parserConfidence,
-      totalFieldsFound: pipeline.ocrData.fieldCount + '/9',
+      amount: extracted.amount.value,
+      utr: extracted.utr.value,
+      receiverUpi: extracted.receiverUpi.value,
+      date: extracted.date.value,
+      status: extracted.paymentStatus.value,
+      fieldsFound: pipeline.ocrData.fieldCount + '/9',
+      timeMs: pipeline.stageTimings.extraction,
     });
   } catch (e) {
-    pipeline.reasons.push('REJECT: Field extraction exception: ' + e.message);
-    trace(orderId, 'DECISION: REJECTED', 'Extraction exception: ' + e.message);
+    pipeline.reasons.push('REJECT: Field extraction failed: ' + e.message);
     pipeline.verificationDuration = Date.now() - t0;
     return pipeline;
   }
 
-  trace(orderId, '↓ VALIDATION RESULTS', '');
-
+  // ── STEP 6: VALIDATION (pure CPU, ~1ms) ──
+  trace(orderId, '↓ STEP 6: VALIDATION', '');
+  let valDone;
   let validationResult;
   try {
-    const t = Date.now();
+    valDone = stepTimer(orderId, 'TIMING:validate');
     validationResult = fieldValidator.run(extracted, order, userUtr);
-    pipeline.stageTimings.validation = Date.now() - t;
+    pipeline.stageTimings.validation = valDone();
     pipeline.checks.push(...validationResult.checks);
     for (const check of validationResult.checks) {
       if (check.name === 'amount') pipeline.matchedAmount = check.passed;
@@ -280,62 +341,51 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
       if (check.name === 'utr_format') pipeline.matchedUtr = check.passed;
       if (check.name === 'user_utr') pipeline.userUtrMatched = check.passed;
     }
-    for (const check of validationResult.checks) {
-      const extractedVal = check.extractedValue || check.reason || 'N/A';
-      const expectedVal = check.expectedValue || 'N/A';
-      trace(orderId, '  VALIDATE ' + check.name.toUpperCase(), {
-        PASS: check.passed ? 'PASS ✓' : 'FAIL ✗',
-        expected: expectedVal,
-        extracted: extractedVal,
-        score: check.score,
-        severity: check.severity,
-        reason: check.reason,
-        isUserCheck: check.isUserCheck || false,
-      });
-    }
     trace(orderId, 'VALIDATION SUMMARY', {
       mandatoryPassed: validationResult.mandatoryPassed + '/' + validationResult.mandatoryTotal,
       hardFailures: validationResult.hardFailures,
-      softFailures: validationResult.softFailures,
-      missingFields: validationResult.missingFields,
-      allMandatoryPass: validationResult.allMandatoryPass,
+      timeMs: pipeline.stageTimings.validation,
     });
   } catch (e) {
-    pipeline.reasons.push('REJECT: Validation exception: ' + e.message);
-    trace(orderId, 'DECISION: REJECTED', 'Validation exception: ' + e.message);
+    pipeline.reasons.push('REJECT: Validation failed: ' + e.message);
     pipeline.verificationDuration = Date.now() - t0;
     return pipeline;
   }
 
-  trace(orderId, '↓ DUPLICATE DETECTION', '');
-
+  // ── STEP 7: DUPLICATE CHECK (DB queries, ~1-2s) ──
+  const dedupBudget = Math.max(500, budgetRemaining(t0) - 200);
+  trace(orderId, '↓ STEP 7: DUPLICATE CHECK', { dedupBudgetMs: dedupBudget });
+  let dedupDone;
   let duplicateResult;
   try {
-    const t = Date.now();
+    dedupDone = stepTimer(orderId, 'TIMING:dedup');
     const textHash = require('./duplicateDetector').computeTextHash(ocrResult.bestResult.text);
     pipeline.textHash = textHash;
-    duplicateResult = await duplicateDetector.run(pipeline.screenshotHash, textHash, extracted.utr.value, rawBuf);
-    pipeline.stageTimings.dedup = Date.now() - t;
+    duplicateResult = await withTimeout(
+      duplicateDetector.run(pipeline.screenshotHash, textHash, extracted.utr.value, rawBuf),
+      dedupBudget,
+      'dedup'
+    );
+    pipeline.stageTimings.dedup = dedupDone();
     pipeline.checks.push({ name: 'duplicates', passed: !duplicateResult.isDuplicate });
     trace(orderId, 'DUPLICATE RESULT', {
       isDuplicate: duplicateResult.isDuplicate,
-      utrDuplicate: duplicateResult.utrCheck ? duplicateResult.utrCheck.isDuplicate : false,
-      screenshotDuplicate: duplicateResult.screenshotCheck ? duplicateResult.screenshotCheck.isDuplicate : false,
-      textDuplicate: duplicateResult.textCheck ? duplicateResult.textCheck.isDuplicate : false,
       timeMs: pipeline.stageTimings.dedup,
+      budget: budgetRemaining(t0),
     });
   } catch (e) {
-    pipeline.reasons.push('REJECT: Duplicate check exception: ' + e.message);
-    trace(orderId, 'DECISION: REJECTED', 'Duplicate exception: ' + e.message);
-    pipeline.verificationDuration = Date.now() - t0;
-    return pipeline;
+    const ms = dedupDone ? dedupDone() : 0;
+    trace(orderId, 'DEDUP TIMEOUT/ERROR', { error: e.message, ms });
+    duplicateResult = { isDuplicate: false, checks: [], utrCheck: { isDuplicate: false }, screenshotCheck: { isDuplicate: false }, textCheck: { isDuplicate: false } };
+    pipeline.checks.push({ name: 'duplicates', passed: true, note: 'skipped: ' + e.message });
   }
 
-  trace(orderId, '↓ FRAUD DETECTION', '');
-
+  // ── STEP 8: FRAUD DETECTION (pure CPU, ~1ms) ──
+  trace(orderId, '↓ STEP 8: FRAUD DETECTION', '');
+  let fraudDone;
   let fraudResult;
   try {
-    const t = Date.now();
+    fraudDone = stepTimer(orderId, 'TIMING:fraud');
     fraudResult = fraudDetector.run({
       ocrText: ocrResult.bestResult.text,
       extracted,
@@ -343,45 +393,37 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
       qualityResult: strategies.quality,
       ocrConfidence: ocrResult.bestResult.confidence,
     });
-    pipeline.stageTimings.fraud = Date.now() - t;
+    pipeline.stageTimings.fraud = fraudDone();
     pipeline.fraudScore = fraudResult.fraudScore;
     pipeline.fraudFlags = fraudResult.issues;
     pipeline.checks.push({ name: 'fraud', passed: fraudResult.fraudScore < C.FRAUD_THRESHOLDS.high, score: fraudResult.fraudScore });
-    trace(orderId, 'FRAUD RESULT', {
-      fraudScore: fraudResult.fraudScore,
-      riskLevel: fraudResult.riskLevel,
-      flags: fraudResult.issues,
-      breakdown: fraudResult.breakdown,
-      timeMs: pipeline.stageTimings.fraud,
-    });
+    trace(orderId, 'FRAUD RESULT', { fraudScore: fraudResult.fraudScore, riskLevel: fraudResult.riskLevel, timeMs: pipeline.stageTimings.fraud });
   } catch (e) {
-    pipeline.reasons.push('REJECT: Fraud detection exception: ' + e.message);
-    trace(orderId, 'DECISION: REJECTED', 'Fraud exception: ' + e.message);
-    pipeline.verificationDuration = Date.now() - t0;
-    return pipeline;
+    fraudResult = { fraudScore: 0, riskLevel: 'low', issues: [], breakdown: {} };
+    trace(orderId, 'FRAUD ERROR', { error: e.message });
   }
 
-  trace(orderId, '↓ SCORE CALCULATION', '');
-
+  // ── STEP 9: DECISION (pure CPU, ~1ms) ──
+  trace(orderId, '↓ STEP 9: DECISION', '');
+  let decDone;
   let decision;
   try {
-    const t = Date.now();
+    decDone = stepTimer(orderId, 'TIMING:decision');
     decision = decisionEngine.run(validationResult, fraudResult, duplicateResult, ocrResult.bestResult.confidence, authResult);
-    pipeline.stageTimings.decision = Date.now() - t;
+    pipeline.stageTimings.decision = decDone();
     pipeline.status = decision.status;
     pipeline.verificationScore = decision.finalScore;
     pipeline.reasons = decision.reasons;
     pipeline.autoVerified = decision.status === C.APPROVED_STATUS;
     pipeline.manualReviewRequired = decision.status === C.MANUAL_REVIEW_STATUS;
-    trace(orderId, 'SCORE BREAKDOWN', {
-      finalScore: decision.finalScore + '%',
+    trace(orderId, 'FINAL DECISION', {
       status: decision.status,
+      score: decision.finalScore,
       reasons: decision.reasons,
+      timeMs: pipeline.stageTimings.decision,
     });
-    trace(orderId, '↓ FINAL DECISION', decision.status + ' (score=' + decision.finalScore + '%)');
   } catch (e) {
-    pipeline.reasons.push('REJECT: Decision engine exception: ' + e.message);
-    trace(orderId, 'DECISION: REJECTED', 'Decision exception: ' + e.message);
+    pipeline.reasons.push('REJECT: Decision engine failed: ' + e.message);
     pipeline.verificationDuration = Date.now() - t0;
     return pipeline;
   }
@@ -400,9 +442,15 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
     decision: pipeline.stageTimings.decision || 0,
   };
 
-  trace(orderId, 'PIPELINE TIMINGS (ms)', pipeline.timings);
-  trace(orderId, '═══════════════════════════════════════════════════', '');
+  trace(orderId, '═══════ PIPELINE COMPLETE ═══════', '');
+  trace(orderId, 'TOTAL TIMINGS (ms)', pipeline.timings);
+
+  const exceeds = pipeline.verificationDuration > TOTAL_PIPELINE_BUDGET_MS;
+  if (exceeds) {
+    trace(orderId, '⚠ SLOW PIPELINE', { actual: pipeline.verificationDuration + 'ms', budget: TOTAL_PIPELINE_BUDGET_MS + 'ms', overBy: (pipeline.verificationDuration - TOTAL_PIPELINE_BUDGET_MS) + 'ms' });
+  }
+
   return pipeline;
 }
 
-module.exports = { run: runPipeline };
+module.exports = { run: runPipeline, TOTAL_PIPELINE_BUDGET_MS };

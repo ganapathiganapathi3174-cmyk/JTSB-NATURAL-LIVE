@@ -154,12 +154,12 @@ module.exports = async (req, res) => {
     });
   }
 
-  const REQ_TIMEOUT_MS = 29000;
+  const REQ_TIMEOUT_MS = 12000;
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
-      console.error('[API] Request timed out for path=' + path + ' (' + (REQ_TIMEOUT_MS/1000) + 's limit)');
+      console.error('[API] HARD TIMEOUT for path=' + path + ' (' + (REQ_TIMEOUT_MS/1000) + 's limit)');
       res.writeHead(504, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Request timed out. Please try again or contact support.' }));
+      res.end(JSON.stringify({ error: 'Server processing took too long. Your payment is being reviewed by our team.' }));
     }
   }, REQ_TIMEOUT_MS);
   const origEnd = res.end.bind(res);

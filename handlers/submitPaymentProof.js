@@ -69,9 +69,13 @@ module.exports = async (req, res) => {
     if (!screenshot) { sendJSON(400, { error: 'screenshot is required' }); return; }
     if (!upiId) { sendJSON(400, { error: 'UPI ID is required' }); return; }
 
+    const uploadStart = Date.now();
     const uploadedUrl = await uploadBase64Image(screenshot);
-    console.log('[UPLOAD_STARTED] order=' + orderId + ' url=' + (uploadedUrl || '').substring(0, 80));
+    console.log('[submitPaymentProof] Upload: ' + (Date.now() - uploadStart) + 'ms, order=' + orderId);
+
+    const verifyStart = Date.now();
     const result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null, userEnteredUpi: upiId });
+    console.log('[submitPaymentProof] Total: ' + (Date.now() - verifyStart) + 'ms, status=' + result.status + ', score=' + (result.verificationScore || 0));
 
     sendJSON(200, {
       ...result,
@@ -82,7 +86,7 @@ module.exports = async (req, res) => {
           : 'Payment submitted for verification',
     });
   } catch (err) {
-    console.error('[submitPaymentProof] Error:', err.message);
+    console.error('[submitPaymentProof] Error:', err.message, err.stack);
     sendJSON(err.status || 500, { error: err.message || 'Internal server error' });
   }
 };

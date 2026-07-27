@@ -240,19 +240,20 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     }
   } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
 
-  // Run verification inline with a timeout — must complete within Vercel's 30s maxDuration.
-  // Pre-OCR DB ops take ~3s, post-OCR DB ops take ~2s, so OCR gets 18s budget.
-  const OCR_TIMEOUT_MS = IS_VERCEL ? 18000 : 60000;
+  // Run verification inline with a hard 7-second budget (5s pipeline + 2s DB overhead).
+  // The pipeline itself tracks its own 5s budget internally.
+  // If it times out here, we return manual_review — never "Request timed out".
+  const VERIFY_INLINE_BUDGET_MS = 7000;
   try {
-    log('[INLINE_VERIFY] order ' + orderId + ' running OCR inline (timeout ' + OCR_TIMEOUT_MS + 'ms)');
+    log('[INLINE_VERIFY] order ' + orderId + ' starting (budget=' + VERIFY_INLINE_BUDGET_MS + 'ms)');
     const v = await Promise.race([
       runOfficerVerification(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('OCR_TIMEOUT')), OCR_TIMEOUT_MS)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFY_BUDGET_EXCEEDED')), VERIFY_INLINE_BUDGET_MS)),
     ]);
 
     const finalStatus = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
 
-    // Update order with real verification result
+    // Update order with verification result — all DB writes are non-blocking on failure
     await updateDoc(COL_ORDERS, orderId, {
       status: finalStatus,
       verification_status: v.status,
@@ -260,9 +261,9 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       ocr_result: v.ocrData || null,
       rejection_reasons: v.reasons || [],
       updated_at: now(),
-    }).catch(e => log('DB update after inline verify failed: ' + e.message));
+    }).catch(e => log('DB update failed: ' + e.message));
 
-    // Update upi_payments status
+    // Update upi_payments
     try {
       const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
       const searchValue = order.pending_reg_id || order.user_id;
@@ -279,14 +280,13 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
           }).catch(() => {});
         }
       }
-    } catch (upiErr) { log('upi_payments update after inline verify failed: ' + upiErr.message); }
+    } catch (_) {}
 
     try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch {}
 
-    log('[INLINE_VERIFY] order ' + orderId + ' completed: status=' + finalStatus + ' score=' + (v.verificationScore || 0));
+    log('[INLINE_VERIFY] order ' + orderId + ' done: status=' + finalStatus + ' score=' + (v.verificationScore || 0));
     verifyingOrders.delete(orderId);
 
-    // Build response object
     const response = {
       orderId, paymentId: orderId,
       status: finalStatus,
@@ -303,34 +303,37 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       ocrData: v.ocrData || null,
     };
 
-    // Fire-and-forget: execute post-approval AFTER response is ready.
-    // On Vercel the process may be killed, so this is best-effort. If it fails,
-    // the admin "Process Pending" handler will pick up the order.
+    // Fire-and-forget post-approval
     if (finalStatus === 'verified') {
-      log('[INLINE_VERIFY] order ' + orderId + ' approved, executing post-approval (background)');
       executeVerifiedOrder(order, v, {
         userId: order.user_id,
         pendingRegId: order.pending_reg_id,
         userEnteredUtr: extra?.userEnteredUtr || order.utr || null,
         userEnteredUpi: extra?.userEnteredUpi || null,
-      }).then(() => log('[INLINE_VERIFY] post-approval completed for ' + orderId))
-        .catch(e => log('Post-approval exec err: ' + e.message));
+      }).catch(e => log('Post-approval err: ' + e.message));
     }
 
     return response;
   } catch (ocrErr) {
-    log('[INLINE_VERIFY] order ' + orderId + ' OCR failed/timed out: ' + ocrErr.message + ', falling back to background worker');
-    // Fall back to background worker
-    pendingVerificationQueue.add(orderId);
-    if (!verificationWorkerRunning) runVerificationWorker();
+    log('[INLINE_VERIFY] order ' + orderId + ' failed: ' + ocrErr.message);
+
+    // Return manual_review — NEVER timeout the HTTP response
+    await updateDoc(COL_ORDERS, orderId, {
+      status: 'manual_review',
+      verification_status: 'manual_review',
+      rejection_reasons: ['Verification timed out: ' + ocrErr.message],
+      updated_at: now(),
+    }).catch(() => {});
+
+    try { broadcast('paymentUpdated', { orderId, status: 'manual_review', type: order.type }); } catch {}
 
     verifyingOrders.delete(orderId);
     return {
       orderId, paymentId: orderId,
-      status: 'pending',
-      verificationStatus: 'pending',
+      status: 'manual_review',
+      verificationStatus: 'manual_review',
       verificationScore: 0,
-      reasons: [],
+      reasons: ['Verification timed out — admin review required'],
       matchedAmount: false, matchedReceiver: false, matchedUtr: false,
       matchedDate: false, userUtrMatched: false,
       userEnteredUtr: extra?.userEnteredUtr || null,
@@ -367,7 +370,7 @@ async function runVerificationWorker() {
       log('Worker: processing order ' + orderId + ' type=' + order.type + ' amount=' + order.amount);
       const v = await Promise.race([
         runOfficerVerification(order, order.screenshot_url, order.user_id || null, order.utr || null, null),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 18000 : 30000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('WORKER_TIMEOUT')), 8000)),
       ]);
       log('Worker: officer result — status=' + v.status + ' score=' + (v.verificationScore || 0) + ' checks=' + JSON.stringify(v.checks || []));
 

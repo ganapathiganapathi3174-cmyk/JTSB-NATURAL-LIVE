@@ -3,7 +3,7 @@
   "outputDirectory": "frontend/dist",
   "installCommand": "cd frontend && npm install",
   "functions": {
-    "api/index.js": { "maxDuration": 30 }
+    "api/index.js": { "maxDuration": 15 }
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
