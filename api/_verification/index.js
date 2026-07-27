@@ -31,6 +31,11 @@ function budgetRemaining(startMs) {
 }
 
 async function fetchBuffer(url) {
+  if (url && url.startsWith('data:')) {
+    const matches = url.match(/^data:[^;]+;base64,(.+)$/);
+    if (matches) return Buffer.from(matches[1], 'base64');
+    throw new Error('Invalid data URL');
+  }
   const https = require('https');
   const http = require('http');
   return new Promise((resolve, reject) => {
@@ -54,7 +59,7 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
-async function runPipeline(order, screenshotUrl, userId, userUtr) {
+async function runPipeline(order, screenshotUrl, userId, userUtr, screenshotBuf) {
   const t0 = Date.now();
   const orderId = order.id || 'unknown';
 
@@ -132,9 +137,15 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
   let rawBuf;
   try {
     fetchDone = stepTimer(orderId, 'TIMING:imageFetch');
-    rawBuf = await withTimeout(fetchBuffer(screenshotUrl), 2000, 'imageFetch');
-    pipeline.stageTimings.imageLoad = fetchDone();
-    trace(orderId, 'IMAGE FETCHED', { bytes: rawBuf.length, timeMs: pipeline.stageTimings.imageLoad });
+    if (screenshotBuf && Buffer.isBuffer(screenshotBuf)) {
+      rawBuf = screenshotBuf;
+      pipeline.stageTimings.imageLoad = fetchDone();
+      trace(orderId, 'IMAGE FROM BUFFER', { bytes: rawBuf.length, timeMs: pipeline.stageTimings.imageLoad });
+    } else {
+      rawBuf = await withTimeout(fetchBuffer(screenshotUrl), 2000, 'imageFetch');
+      pipeline.stageTimings.imageLoad = fetchDone();
+      trace(orderId, 'IMAGE FETCHED', { bytes: rawBuf.length, timeMs: pipeline.stageTimings.imageLoad });
+    }
   } catch (e) {
     const ms = fetchDone ? fetchDone() : 0;
     pipeline.reasons.push('REJECT: Could not fetch screenshot: ' + e.message);

@@ -98,7 +98,7 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
 
     try {
       const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 14000);
+      const fetchTimeout = setTimeout(() => controller.abort(), 5000);
 
       let resp = await fetch(`${API_BASE}/submitPaymentProof`, {
         method: 'POST',
@@ -119,7 +119,7 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
         console.log('[PaymentFlow] Order expired, retrying in 1s...');
         await new Promise(r => setTimeout(r, 1000));
         const retryController = new AbortController();
-        const retryTimeout = setTimeout(() => retryController.abort(), 14000);
+        const retryTimeout = setTimeout(() => retryController.abort(), 5000);
         resp = await fetch(`${API_BASE}/submitPaymentProof`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -136,7 +136,7 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
 
       if (!resp.ok) throw new Error(data.error || 'Submission failed');
 
-      // Inline verification complete — show result immediately
+      // If backend returned a final result immediately, show it
       if (data.status === 'verified' || data.status === 'rejected' || data.status === 'manual_review') {
         setResult(data);
         setStep('result');
@@ -145,13 +145,17 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
         return;
       }
 
-      // Still pending (OCR timed out) — poll for background worker result
+      // "processing" — poll for background verification result
       setResult(data);
       startPolling(orderId);
     } catch (err) {
       const isTimeout = err.name === 'AbortError' || /timeout|timed out/i.test(err.message);
-      onError?.(isTimeout ? 'Verification is taking longer than expected. Checking status...' : err.message);
-      // Even on timeout, start polling — the backend may still be processing
+      if (isTimeout) {
+        onError?.('Payment submitted. Checking verification status...');
+      } else {
+        onError?.(err.message);
+      }
+      // Even on timeout/error, the backend may still be processing — start polling
       startPolling(orderId);
     }
   }

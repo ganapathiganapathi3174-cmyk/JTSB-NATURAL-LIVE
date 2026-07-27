@@ -1,4 +1,4 @@
-const { getPaymentOrder, submitPaymentProof } = require('../api/_paymentOrderManager.js');
+const { getPaymentOrder } = require('../api/_paymentOrderManager.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -18,19 +18,6 @@ module.exports = async (req, res) => {
 
     const order = await getPaymentOrder(orderId);
     if (!order) { res.writeHead(404); res.end(JSON.stringify({ error: 'Order not found' })); return; }
-
-    // If still pending with a screenshot, trigger verification now (first poll wins)
-    if (order.status === 'pending' && order.screenshot_url && !order.verification_status) {
-      console.log('[getPaymentOrderStatus] Auto-triggering verification for ' + orderId);
-      try {
-        await submitPaymentProof(orderId, order.screenshot_url, { userEnteredUtr: order.utr || null, userEnteredUpi: null });
-      } catch (e) {
-        console.error('[getPaymentOrderStatus] Auto-verify failed for ' + orderId + ': ' + e.message);
-      }
-      // Re-fetch after verification attempt
-      const updated = await getPaymentOrder(orderId);
-      if (updated) Object.assign(order, updated);
-    }
 
     res.writeHead(200); res.end(JSON.stringify({
       orderId: order.id,

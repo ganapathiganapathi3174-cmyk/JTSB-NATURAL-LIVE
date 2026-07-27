@@ -6,9 +6,9 @@ function log(msg) {
 
 function now() { return new Date().toISOString(); }
 
-async function runOfficerVerification(order, screenshotUrl, userId, userEnteredUtr, userEnteredUpi) {
+async function runOfficerVerification(order, screenshotUrl, userId, userEnteredUtr, userEnteredUpi, screenshotBuf) {
   const t0 = Date.now();
-  log('Starting verification for ' + (order.id || 'unknown') + ', amount=' + order.amount);
+  log('Starting verification for ' + (order.id || 'unknown') + ', amount=' + order.amount + ', hasBuf=' + !!screenshotBuf);
 
   const orderObj = {
     id: order.id,
@@ -18,7 +18,7 @@ async function runOfficerVerification(order, screenshotUrl, userId, userEnteredU
     expected_upi_id: require('./_shared.js').ADMIN_UPI_ID,
   };
 
-  const v = await verificationEngine.run(orderObj, screenshotUrl, userId, userEnteredUtr);
+  const v = await verificationEngine.run(orderObj, screenshotUrl, userId, userEnteredUtr, screenshotBuf);
 
   log('Done: status=' + v.status + ' score=' + v.verificationScore + ' (' + (Date.now() - t0) + 'ms)');
   return v;

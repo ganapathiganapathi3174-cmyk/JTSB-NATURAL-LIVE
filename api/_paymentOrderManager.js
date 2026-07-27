@@ -190,28 +190,38 @@ async function getPaymentOrder(orderId) {
 
 const IS_VERCEL = !!process.env.VERCEL;
 
+const VERIFY_INLINE_BUDGET_MS = 4500;
+
 async function submitPaymentProof(orderId, screenshotUrl, extra) {
-  let order = await getPaymentOrder(orderId);
+  const t0 = Date.now();
+
+  // ── FAST PATH: Minimal DB check (3s hard timeout) ──
+  let order;
+  try {
+    order = await Promise.race([
+      getDoc(COL_ORDERS, orderId),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('ORDER_FETCH_TIMEOUT')), 3000)),
+    ]);
+  } catch (e) {
+    log('[SUBMIT] Order fetch failed for ' + orderId + ': ' + e.message + ' (' + (Date.now() - t0) + 'ms)');
+    throw Object.assign(new Error('Order not found'), { status: 404 });
+  }
   if (!order) throw Object.assign(new Error('Order not found'), { status: 404 });
 
-  // Re-activate expired orders when valid screenshot is provided (user was still working on it)
+  // Re-activate expired orders
+  if (order.status === 'pending' && order.expires_at && Date.now() > new Date(order.expires_at).getTime()) {
+    order.status = 'expired';
+  }
   if (order.status === 'expired') {
-    log('[EXPIRED] order=' + orderId + ' re-activating for screenshot submission');
+    log('[EXPIRED] order=' + orderId + ' re-activating');
     const newExpiresAt = new Date(Date.now() + ORDER_TTL_MS).toISOString();
     await updateDoc(COL_ORDERS, orderId, {
-      status: 'pending',
-      verification_status: null,
-      verification_score: null,
-      ocr_result: null,
-      rejection_reasons: [],
-      screenshot_url: null,
-      expires_at: newExpiresAt,
-      updated_at: now(),
+      status: 'pending', verification_status: null, verification_score: null,
+      ocr_result: null, rejection_reasons: [], screenshot_url: null,
+      expires_at: newExpiresAt, updated_at: now(),
     }).catch(() => {});
-    // Re-fetch to get updated order
-    order = await getDoc(COL_ORDERS, orderId).catch(() => null);
-    if (!order) throw Object.assign(new Error('Order not found after re-activation'), { status: 404 });
-    log('[EXPIRED] order=' + orderId + ' re-activated, new expires_at=' + newExpiresAt);
+    order.status = 'pending';
+    order.expires_at = newExpiresAt;
   }
 
   if (order.status === 'verified') throw Object.assign(new Error('Order already verified'), { status: 400 });
@@ -221,53 +231,9 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   verifyingOrders.add(orderId);
   setTimeout(() => verifyingOrders.delete(orderId), VERIFY_LOCK_TIMEOUT_MS);
 
-  // Store screenshot + UTR — set to pending, worker picks it up
-  try {
-    await updateDoc(COL_ORDERS, orderId, {
-      status: 'pending',
-      verification_status: 'pending',
-      screenshot_url: screenshotUrl,
-      utr: extra?.userEnteredUtr || null,
-      updated_at: now(),
-    });
-  } catch (dbErr) {
-    log('Failed to update order ' + orderId + ': ' + dbErr.message);
-    verifyingOrders.delete(orderId);
-    throw Object.assign(new Error('Failed to save payment proof. Please try again.'), { status: 500 });
-  }
+  log('[SUBMIT] Pre-pipeline DB done: ' + (Date.now() - t0) + 'ms for ' + orderId);
 
-  // Persist screenshot + UTR to upi_payments for admin visibility
-  try {
-    const pendingRegId = extra?.pendingRegId || order.pending_reg_id;
-    if (pendingRegId) {
-      const existingPayments = await runQuery(COL_UPI_PAYMENTS, [
-        { field: 'pending_reg_id', op: 'EQUAL', value: pendingRegId },
-      ], { limit: 5 });
-      for (const p of existingPayments) {
-        await updateDoc(COL_UPI_PAYMENTS, p.id, {
-          screenshot_url: screenshotUrl,
-          utr: extra?.userEnteredUtr || p.utr,
-          verification_locked: false,
-        }).catch(() => {});
-      }
-    } else if (order.user_id) {
-      const existingPayments = await runQuery(COL_UPI_PAYMENTS, [
-        { field: 'user_id', op: 'EQUAL', value: order.user_id },
-      ], { limit: 5 });
-      for (const p of existingPayments) {
-        await updateDoc(COL_UPI_PAYMENTS, p.id, {
-          screenshot_url: screenshotUrl,
-          utr: extra?.userEnteredUtr || p.utr,
-          verification_locked: false,
-        }).catch(() => {});
-      }
-    }
-  } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
-
-  // Run verification inline with a hard 7-second budget (5s pipeline + 2s DB overhead).
-  // The pipeline itself tracks its own 5s budget internally.
-  // If it times out here, we return manual_review — never "Request timed out".
-  const VERIFY_INLINE_BUDGET_MS = 5000;
+  // ── FAST PATH: Run verification inline (4.5s budget) ──
   try {
     log('[INLINE_VERIFY] order ' + orderId + ' starting (budget=' + VERIFY_INLINE_BUDGET_MS + 'ms)');
     const v = await Promise.race([
@@ -277,38 +243,38 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
 
     const finalStatus = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
 
-    // Update order with verification result — all DB writes are non-blocking on failure
-    await updateDoc(COL_ORDERS, orderId, {
-      status: finalStatus,
-      verification_status: v.status,
-      verification_score: v.verificationScore || 0,
-      ocr_result: v.ocrData || null,
-      rejection_reasons: v.reasons || [],
-      updated_at: now(),
-    }).catch(e => log('DB update failed: ' + e.message));
-
-    // Update upi_payments
-    try {
-      const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
-      const searchValue = order.pending_reg_id || order.user_id;
-      if (searchValue) {
-        const ups = await runQuery(COL_UPI_PAYMENTS, [
-          { field: searchField, op: 'EQUAL', value: searchValue },
-        ], { limit: 5 });
-        for (const p of ups) {
-          await updateDoc(COL_UPI_PAYMENTS, p.id, {
-            status: finalStatus, verification_locked: false,
-            ocr_result: v.ocrData || null, final_score: v.verificationScore || 0,
-            fraud_score: v.fraudScore || 0, rejection_reasons: v.reasons || [],
-            verified_at: now(), verification_completed_at: now(),
-          }).catch(() => {});
-        }
-      }
-    } catch (_) {}
+    // Post-verification DB writes — non-blocking on failure, fire-and-forget
+    const postDbT0 = Date.now();
+    Promise.all([
+      updateDoc(COL_ORDERS, orderId, {
+        status: finalStatus, verification_status: v.status,
+        verification_score: v.verificationScore || 0, ocr_result: v.ocrData || null,
+        rejection_reasons: v.reasons || [], updated_at: now(),
+      }).catch(e => log('DB update order failed: ' + e.message)),
+      (async () => {
+        try {
+          const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
+          const searchValue = order.pending_reg_id || order.user_id;
+          if (searchValue) {
+            const ups = await runQuery(COL_UPI_PAYMENTS, [
+              { field: searchField, op: 'EQUAL', value: searchValue },
+            ], { limit: 5 });
+            for (const p of ups) {
+              await updateDoc(COL_UPI_PAYMENTS, p.id, {
+                status: finalStatus, verification_locked: false,
+                ocr_result: v.ocrData || null, final_score: v.verificationScore || 0,
+                fraud_score: v.fraudScore || 0, rejection_reasons: v.reasons || [],
+                verified_at: now(), verification_completed_at: now(),
+              }).catch(() => {});
+            }
+          }
+        } catch (_) {}
+      })(),
+    ]).then(() => { log('[POST_DB] ' + orderId + ' done: ' + (Date.now() - postDbT0) + 'ms'); }).catch(() => {});
 
     try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch {}
 
-    log('[INLINE_VERIFY] order ' + orderId + ' done: status=' + finalStatus + ' score=' + (v.verificationScore || 0));
+    log('[INLINE_VERIFY] order ' + orderId + ' done: status=' + finalStatus + ' score=' + (v.verificationScore || 0) + ' total=' + (Date.now() - t0) + 'ms');
     verifyingOrders.delete(orderId);
 
     const response = {
@@ -339,10 +305,10 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
 
     return response;
   } catch (ocrErr) {
-    log('[INLINE_VERIFY] order ' + orderId + ' failed: ' + ocrErr.message);
+    log('[INLINE_VERIFY] order ' + orderId + ' failed: ' + ocrErr.message + ' (' + (Date.now() - t0) + 'ms)');
 
     // Return manual_review — NEVER timeout the HTTP response
-    await updateDoc(COL_ORDERS, orderId, {
+    updateDoc(COL_ORDERS, orderId, {
       status: 'manual_review',
       verification_status: 'manual_review',
       rejection_reasons: ['Verification timed out: ' + ocrErr.message],
