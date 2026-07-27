@@ -3,22 +3,6 @@ try { Tesseract = require('tesseract.js'); } catch (_) {}
 const C = require('./config');
 const log = require('./logger').OCR;
 
-async function runTesseractWorker(buffer, lang) {
-  let worker = null;
-  try {
-    worker = await Tesseract.createWorker(lang || 'eng', 1, {
-      logger: () => {},
-    });
-    const result = await Promise.race([
-      worker.recognize(buffer),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('TESSERACT_TIMEOUT')), C.OCR_ENGINE_TIMEOUT_MS)),
-    ]);
-    return result.data;
-  } finally {
-    try { if (worker) await worker.terminate(); } catch (_) {}
-  }
-}
-
 function wordConfidence(data) {
   const words = (data.words || []).filter(w => (w.text || '').trim().length > 0);
   if (words.length === 0) return 0;
@@ -62,38 +46,65 @@ function majorityVote(results) {
 async function run(strategies) {
   const t0 = Date.now();
   if (!Tesseract) {
-    log.error('', 'Tesseract.js not available');
+    log.error('', 'Tesseract.js not available — engine not loaded');
     return { results: [], bestResult: null, bestStrategy: null, consensus: null, engineAvailable: false, duration: Date.now() - t0 };
   }
-  const results = [];
+
   const stratArr = Array.isArray(strategies) && strategies.length > 0
     ? strategies
     : [{ name: 'default', buf: null }];
 
-  const maxStrategies = 2;
-  const toRun = stratArr.filter(s => s.buf).slice(0, maxStrategies);
+  const toRun = stratArr.filter(s => s.buf);
+  if (toRun.length === 0) {
+    log.error('', 'No strategies with image buffers to process');
+    return { results: [], bestResult: null, bestStrategy: null, consensus: null, engineAvailable: true, duration: Date.now() - t0 };
+  }
 
-  for (const strat of toRun) {
-    try {
-      const data = await runTesseractWorker(strat.buf);
-      const avgConf = wordConfidence(data);
-      const medConf = medianConfidence(data);
-      results.push({
-        strategy: strat.name,
-        text: (data.text || '').trim(),
-        confidence: Math.round(avgConf * 100) / 100,
-        medianConfidence: Math.round(medConf * 100) / 100,
-        wordCount: (data.words || []).length,
-        words: (data.words || []).map(w => ({ text: w.text, confidence: w.confidence || 0, bbox: w.bbox || null })),
-      });
-      log.info('', strat.name + ': ' + (data.text || '').length + ' chars, conf=' + Math.round(avgConf) + '%');
-      if (avgConf >= 60 && results.length >= 1) break;
-    } catch (e) {
-      log.error('', strat.name + ' failed: ' + e.message);
+  const results = [];
+  let worker = null;
+
+  try {
+    log.info('', 'Creating shared Tesseract worker (lang=eng)...');
+    const workerT0 = Date.now();
+    worker = await Tesseract.createWorker('eng', 1, { logger: () => {} });
+    log.info('', 'Worker created in ' + (Date.now() - workerT0) + 'ms');
+
+    for (const strat of toRun) {
+      const stratT0 = Date.now();
+      try {
+        log.info('', 'Running OCR on strategy: ' + strat.name + ' (' + strat.buf.length + ' bytes)...');
+        const data = await Promise.race([
+          worker.recognize(strat.buf),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('TESSERACT_SINGLE_TIMEOUT')), C.OCR_ENGINE_TIMEOUT_MS)),
+        ]);
+        const avgConf = wordConfidence(data);
+        const medConf = medianConfidence(data);
+        const text = (data.text || '').trim();
+        results.push({
+          strategy: strat.name,
+          text,
+          confidence: Math.round(avgConf * 100) / 100,
+          medianConfidence: Math.round(medConf * 100) / 100,
+          wordCount: (data.words || []).length,
+          words: (data.words || []).map(w => ({ text: w.text, confidence: w.confidence || 0, bbox: w.bbox || null })),
+        });
+        log.info('', strat.name + ': ' + text.length + ' chars, conf=' + Math.round(avgConf) + '% (' + (Date.now() - stratT0) + 'ms)');
+        if (avgConf >= 60) {
+          log.info('', 'Confidence ' + Math.round(avgConf) + '% >= 60 — accepting result, skipping remaining strategies');
+          break;
+        }
+      } catch (e) {
+        log.error('', strat.name + ' failed: ' + e.message + ' (' + (Date.now() - stratT0) + 'ms)');
+      }
     }
+  } catch (e) {
+    log.error('', 'Worker creation failed: ' + e.message);
+  } finally {
+    try { if (worker) await worker.terminate(); } catch (_) {}
   }
 
   if (results.length === 0) {
+    log.error('', 'OCR produced 0 results from ' + toRun.length + ' strategies');
     return { results: [], bestResult: null, bestStrategy: null, consensus: null, engineAvailable: true, duration: Date.now() - t0 };
   }
 

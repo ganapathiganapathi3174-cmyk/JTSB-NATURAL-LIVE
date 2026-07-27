@@ -240,8 +240,9 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     }
   } catch (e) { log('Failed to save screenshot/UTR to upi_payments: ' + e.message); }
 
-  // Run verification inline with a timeout — return real result to frontend
-  const OCR_TIMEOUT_MS = IS_VERCEL ? 28000 : 60000;
+  // Run verification inline with a timeout — must complete within Vercel's 30s maxDuration.
+  // Pre-OCR DB ops take ~3s, post-OCR DB ops take ~2s, so OCR gets 18s budget.
+  const OCR_TIMEOUT_MS = IS_VERCEL ? 18000 : 60000;
   try {
     log('[INLINE_VERIFY] order ' + orderId + ' running OCR inline (timeout ' + OCR_TIMEOUT_MS + 'ms)');
     const v = await Promise.race([
@@ -260,17 +261,6 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       rejection_reasons: v.reasons || [],
       updated_at: now(),
     }).catch(e => log('DB update after inline verify failed: ' + e.message));
-
-    // Execute post-approval actions if verified
-    if (finalStatus === 'verified') {
-      log('[INLINE_VERIFY] order ' + orderId + ' approved, executing post-approval');
-      await executeVerifiedOrder(order, v, {
-        userId: order.user_id,
-        pendingRegId: order.pending_reg_id,
-        userEnteredUtr: extra?.userEnteredUtr || order.utr || null,
-        userEnteredUpi: extra?.userEnteredUpi || null,
-      }).catch(e => log('Post-approval exec err: ' + e.message));
-    }
 
     // Update upi_payments status
     try {
@@ -296,7 +286,8 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     log('[INLINE_VERIFY] order ' + orderId + ' completed: status=' + finalStatus + ' score=' + (v.verificationScore || 0));
     verifyingOrders.delete(orderId);
 
-    return {
+    // Build response object
+    const response = {
       orderId, paymentId: orderId,
       status: finalStatus,
       verificationStatus: v.status,
@@ -311,6 +302,22 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       fraudScore: v.fraudScore || 0, checks: v.checks || [],
       ocrData: v.ocrData || null,
     };
+
+    // Fire-and-forget: execute post-approval AFTER response is ready.
+    // On Vercel the process may be killed, so this is best-effort. If it fails,
+    // the admin "Process Pending" handler will pick up the order.
+    if (finalStatus === 'verified') {
+      log('[INLINE_VERIFY] order ' + orderId + ' approved, executing post-approval (background)');
+      executeVerifiedOrder(order, v, {
+        userId: order.user_id,
+        pendingRegId: order.pending_reg_id,
+        userEnteredUtr: extra?.userEnteredUtr || order.utr || null,
+        userEnteredUpi: extra?.userEnteredUpi || null,
+      }).then(() => log('[INLINE_VERIFY] post-approval completed for ' + orderId))
+        .catch(e => log('Post-approval exec err: ' + e.message));
+    }
+
+    return response;
   } catch (ocrErr) {
     log('[INLINE_VERIFY] order ' + orderId + ' OCR failed/timed out: ' + ocrErr.message + ', falling back to background worker');
     // Fall back to background worker
@@ -360,7 +367,7 @@ async function runVerificationWorker() {
       log('Worker: processing order ' + orderId + ' type=' + order.type + ' amount=' + order.amount);
       const v = await Promise.race([
         runOfficerVerification(order, order.screenshot_url, order.user_id || null, order.utr || null, null),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 28000 : 30000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 18000 : 30000)),
       ]);
       log('Worker: officer result — status=' + v.status + ' score=' + (v.verificationScore || 0) + ' checks=' + JSON.stringify(v.checks || []));
 

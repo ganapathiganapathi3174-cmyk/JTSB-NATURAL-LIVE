@@ -47,11 +47,16 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
       if (type === 'registration') body.pendingRegId = pendingRegId;
       else body.userId = userId;
 
+      const controller = new AbortController();
+      const fetchTimeout = setTimeout(() => controller.abort(), 15000);
+
       const resp = await fetch(`${API_BASE}/createPaymentOrder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      clearTimeout(fetchTimeout);
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to create order');
@@ -59,7 +64,8 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
       const order = await resp.json();
       setOrderId(order.orderId);
     } catch (err) {
-      onError?.(err.message);
+      const isTimeout = err.name === 'AbortError' || /timeout|timed out/i.test(err.message);
+      onError?.(isTimeout ? 'Connection slow. Please try again.' : err.message);
       setStep('amount');
     }
   }
@@ -91,6 +97,9 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
     setStep('processing');
 
     try {
+      const controller = new AbortController();
+      const fetchTimeout = setTimeout(() => controller.abort(), 25000);
+
       const resp = await fetch(`${API_BASE}/submitPaymentProof`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,7 +108,9 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
           screenshot: screenshotPreview,
           upiId: UPI_ID,
         }),
+        signal: controller.signal,
       });
+      clearTimeout(fetchTimeout);
 
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Submission failed');
@@ -117,9 +128,10 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
       setResult(data);
       startPolling(orderId);
     } catch (err) {
-      onError?.(err.message);
-      setStep('upload');
-      setSubmitting(false);
+      const isTimeout = err.name === 'AbortError' || /timeout|timed out/i.test(err.message);
+      onError?.(isTimeout ? 'Verification is taking longer than expected. Checking status...' : err.message);
+      // Even on timeout, start polling — the backend may still be processing
+      startPolling(orderId);
     }
   }
 
