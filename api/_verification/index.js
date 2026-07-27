@@ -161,7 +161,8 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
       rawText: extracted.rawText,
       extractedAmount: extracted.amount.value,
       extractedUtr: extracted.utr.value,
-      extractedSenderVpa: extracted.receiverUpi.value,
+      extractedReceiverUpi: extracted.receiverUpi.value,
+      extractedSenderVpa: extracted.senderUpi ? extracted.senderUpi.value : null,
       extractedReceiverName: extracted.receiverName.value,
       extractedBankName: extracted.bankName.value,
       extractedDate: extracted.date.value,
@@ -169,7 +170,7 @@ async function runPipeline(order, screenshotUrl, userId, userUtr) {
       extractedPaymentStatus: extracted.paymentStatus.value,
       confidence: ocrResult.bestResult.confidence,
       wordCount: extracted.wordCount,
-      fieldCount: [extracted.amount, extracted.utr, extracted.receiverUpi, extracted.date, extracted.time, extracted.paymentStatus, extracted.receiverName, extracted.bankName].filter(f => f.value !== null).length,
+      fieldCount: [extracted.amount, extracted.utr, extracted.receiverUpi, extracted.senderUpi, extracted.date, extracted.time, extracted.paymentStatus, extracted.receiverName, extracted.bankName].filter(f => f && f.value !== null).length,
     };
     log.info(orderId, 'Extraction: ' + pipeline.ocrData.fieldCount + '/8 fields');
   } catch (e) {

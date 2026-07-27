@@ -8,7 +8,7 @@ const {
 } = require('./_shared.js');
 const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet, getSupabaseClient } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
-const { runOfficerVerificationForWorker } = require('./_verificationOfficer.js');
+const { runOfficerVerification } = require('./_verificationOfficer.js');
 const cycleEngine = require('./_cycleEngine.js');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;
@@ -245,7 +245,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   try {
     log('[INLINE_VERIFY] order ' + orderId + ' running OCR inline (timeout ' + OCR_TIMEOUT_MS + 'ms)');
     const v = await Promise.race([
-      runOfficerVerificationForWorker(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null),
+      runOfficerVerification(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null),
       new Promise((_, reject) => setTimeout(() => reject(new Error('OCR_TIMEOUT')), OCR_TIMEOUT_MS)),
     ]);
 
@@ -359,7 +359,7 @@ async function runVerificationWorker() {
 
       log('Worker: processing order ' + orderId + ' type=' + order.type + ' amount=' + order.amount);
       const v = await Promise.race([
-        runOfficerVerificationForWorker(order, order.screenshot_url, order.user_id || null, order.utr || null, null),
+        runOfficerVerification(order, order.screenshot_url, order.user_id || null, order.utr || null, null),
         new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), IS_VERCEL ? 25000 : 30000)),
       ]);
       log('Worker: officer result — status=' + v.status + ' score=' + (v.verificationScore || 0) + ' checks=' + JSON.stringify(v.checks || []));
