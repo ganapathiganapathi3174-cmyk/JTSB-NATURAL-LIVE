@@ -1,4 +1,4 @@
-const { submitPaymentProof } = require('../api/_paymentOrderManager.js');
+const { submitPaymentProof, retryPaymentOrder } = require('../api/_paymentOrderManager.js');
 const r2 = require('../api/_r2.js');
 
 function getPublicUrl(key) {
@@ -74,7 +74,23 @@ module.exports = async (req, res) => {
     console.log('[submitPaymentProof] Upload: ' + (Date.now() - uploadStart) + 'ms, order=' + orderId);
 
     const verifyStart = Date.now();
-    const result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null, userEnteredUpi: upiId });
+    let result;
+    try {
+      result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null, userEnteredUpi: upiId });
+    } catch (verifyErr) {
+      // Auto-retry on expired order — re-activate and try again once
+      if (verifyErr.message === 'Order expired' || verifyErr.message === 'Order not found') {
+        console.log('[submitPaymentProof] Order expired/not-found, auto-retrying via retryPaymentOrder for ' + orderId);
+        try {
+          await retryPaymentOrder(orderId);
+          result = await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null, userEnteredUpi: upiId });
+        } catch (retryErr) {
+          throw retryErr;
+        }
+      } else {
+        throw verifyErr;
+      }
+    }
     console.log('[submitPaymentProof] Total: ' + (Date.now() - verifyStart) + 'ms, status=' + result.status + ', score=' + (result.verificationScore || 0));
 
     sendJSON(200, {

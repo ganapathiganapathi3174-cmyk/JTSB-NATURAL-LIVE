@@ -100,7 +100,7 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
       const controller = new AbortController();
       const fetchTimeout = setTimeout(() => controller.abort(), 12000);
 
-      const resp = await fetch(`${API_BASE}/submitPaymentProof`, {
+      let resp = await fetch(`${API_BASE}/submitPaymentProof`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -112,7 +112,28 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
       });
       clearTimeout(fetchTimeout);
 
-      const data = await resp.json();
+      let data = await resp.json();
+
+      // Auto-retry once on "Order expired" — backend re-activates the order
+      if (!resp.ok && data.error === 'Order expired') {
+        console.log('[PaymentFlow] Order expired, retrying in 1s...');
+        await new Promise(r => setTimeout(r, 1000));
+        const retryController = new AbortController();
+        const retryTimeout = setTimeout(() => retryController.abort(), 12000);
+        resp = await fetch(`${API_BASE}/submitPaymentProof`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId,
+            screenshot: screenshotPreview,
+            upiId: UPI_ID,
+          }),
+          signal: retryController.signal,
+        });
+        clearTimeout(retryTimeout);
+        data = await resp.json();
+      }
+
       if (!resp.ok) throw new Error(data.error || 'Submission failed');
 
       // Inline verification complete — show result immediately

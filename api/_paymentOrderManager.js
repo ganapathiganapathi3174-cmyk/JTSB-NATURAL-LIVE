@@ -177,6 +177,10 @@ async function getPaymentOrder(orderId) {
   const order = await getDoc(COL_ORDERS, orderId).catch(() => null);
   if (!order) return null;
   if (order.status === 'pending' && order.expires_at && Date.now() > new Date(order.expires_at).getTime()) {
+    const createdAt = order.created_at ? new Date(order.created_at).getTime() : 'unknown';
+    const expiresAt = new Date(order.expires_at).getTime();
+    const diff = Date.now() - expiresAt;
+    log('[EXPIRED] order=' + orderId + ' status=pending→expired created_at=' + createdAt + ' expires_at=' + order.expires_at + ' now=' + Date.now() + ' overdue=' + diff + 'ms');
     order.status = 'expired';
     await updateDoc(COL_ORDERS, orderId, { status: 'expired', updated_at: now() }).catch(() => {});
     try { broadcast('paymentUpdated', { orderId, status: 'expired' }); } catch {}
@@ -187,9 +191,29 @@ async function getPaymentOrder(orderId) {
 const IS_VERCEL = !!process.env.VERCEL;
 
 async function submitPaymentProof(orderId, screenshotUrl, extra) {
-  const order = await getPaymentOrder(orderId);
+  let order = await getPaymentOrder(orderId);
   if (!order) throw Object.assign(new Error('Order not found'), { status: 404 });
-  if (order.status === 'expired') throw Object.assign(new Error('Order expired'), { status: 400 });
+
+  // Re-activate expired orders when valid screenshot is provided (user was still working on it)
+  if (order.status === 'expired') {
+    log('[EXPIRED] order=' + orderId + ' re-activating for screenshot submission');
+    const newExpiresAt = new Date(Date.now() + ORDER_TTL_MS).toISOString();
+    await updateDoc(COL_ORDERS, orderId, {
+      status: 'pending',
+      verification_status: null,
+      verification_score: null,
+      ocr_result: null,
+      rejection_reasons: [],
+      screenshot_url: null,
+      expires_at: newExpiresAt,
+      updated_at: now(),
+    }).catch(() => {});
+    // Re-fetch to get updated order
+    order = await getDoc(COL_ORDERS, orderId).catch(() => null);
+    if (!order) throw Object.assign(new Error('Order not found after re-activation'), { status: 404 });
+    log('[EXPIRED] order=' + orderId + ' re-activated, new expires_at=' + newExpiresAt);
+  }
+
   if (order.status === 'verified') throw Object.assign(new Error('Order already verified'), { status: 400 });
 
   // Duplicate request lock
