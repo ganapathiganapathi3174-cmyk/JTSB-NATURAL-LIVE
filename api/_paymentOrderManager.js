@@ -267,7 +267,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   // Run verification inline with a hard 7-second budget (5s pipeline + 2s DB overhead).
   // The pipeline itself tracks its own 5s budget internally.
   // If it times out here, we return manual_review — never "Request timed out".
-  const VERIFY_INLINE_BUDGET_MS = 7000;
+  const VERIFY_INLINE_BUDGET_MS = 5000;
   try {
     log('[INLINE_VERIFY] order ' + orderId + ' starting (budget=' + VERIFY_INLINE_BUDGET_MS + 'ms)');
     const v = await Promise.race([

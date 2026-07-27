@@ -98,7 +98,7 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
 
     try {
       const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 12000);
+      const fetchTimeout = setTimeout(() => controller.abort(), 14000);
 
       let resp = await fetch(`${API_BASE}/submitPaymentProof`, {
         method: 'POST',
@@ -119,7 +119,7 @@ export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onE
         console.log('[PaymentFlow] Order expired, retrying in 1s...');
         await new Promise(r => setTimeout(r, 1000));
         const retryController = new AbortController();
-        const retryTimeout = setTimeout(() => retryController.abort(), 12000);
+        const retryTimeout = setTimeout(() => retryController.abort(), 14000);
         resp = await fetch(`${API_BASE}/submitPaymentProof`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

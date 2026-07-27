@@ -154,7 +154,7 @@ module.exports = async (req, res) => {
     });
   }
 
-  const REQ_TIMEOUT_MS = 12000;
+  const REQ_TIMEOUT_MS = 14000;
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
       console.error('[API] HARD TIMEOUT for path=' + path + ' (' + (REQ_TIMEOUT_MS/1000) + 's limit)');
