@@ -49,10 +49,12 @@ async function run(strategies, budgetMs) {
       try {
         const stratTimeout = Math.min(remaining, 2500);
         log.info('', strat.name + ': ' + strat.buf.length + ' bytes, timeout=' + stratTimeout + 'ms');
+        let stratTimeoutId;
         const data = await Promise.race([
           worker.recognize(strat.buf),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('STRAT_TIMEOUT')), stratTimeout)),
+          new Promise((_, reject) => { stratTimeoutId = setTimeout(() => reject(new Error('STRAT_TIMEOUT')), stratTimeout); }),
         ]);
+        clearTimeout(stratTimeoutId);
         const avgConf = wordConfidence(data);
         const text = (data.text || '').trim();
         results.push({
@@ -69,6 +71,7 @@ async function run(strategies, budgetMs) {
           break;
         }
       } catch (e) {
+        clearTimeout(stratTimeoutId);
         log.error('', strat.name + ' failed: ' + e.message + ' (' + (Date.now() - stratT0) + 'ms)');
       }
     }

@@ -9,7 +9,7 @@ const decisionEngine = require('./decisionEngine');
 const C = require('./config');
 const log = require('./logger').PIPELINE;
 
-const TOTAL_PIPELINE_BUDGET_MS = 5000;
+const TOTAL_PIPELINE_BUDGET_MS = 30000;
 
 function trace(orderId, label, data) {
   const ts = new Date().toISOString().slice(11, 23);
@@ -53,10 +53,13 @@ async function fetchBuffer(url) {
 }
 
 function withTimeout(promise, ms, label) {
-  return Promise.race([
+  let id;
+  const result = Promise.race([
     promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT:' + label + ':' + ms + 'ms')), ms)),
+    new Promise((_, reject) => { id = setTimeout(() => reject(new Error('TIMEOUT:' + label + ':' + ms + 'ms')), ms); }),
   ]);
+  result.finally(() => clearTimeout(id));
+  return result;
 }
 
 async function runPipeline(order, screenshotUrl, userId, userUtr, screenshotBuf) {
@@ -183,7 +186,9 @@ async function runPipeline(order, screenshotUrl, userId, userUtr, screenshotBuf)
       budget: budgetRemaining(t0),
     });
     if (!authResult.passed) {
-      pipeline.reasons.push('REJECT: Authenticity failed — ' + authResult.issues.join('; '));
+      pipeline.status = 'manual_review';
+      pipeline.manualReviewRequired = true;
+      pipeline.reasons.push('MANUAL_REVIEW: Authenticity check failed — ' + authResult.issues.join('; '));
       pipeline.verificationDuration = Date.now() - t0;
       return pipeline;
     }
@@ -221,7 +226,9 @@ async function runPipeline(order, screenshotUrl, userId, userUtr, screenshotBuf)
       budget: budgetRemaining(t0),
     });
     if (!strategies.quality.passed) {
-      pipeline.reasons.push('REJECT: Image quality failed — ' + strategies.quality.issues.join('; '));
+      pipeline.status = 'manual_review';
+      pipeline.manualReviewRequired = true;
+      pipeline.reasons.push('MANUAL_REVIEW: Image quality failed — ' + strategies.quality.issues.join('; '));
       pipeline.verificationDuration = Date.now() - t0;
       return pipeline;
     }

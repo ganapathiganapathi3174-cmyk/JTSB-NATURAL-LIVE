@@ -61,11 +61,7 @@ function computeFinalScore(validationResult, fraudResult, ocrConfidence, authRes
 
   const ocrConfPct = Math.min(100, Math.max(0, ocrConfidence || 0));
   totalWeight += weights.ocr_confidence;
-  if (ocrConfPct >= 50) {
-    earned += Math.round(weights.ocr_confidence * ocrConfPct / 100);
-  } else {
-    earned += Math.round(weights.ocr_confidence * ocrConfPct / 200);
-  }
+  earned += Math.round(weights.ocr_confidence * ocrConfPct / 100);
 
   if (authResult) {
     totalWeight += weights.authenticity;
