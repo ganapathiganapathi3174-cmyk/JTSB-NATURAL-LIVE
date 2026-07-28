@@ -11,5 +11,6 @@
     "jimp": "^1.6.1",
     "pg": "^8.22.0",
     "tesseract.js": "^7.0.0"
-  }
+  },
+  "description": "JSREE APEX API - Enterprise Referral & Payment Management API"
 }

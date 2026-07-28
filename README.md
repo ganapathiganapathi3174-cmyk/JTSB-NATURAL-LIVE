@@ -1,4 +1,4 @@
-# Paid Community Platform - Frontend Only
+# JSREE APEX - Frontend Only
 
 **₹120 UPI payment** → admin (or mock) verification → **registration** with optional **referral codes**, **JWT** auth, and an **admin** panel for users and payments.
 

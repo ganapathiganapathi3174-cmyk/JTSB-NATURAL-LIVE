@@ -6,7 +6,7 @@ This app uses **Firebase Firestore** as its shared database so all users see the
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Click **"Add project"**
-3. Name it (e.g. `jtsb-natural-live`)
+3. Name it (e.g. `jsree-apex`)
 4. Disable Google Analytics (not needed)
 5. Click **Create project**
 

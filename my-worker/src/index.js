@@ -1,5 +1,5 @@
 /**
- * JTSB Natural Live - Cloudflare Worker
+ * JSREE APEX - Cloudflare Worker
  *
  * Server-side proxy for privileged Appwrite operations.
  * The API key lives here, never in the frontend.
@@ -123,7 +123,7 @@ async function handleGenerateCode(request, env) {
     const session = await appwriteApi('GET', `/databases/${dbId}/collections/payment_sessions/documents/${sessionId}`, null, env);
     if (!session) return error('Session not found', 404);
 
-    const code = genId('JTSB', 6);
+    const code = genId('JSREE', 6);
     const now = new Date().toISOString();
     const codeData = {
       code,

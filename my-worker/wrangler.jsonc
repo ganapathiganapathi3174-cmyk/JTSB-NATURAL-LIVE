@@ -1,5 +1,5 @@
 {
-	"name": "jtsb-natural-live-worker",
+	"name": "jsree-apex-worker",
 	"main": "src/index.js",
 	"compatibility_date": "2025-01-01",
 	"workers_dev": true,

@@ -4,7 +4,7 @@ const os = require('os');
 const r2 = require('../api/_r2.js');
 
 const LOCAL_DIR = path.join(__dirname, '..', 'public', 'uploads');
-const TMP_DIR = path.join(os.tmpdir(), 'jtsb-uploads');
+const TMP_DIR = path.join(os.tmpdir(), 'jsree-apex-uploads');
 
 let bucketEnsured = false;
 

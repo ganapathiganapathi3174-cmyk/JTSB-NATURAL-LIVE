@@ -33,7 +33,7 @@
 
 | # | Attribute Name  | Type    | Size | Required | Default | Notes |
 |---|-----------------|---------|------|----------|---------|-------|
-| 1 | `code`          | string  | 64   | No       | —       | Format "JTSB-XXXXXX", used as $id |
+| 1 | `code`          | string  | 64   | No       | —       | Format "JSREE-XXXXXX", used as $id |
 | 2 | `sessionId`     | string  | 64   | No       | —       | Links to payment_sessions |
 | 3 | `userId`        | string  | 128  | No       | —       | User who generated the code |
 | 4 | `type`          | string  | 64   | No       | —       | "registration" or "topup" |

@@ -1,4 +1,4 @@
-# JTSB NATURAL LIVE - Frontend-Only Architecture
+# JSREE APEX - Frontend-Only Architecture
 
 ## ✅ Status: 100% Frontend-Dependent
 
@@ -154,8 +154,8 @@ All data is stored in **localStorage** (browser storage):
 | `pc_db_users` | All registered users |
 | `pc_db_payments` | All payment submissions |
 | `pc_db_admins` | Admin accounts |
-| `jtsb_token` | User JWT token |
-| `jtsb_user` | User profile data |
+| `jsree_apex_token` | User JWT token |
+| `jsree_apex_user` | User profile data |
 | `pc_admin_token` | Admin JWT token |
 
 ### **View Stored Data:**
