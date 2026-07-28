@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FirebaseUser } from '../db/firebase-db.js';
-import { getSupabase } from '../supabase/config.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
@@ -202,11 +201,10 @@ export default function FirebaseAdminStatusPage() {
     setDraggedOverStatus(null);
     setUpdating(true);
     try {
-      const supabase = getSupabase();
       const updateFields = { admin_status: targetStatus };
       if (targetStatus === 'active') updateFields.account_status = 'active';
       if (targetStatus === 'inactive') updateFields.account_status = 'inactive';
-      await supabase.from('users').update(updateFields).eq('id', user.id);
+      await FirebaseUser.updateAdminStatus(user.id, targetStatus);
       showToast(`"${user.name}" moved to ${STATUSES[targetStatus].label}`);
     } catch (err) {
       showToast('Update failed: ' + (err.message || 'Unknown error'), 'error');

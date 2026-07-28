@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FirebaseUser, FirebaseNotification } from '../db/firebase-db.js';
-import { getSupabase } from '../supabase/config.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 
 const ADMIN_KEY = 'fb_admin_token';
@@ -489,15 +488,13 @@ export default function FirebaseAdminUsersPage() {
 
   const handleDeleteReferral = async (referralCode, referredUserId) => {
     try {
-      const supabase = getSupabase();
-      const { data: referredUser } = await supabase.from('users').select('*').eq('id', referredUserId).maybeSingle();
+      const referredUser = await FirebaseUser.findById(referredUserId);
       if (referredUser) {
         const referrer = await FirebaseUser.findByReferralCode(referralCode);
         if (referrer) {
-          const newCount = Math.max(0, (referrer.referrals_count || 0) - 1);
-          await supabase.from('users').update({ referrals_count: newCount, referral_limit_reached: newCount >= 2 }).eq('id', referrer.id);
+          await FirebaseUser.decrementReferralCount(referrer.id);
         }
-        await supabase.from('users').update({ referred_by: null, referred_by_status: null, referral_limit_reached: false }).eq('id', referredUserId);
+        await FirebaseUser.updateReferralCode(referredUserId, null);
       }
     } catch (err) {
       console.error('Delete referral error:', err);
