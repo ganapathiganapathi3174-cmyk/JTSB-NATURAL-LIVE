@@ -7,7 +7,7 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   } catch (setHeaderErr) {
     console.error('[CPO] setHeader failed:', setHeaderErr.message, setHeaderErr.stack);
-    if (!res.headersSent) { res.writeHead(500); res.end(String(setHeaderErr.message || 'header error')); }
+      if (!res.headersSent) { res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' })); }
     return;
   }
   if (req.method === 'OPTIONS') return res.writeHead(200).end();
@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
       if (!res.headersSent) {
         res.writeHead(status, { 'Content-Type': 'application/json' });
       }
-      res.end(JSON.stringify({ error: err.status && err.status < 500 ? err.message : 'Internal server error', _ref: 'CPO-' + Date.now() }));
+      res.end(JSON.stringify({ error: err.status && err.status < 500 ? 'Request error: ' + err.message : 'Internal server error' }));
     } catch (sendErr) {
       console.error('[CPO] Failed to send error response:', sendErr.message, sendErr.stack);
       try { res.end(String(err.message || 'error')); } catch (_) {}

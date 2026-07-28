@@ -54,6 +54,6 @@ module.exports = async (req, res) => {
   } catch (err) {
     console.error('[FIX-SYSTEM] Error: ' + err.message);
     res.writeHead(500);
-    res.end(JSON.stringify({ error: err.message }));
+    res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };

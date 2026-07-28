@@ -16,11 +16,13 @@ async function processNextPayment() {
   for (const payment of payments || []) {
     if (!payment.screenshot_url) { result.errors.push({ paymentId: payment.id, error: 'No screenshot' }); continue; }
     result.processed++;
+    let timeoutId;
     try {
       const v = await Promise.race([
         verificationEngine.run(payment, payment.screenshot_url, payment.user_id, payment.utr),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), PER_PAYMENT_TIMEOUT)),
+        new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error('TIMEOUT')), PER_PAYMENT_TIMEOUT); }),
       ]);
+      clearTimeout(timeoutId);
       const finalStatus = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
       await updateDoc(COL_UPI_PAYMENTS, payment.id, {
         status: finalStatus, ocr_result: v.ocrData || null, final_score: v.verificationScore || 0,
@@ -32,6 +34,7 @@ async function processNextPayment() {
       else if (finalStatus === 'rejected') result.rejected++;
       else result.manualReview++;
     } catch (e) {
+      clearTimeout(timeoutId);
       result.errors.push({ paymentId: payment.id, error: e.message === 'TIMEOUT' ? 'Timeout' : e.message });
       await updateDoc(COL_UPI_PAYMENTS, payment.id, {
         status: 'manual_review', verification_locked: false,

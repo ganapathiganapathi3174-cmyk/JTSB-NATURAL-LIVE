@@ -99,7 +99,6 @@ module.exports = async (req, res) => {
         passwordMatch = (admin.password_hash === hash);
       }
       if (passwordMatch) {
-        recordLoginAttempt(normalizedEmail);
         const role = normalizeRole(admin.role);
         const name = admin.name || 'Admin';
         const token = signAdminToken({ email: admin.email, role, name });

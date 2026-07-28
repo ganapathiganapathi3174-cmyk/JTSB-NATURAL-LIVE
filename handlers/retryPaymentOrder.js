@@ -16,6 +16,6 @@ module.exports = async (req, res) => {
   } catch (err) {
     const status = err.status || 500;
     console.error('[retryPaymentOrder] Error:', err.message);
-    res.writeHead(status); res.end(JSON.stringify({ error: err.status && err.status < 500 ? err.message : 'Internal server error' }));
+    res.writeHead(status); res.end(JSON.stringify({ error: status < 500 ? err.message : 'Internal server error' }));
   }
 };

@@ -77,10 +77,12 @@ async function storeAndVerify(orderId, screenshot, utr, upiId) {
     const parsed = parseBase64(screenshot);
     if (parsed && parsed.buffer.length <= 10 * 1024 * 1024) {
       const key = 'payments/' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + parsed.ext;
+      let r2TimeoutId;
       const r2Result = await Promise.race([
         r2.uploadFile(key, parsed.buffer, parsed.mimeType),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('R2_TIMEOUT')), 4000)),
+        new Promise((_, reject) => { r2TimeoutId = setTimeout(() => reject(new Error('R2_TIMEOUT')), 4000); }),
       ]);
+      clearTimeout(r2TimeoutId);
       if (r2Result && r2Result.url) uploadedUrl = r2Result.url;
       log('R2 upload done: ' + (Date.now() - bt0) + 'ms, url=' + (uploadedUrl || '').substring(0, 60));
     }

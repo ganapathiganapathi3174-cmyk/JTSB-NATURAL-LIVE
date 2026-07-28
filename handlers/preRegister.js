@@ -66,7 +66,7 @@ module.exports = async (req, res) => {
       'findPendingEmail',
       () => runQuery(COL_PENDING_REGS, [{ field: 'email', op: 'EQUAL', value: email.toLowerCase().trim() }], { limit: 1 }),
       'handlers/preRegister.js', 'module.exports', 64
-    ).catch(() => []);
+    ).catch((e) => { LOG('Email duplicate query failed: ' + (e?.message || e)); return []; });
     STEP(3, 'After Supabase Query — email check done');
     if (existingEmailUser) {
       const uEmailRaw = (existingEmailUser.email || '').toLowerCase().trim();
@@ -121,7 +121,7 @@ module.exports = async (req, res) => {
       'findPendingPhone',
       () => runQuery(COL_PENDING_REGS, [{ field: 'phone', op: 'EQUAL', value: phone.trim() }], { limit: 1 }),
       'handlers/preRegister.js', 'module.exports', 79
-    ).catch(() => []);
+    ).catch((e) => { LOG('Phone duplicate query failed: ' + (e?.message || e)); return []; });
     STEP(4, 'After Supabase Query — phone check done');
     if (existingPhoneUser) {
       const uPhoneRaw = (existingPhoneUser.phone || '').trim();

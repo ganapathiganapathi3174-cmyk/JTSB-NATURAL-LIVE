@@ -6,7 +6,7 @@ const SIMPLE_TYPES = { topup: COL_TOPUPS, pending_payment: COL_UPI_PAYMENTS, rej
 const LABELS = { topup: 'Topup', upi_payment: 'UPI Payment', verification_log: 'Verification Log', user: 'User' };
 
 function send(res, status, data) {
-  try { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); } catch {}
+  try { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); } catch (e) { console.error('[adminDeleteRecord:send]', e.message); }
 }
 
 async function deleteR2File(url) {
@@ -265,11 +265,11 @@ module.exports = async (req, res) => {
     if (req.method === 'OPTIONS') { res.writeHead(200).end(); return; }
     if (req.method !== 'POST') { send(res, 405, { error: 'Method not allowed' }); return; }
 
-    const { recordId, recordType, reason, adminName } = req.body || {};
+    const { recordId, recordType, reason } = req.body || {};
     if (!req.admin) { send(res, 401, { error: 'Authentication required. Please re-login as admin.' }); return; }
     if (!recordId || !recordId.trim() || !reason || !reason.trim()) { send(res, 400, { error: 'Missing required fields: recordId, recordType, reason' }); return; }
 
-    const adminInfo = { adminId: req.admin.email || req.admin.adminId || 'admin', adminName: adminName || req.admin.name || 'Admin' };
+    const adminInfo = { adminId: req.admin.email || req.admin.adminId || 'admin', adminName: req.admin.name || 'Admin' };
 
     if (recordType === 'user') {
       const result = await deleteUserCascade(recordId.trim(), reason.trim(), adminInfo);
@@ -298,7 +298,7 @@ module.exports = async (req, res) => {
     // For UPI payments: fetch record first to get screenshot_url and resolve UUID vs UTR
     if (collection === COL_UPI_PAYMENTS) {
       // Try to find by ID first (UUID) — catch invalid UUID syntax
-      try { paymentRecord = await getDoc(COL_UPI_PAYMENTS, deleteId); } catch {}
+      try { paymentRecord = await getDoc(COL_UPI_PAYMENTS, deleteId); } catch (e) { /* invalid UUID syntax, try UTR lookup */ }
       // If not found by ID, try by UTR
       if (!paymentRecord) {
         const existing = await runQuery(COL_UPI_PAYMENTS, [{ field: 'utr', op: 'EQUAL', value: deleteId }], { limit: 1 });
@@ -333,8 +333,9 @@ module.exports = async (req, res) => {
         send(res, 500, { error: 'Deletion verification failed — record still exists in database. Please try again.' });
         return;
       }
-    } catch {
+    } catch (e) {
       // getDoc threw an error — likely the record was deleted, which is fine
+      console.error('[adminDeleteRecord] Post-delete verification error:', e.message);
     }
 
     // Delete screenshot from storage
@@ -409,7 +410,7 @@ module.exports = async (req, res) => {
         deleted_count: 1 + cascadeTotal,
         deleted_at: new Date().toISOString(),
       });
-    } catch {}
+    } catch (e) { console.error('[adminDeleteRecord] Audit log write failed:', e.message); }
 
     send(res, 200, {
       success: true,

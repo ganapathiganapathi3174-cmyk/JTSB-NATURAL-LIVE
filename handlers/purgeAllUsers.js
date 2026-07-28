@@ -73,6 +73,6 @@ module.exports = async (req, res) => {
   } catch (err) {
     console.error('[purgeAllUsers] Error:', err.message);
     res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: err.message }));
+    res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 };
