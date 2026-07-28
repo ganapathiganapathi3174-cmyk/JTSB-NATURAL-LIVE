@@ -8,7 +8,7 @@
 const http = require('http');
 const https = require('https');
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://starlightascent.vercel.app';
+const BASE_URL = process.env.E2E_BASE_URL || 'https://jsree-apex.vercel.app';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'jayaraj@gmail.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'jayaraj7523';
 

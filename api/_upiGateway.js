@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-const MERCHANT_NAME = 'StarlightAscent';
+const MERCHANT_NAME = 'JsreeApex';
 const UPI_ID = 'jayarajj126-3@okicici';
 const MOBILE_NUMBER = '9655897523';
 const DEFAULT_TIMEOUT_MINUTES = 10;

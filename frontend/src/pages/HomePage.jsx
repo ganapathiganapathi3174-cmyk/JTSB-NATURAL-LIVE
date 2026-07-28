@@ -22,7 +22,7 @@ export default function HomePage() {
         </div>
 
         <h1 className="landing-title animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-          <span className="text-gradient">StarlightAscent</span>
+          <span className="text-gradient">JsreeApex</span>
         </h1>
         <p className="landing-subtitle animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
           Premium FinTech platform for smart earning. Join thousands of members building their financial future.

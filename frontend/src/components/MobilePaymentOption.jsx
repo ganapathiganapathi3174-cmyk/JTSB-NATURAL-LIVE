@@ -7,7 +7,7 @@ const UPI_POLL_TIMEOUT = 30 * 60 * 1000;
 
 const MOBILE_NUMBER = '9655897523';
 const UPI_ID = 'jayarajj126-3@okicici';
-const MERCHANT_NAME = 'StarlightAscent';
+const MERCHANT_NAME = 'JsreeApex';
 
 function upiParam(val, keepAt) {
   const s = encodeURIComponent(String(val));

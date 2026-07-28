@@ -21,7 +21,7 @@ function getClient() {
 }
 
 function getBucket() {
-  return process.env.R2_BUCKET || 'starlightascent-payments';
+  return process.env.R2_BUCKET || 'jsree-apex-payments';
 }
 
 async function uploadFile(key, buffer, contentType = 'image/jpeg') {

@@ -381,7 +381,7 @@ export default function FirebaseUserDashboard() {
     <div className="page-wrap has-bottom-nav">
       {/* Top Bar */}
       <div className="glass-strong flex flex-between items-center mb-md" style={{ padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)' }}>
-        <div className="text-lg font-bold"><span className="text-gradient">StarlightAscent</span></div>
+        <div className="text-lg font-bold"><span className="text-gradient">JsreeApex</span></div>
         <div className="flex items-center gap-md">
           <div style={{ position: 'relative' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowBellDropdown(v => !v)}

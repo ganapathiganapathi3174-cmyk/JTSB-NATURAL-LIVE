@@ -4,7 +4,7 @@ const http = require('http');
 const J = require('jimp');
 const { Jimp: JimpCtor } = J;
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://starlightascent.vercel.app';
+const BASE_URL = process.env.E2E_BASE_URL || 'https://jsree-apex.vercel.app';
 
 function rand(n) { return Math.random().toString(36).slice(2, 2+n).toUpperCase(); }
 

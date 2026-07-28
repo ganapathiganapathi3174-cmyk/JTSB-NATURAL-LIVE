@@ -10,7 +10,7 @@ function getKey() {
     console.warn('[CRYPTO] ENCRYPTION_KEY not set or too short — encryption disabled');
     return null;
   }
-  return crypto.scryptSync(key, 'starlight-ascent-salt', 32);
+  return crypto.scryptSync(key, 'jsree-apex-salt', 32);
 }
 
 function encrypt(text) {

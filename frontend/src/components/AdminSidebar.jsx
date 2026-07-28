@@ -153,7 +153,7 @@ export default function AdminSidebar({ pendingCounts = {}, userName }) {
                 <path d="M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className="sidebar-brand-text text-gradient">Starlight Admin</span>
+            <span className="sidebar-brand-text text-gradient">JSREE APEX</span>
           </div>
         </div>
 

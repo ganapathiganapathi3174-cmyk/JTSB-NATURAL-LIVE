@@ -3,7 +3,7 @@ import QrCodeDisplay from './QrCodeDisplay.jsx';
 
 const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 const ADMIN_UPI = 'jayarajj126-3@okicici';
-const MERCHANT_NAME = 'StarlightAscent';
+const MERCHANT_NAME = 'JsreeApex';
 const MOBILE_NUMBER = '9655897523';
 const SSE_URL = FUNCTIONS_BASE + '/sse/dashboard';
 
