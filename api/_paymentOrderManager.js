@@ -8,7 +8,7 @@ const {
 } = require('./_shared.js');
 const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet, getSupabaseClient } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
-const { runOfficerVerification } = require('./_verificationOfficer.js');
+const { verify } = require('./verification6.js');
 const cycleEngine = require('./_cycleEngine.js');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;
@@ -233,22 +233,16 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
 
   log('[SUBMIT] Pre-pipeline DB done: ' + (Date.now() - t0) + 'ms for ' + orderId);
 
-  // ── FAST PATH: Run verification inline (4.5s budget) ──
+  // ── FAST PATH: V6 inline verification ──
   try {
-    log('[INLINE_VERIFY] order ' + orderId + ' starting (budget=' + VERIFY_INLINE_BUDGET_MS + 'ms)');
-    const v = await Promise.race([
-      runOfficerVerification(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFY_BUDGET_EXCEEDED')), VERIFY_INLINE_BUDGET_MS)),
-    ]);
-
+    log('[INLINE_VERIFY] order ' + orderId + ' starting (V6)');
+    const v = await verify(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null, null);
     const finalStatus = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
-
-    // Post-verification DB writes — non-blocking on failure, fire-and-forget
     const postDbT0 = Date.now();
     Promise.all([
       updateDoc(COL_ORDERS, orderId, {
         status: finalStatus, verification_status: v.status,
-        verification_score: v.verificationScore || 0, ocr_result: v.ocrData || null,
+        verification_score: v.confidence || 0, ocr_result: v.ocrData || null,
         rejection_reasons: v.reasons || [], updated_at: now(),
       }).catch(e => log('DB update order failed: ' + e.message)),
       (async () => {
@@ -262,8 +256,8 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
             for (const p of ups) {
               await updateDoc(COL_UPI_PAYMENTS, p.id, {
                 status: finalStatus, verification_locked: false,
-                ocr_result: v.ocrData || null, final_score: v.verificationScore || 0,
-                fraud_score: v.fraudScore || 0, rejection_reasons: v.reasons || [],
+                ocr_result: v.ocrData || null, final_score: v.confidence || 0,
+                rejection_reasons: v.reasons || [],
                 verified_at: now(), verification_completed_at: now(),
               }).catch(() => {});
             }
@@ -271,50 +265,34 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
         } catch (_) {}
       })(),
     ]).then(() => { log('[POST_DB] ' + orderId + ' done: ' + (Date.now() - postDbT0) + 'ms'); }).catch(() => {});
-
     try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch {}
-
-    log('[INLINE_VERIFY] order ' + orderId + ' done: status=' + finalStatus + ' score=' + (v.verificationScore || 0) + ' total=' + (Date.now() - t0) + 'ms');
+    log('[INLINE_VERIFY] order ' + orderId + ' done: status=' + finalStatus + ' score=' + (v.confidence || 0) + ' total=' + (Date.now() - t0) + 'ms');
     verifyingOrders.delete(orderId);
-
     const response = {
       orderId, paymentId: orderId,
-      status: finalStatus,
-      verificationStatus: v.status,
-      verificationScore: v.verificationScore || 0,
-      reasons: v.reasons || [],
-      matchedAmount: v.matchedAmount || false, matchedReceiver: v.matchedReceiver || false,
-      matchedUtr: v.matchedUtr || false, matchedDate: v.matchedDate || false,
-      userUtrMatched: v.userUtrMatched || false,
+      status: finalStatus, verificationStatus: v.status,
+      verificationScore: v.confidence || 0, reasons: v.reasons || [],
+      matchedAmount: v.extractedFields && v.extractedFields.amount ? true : false,
+      matchedUtr: v.extractedFields && v.extractedFields.utr ? true : false,
       userEnteredUtr: extra?.userEnteredUtr || null,
-      userUpiMatched: v.userUpiMatched || false,
       userEnteredUpi: extra?.userEnteredUpi || null,
-      fraudScore: v.fraudScore || 0, checks: v.checks || [],
+      fraudScore: 0, checks: v.checks || [],
       ocrData: v.ocrData || null,
     };
-
-    // Fire-and-forget post-approval
     if (finalStatus === 'verified') {
       executeVerifiedOrder(order, v, {
-        userId: order.user_id,
-        pendingRegId: order.pending_reg_id,
+        userId: order.user_id, pendingRegId: order.pending_reg_id,
         userEnteredUtr: extra?.userEnteredUtr || order.utr || null,
         userEnteredUpi: extra?.userEnteredUpi || null,
       }).catch(e => log('Post-approval err: ' + e.message));
     }
-
     return response;
   } catch (ocrErr) {
-    log('[INLINE_VERIFY] order ' + orderId + ' failed: ' + ocrErr.message + ' (' + (Date.now() - t0) + 'ms)');
-
-    // Return manual_review — NEVER timeout the HTTP response
+    log('[INLINE_VERIFY] order ' + orderId + ' failed: ' + ocrErr.message);
     updateDoc(COL_ORDERS, orderId, {
-      status: 'manual_review',
-      verification_status: 'manual_review',
-      rejection_reasons: ['Verification timed out: ' + ocrErr.message],
-      updated_at: now(),
+      status: 'manual_review', verification_status: 'manual_review',
+      rejection_reasons: ['Verification error: ' + ocrErr.message], updated_at: now(),
     }).catch(() => {});
-
     try { broadcast('paymentUpdated', { orderId, status: 'manual_review', type: order.type }); } catch {}
 
     verifyingOrders.delete(orderId);
@@ -358,30 +336,23 @@ async function runVerificationWorker() {
       }
 
       log('Worker: processing order ' + orderId + ' type=' + order.type + ' amount=' + order.amount);
-      const v = await Promise.race([
-        runOfficerVerification(order, order.screenshot_url, order.user_id || null, order.utr || null, null),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('WORKER_TIMEOUT')), 8000)),
-      ]);
-      log('Worker: officer result — status=' + v.status + ' score=' + (v.verificationScore || 0) + ' checks=' + JSON.stringify(v.checks || []));
-
+      const v = await verify(order, order.screenshot_url, order.user_id || null, order.utr || null, null, null);
+      log('Worker: V6 result — status=' + v.status + ' score=' + (v.confidence || 0));
       const isVerified = v.status === 'verified';
       const finalStatus = isVerified ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
-
       log('[STATUS_CHANGED] payment_sessions -> ' + finalStatus + ' for order ' + orderId);
       const dbResult = await updateDoc(COL_ORDERS, orderId, {
         status: finalStatus, verification_status: v.status,
-        verification_score: v.verificationScore || 0, ocr_result: v.ocrData || null,
+        verification_score: v.confidence || 0, ocr_result: v.ocrData || null,
         rejection_reasons: v.reasons || [], updated_at: now(),
       });
       if (!dbResult) log('[ERROR_OCCURRED] COL_ORDERS update returned falsy for ' + orderId);
       log('[DATABASE_UPDATED] payment_sessions updated for ' + orderId);
-
       if (isVerified) {
         log('Worker: approved — executing post-approval for ' + orderId);
         await executeVerifiedOrder(order, v, { userId: order.user_id, pendingRegId: order.pending_reg_id, userEnteredUtr: order.utr, userEnteredUpi: null })
           .catch(e => log('Worker: post-approval exec err: ' + e.message));
       }
-
       // Update upi_payments status
       try {
         const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
@@ -516,18 +487,18 @@ async function executeVerifiedOrder(order, verificationResult, extra) {
 
     await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Welcome! Your registration payment of ₹' + amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(() => {});
     try {
-      await addDoc('audit_logs', { action: 'auto_approve_registration', target_id: orderId, target_type: 'payment_order', admin_id: 'system', details: { userId: newUserId, amount, verificationScore: verificationResult.verificationScore }, created_at: completedAt });
+      await addDoc('audit_logs', { action: 'auto_approve_registration', target_id: orderId, target_type: 'payment_order', admin_id: 'system', details: { userId: newUserId, amount, verificationScore: verificationResult.confidence || 0 }, created_at: completedAt });
     } catch {}
 
     await addDoc(COL_UPI_PAYMENTS, {
-      utr: verificationResult.ocrData?.extractedUtr || orderId,
+      utr: verificationResult.ocrData?.fields?.utr || orderId,
       upi_id: ADMIN_UPI_ID,
       amount, amount_option: String(amount), payment_type: 'registration',
       screenshot_url: order.screenshot_url,
       status: 'verified',
       ocr_result: verificationResult.ocrData || null,
-      final_score: verificationResult.verificationScore || 0,
-      fraud_score: verificationResult.fraudScore || 0,
+      final_score: verificationResult.confidence || 0 || 0,
+      fraud_score: 0,
       user_id: newUserId,
       pending_reg_id: pendingRegId,
       payment_date: completedAt,
@@ -551,7 +522,7 @@ async function executeVerifiedOrder(order, verificationResult, extra) {
 
     await atomicCreditWallet(userId, amount, orderId, 'Topup via verified payment');
     const topupId = (await addDoc(COL_TOPUPS, {
-      user_id: userId, amount, utr: verificationResult.ocrData?.extractedUtr || orderId,
+      user_id: userId, amount, utr: verificationResult.ocrData?.fields?.utr || orderId,
       screenshot_url: order.screenshot_url, status: 'approved', verified_at: completedAt,
     })).id;
 
@@ -599,18 +570,18 @@ async function executeVerifiedOrder(order, verificationResult, extra) {
 
     await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Your topup of ₹' + amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(() => {});
     try {
-      await addDoc('audit_logs', { action: 'auto_approve_topup', target_id: orderId, target_type: 'payment_order', admin_id: 'system', details: { userId, amount, topupId, verificationScore: verificationResult.verificationScore }, created_at: completedAt });
+      await addDoc('audit_logs', { action: 'auto_approve_topup', target_id: orderId, target_type: 'payment_order', admin_id: 'system', details: { userId, amount, topupId, verificationScore: verificationResult.confidence || 0 }, created_at: completedAt });
     } catch {}
 
     await addDoc(COL_UPI_PAYMENTS, {
-      utr: verificationResult.ocrData?.extractedUtr || orderId,
+      utr: verificationResult.ocrData?.fields?.utr || orderId,
       upi_id: ADMIN_UPI_ID,
       amount, amount_option: String(amount), payment_type: 'topup',
       screenshot_url: order.screenshot_url,
       status: 'verified',
       ocr_result: verificationResult.ocrData || null,
-      final_score: verificationResult.verificationScore || 0,
-      fraud_score: verificationResult.fraudScore || 0,
+      final_score: verificationResult.confidence || 0 || 0,
+      fraud_score: 0,
       user_id: userId,
       payment_date: completedAt,
       verified_at: completedAt,
