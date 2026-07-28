@@ -100,8 +100,7 @@ try { handlers.purgeAllUsers = requireAdmin(safeHandler('purgeAllUsers', require
 try { handlers.permanentDeleteUser = requireAdmin(safeHandler('permanentDeleteUser', require('../handlers/permanentDeleteUser.js'))); } catch (e) { handlers.permanentDeleteUser = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'permanentDeleteUser load failed',detail:e.message})); }; }
 try { handlers.cascadeDeleteUser = requireAdmin(safeHandler('cascadeDeleteUser', require('../handlers/cascadeDeleteUser.js'))); } catch (e) { handlers.cascadeDeleteUser = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'cascadeDeleteUser load failed',detail:e.message})); }; }
 
-// === NEW MODULES: AI Pipeline + Upgrade Requests ===
-try { handlers.runAIVerification = safeHandler('runAIVerification', require('../handlers/runAIVerification.js')); } catch (e) { handlers.runAIVerification = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'runAIVerification load failed',detail:e.message})); }; }
+// === NEW MODULES: Upgrade Requests ===
 try { handlers.createUpgradeRequest = safeHandler('createUpgradeRequest', require('../handlers/createUpgradeRequest.js')); } catch (e) { handlers.createUpgradeRequest = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'createUpgradeRequest load failed',detail:e.message})); }; }
 try { handlers.getUpgradeRequests = requireAdmin(safeHandler('getUpgradeRequests', require('../handlers/getUpgradeRequests.js'))); } catch (e) { handlers.getUpgradeRequests = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'getUpgradeRequests load failed',detail:e.message})); }; }
 try { handlers.approveUpgradeRequest = requireAdmin(safeHandler('approveUpgradeRequest', require('../handlers/approveUpgradeRequest.js'))); } catch (e) { handlers.approveUpgradeRequest = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'approveUpgradeRequest load failed',detail:e.message})); }; }

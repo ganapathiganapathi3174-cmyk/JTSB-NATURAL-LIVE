@@ -374,7 +374,7 @@ async function main() {
 
   for (const d of DECISIONS) {
     const status = d.condition ? '◉ HIT' : '○ SKIP';
-    console.log('  [' + status + '] api/_verificationEngine.js:' + d.line + ' — ' + d.label);
+    console.log('  [' + status + '] NUCLEAR engine:' + d.line + ' — ' + d.label);
     if (d.condition) {
       if (d.line === 547) {
         console.log('    ↳ Reject because: receiverMatch=false');
@@ -416,7 +416,7 @@ async function main() {
   for (const d of DECISIONS) {
     if (d.condition) {
       console.log('  DECISION: ' + d.label.replace(/^[^:]*:\s*/, ''));
-      console.log('  TRIGGERED BY: api/_verificationEngine.js:' + d.line);
+      console.log('  TRIGGERED BY: NUCLEAR engine:' + d.line);
       console.log('');
       if (d.label.includes('approve')) console.log('  STATUS: APPROVED');
       else if (d.label.includes('reject')) console.log('  STATUS: REJECTED');

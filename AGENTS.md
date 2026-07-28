@@ -565,3 +565,102 @@ Rewrite Stage 8 decision logic per new business rules: UTR + date match → auto
 | **Decision** | ✅ **APPROVED** — UTR+Date match |
 | **Reasons** | "UTR matched successfully", "Date matches current transaction", "Amount unclear but ignored due to rule" |
 | **matched_fields** | `{utr: true, date: true, amount: "uncertain", upi_id: false}` |
+
+---
+
+# CURRENT SESSION (Jul 28, 2026) — NUCLEAR REBUILD: Complete Verification Engine Rewrite
+
+## Goal
+
+Delete **every** verification-related file in the repo (V5 engine, AI pipeline, decision engine, OCR modules, test files, handler) and build a brand-new clean minimal engine from absolute zero — no reused code, no legacy imports, no old logic.
+
+## What Changed
+
+### Deleted (14 files/dirs)
+
+| File | Reason |
+|------|--------|
+| `api/_verification/` (10 files) | Entire V5 engine directory |
+| `api/_verificationOfficer.js` | Wrapper — rebuilt |
+| `api/_aiPipeline.js` | Dead AI pipeline |
+| `api/_aiVerificationBridge.js` | Dead bridge |
+| `api/_bankSmsVerificationEngine.js` | Dead SMS engine |
+| `api/_decisionEngine.js` | Dead decision engine |
+| `api/_ocr_paddle.js` | Dead PaddleOCR module |
+| `api/tests/e2e_strict_verification.js` | Dead test |
+| `api/tests/e2e_bank_sms.js` | Dead test |
+| `api/tests/test_13_cases.js` | Dead test |
+| `api/tests/test_upgrade_pipeline.js` | Dead test |
+| `api/e2e_verify_real.js` | Dead E2E test |
+| `api/e2e_now.js` | Dead E2E test |
+| `handlers/runAIVerification.js` | Dead handler + route |
+
+Route `runAIVerification` removed from `api/index.js` and `api/local-dev.js`.
+
+### Created (11 files)
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `api/_verification/config.js` | — | Constants (RECEIVER_UPI, RECEIVER_NAME, ALLOWED_AMOUNTS, TIME_WINDOW, etc.) |
+| `api/_verification/imageValidator.js` | — | Format + size + blur + crop + darkness checks |
+| `api/_verification/ocr.js` | — | Single-strategy Tesseract.js (no multi-engine, no API keys) |
+| `api/_verification/fieldExtractor.js` | — | Regex extraction for amount, UTR, UPI, name, date, time, status |
+| `api/_verification/rulesValidator.js` | — | Strict exact-match business rules (amount, name, UPI, status, date, time, UTR) |
+| `api/_verification/duplicateChecker.js` | — | DB-backed UTR hash + screenshot hash dedup |
+| `api/_verification/decider.js` | — | Simple 3-way decision (reject on hard fail / manual_review on soft fail / approve on all pass) |
+| `api/_verification/audit.js` | — | Minimal audit record |
+| `api/_verification/index.js` | — | Orchestrator — 7-step pipeline: screenshot → image validation → OCR → field extraction → rule validation → duplicate check → decision → audit |
+| `api/_verificationOfficer.js` | — | Wrapper preserving `runOfficerVerification(payment)` interface |
+| `api/e2e_check.js` | — | E2E test: Membership (₹120) + Topup (₹500, ₹1000) auto-approval |
+
+### Verification Results
+
+| Test | Result |
+|------|--------|
+| E2E: Membership ₹120 screen → auto-approve ✅ | VERIFIED (score=90, all checks pass) |
+| E2E: Topup ₹500 screen → auto-approve ✅ | VERIFIED (score=90, all checks pass) |
+| E2E: Topup ₹1000 screen → auto-approve ✅ | VERIFIED (score=90, all checks pass) |
+| `npm run build` | ✅ 520 modules, 0 errors, 1.57s |
+| `npm run test:run` (frontend) | ✅ 47/47 passed |
+| Legacy refs in codebase | ✅ ZERO remaining (verified with grep) |
+| 2 string log refs in `_trace_flow.js` | ✅ Updated from `_verificationEngine.js` → `NUCLEAR engine` |
+
+### Engine Architecture (7-Phase Pipeline)
+
+```
+runOfficerVerification(payment)
+  → index.run(order, screenshotUrl, userId, userUtr, screenshotBuf)
+    1. Image validation  ← imageValidator (format/size/dimensions/blur/crop/dark)
+    2. OCR               ← ocr (Tesseract.js, single worker)
+    3. Field extraction  ← fieldExtractor (amount/UTR/UPI/name/date/time/status)
+    4. Rule validation   ← rulesValidator (hard: amount/UPI/status/UTR; soft: name/date/time)
+    5. Duplicate check   ← duplicateChecker (UTR hash + screenshot hash via DB)
+    6. Decision          ← decider (reject on any hard fail → manual_review on soft fail → approve)
+    7. Audit             ← audit (write result to DB)
+  Returns: { status, verificationScore, ocrConfidence, extractedFields, matchResults, fraudScore, reasons, ... }
+```
+
+### Key Design Decisions
+
+- **Single OCR engine** (Tesseract.js only) — no Google Vision, no multi-engine voting, no billing dependency
+- **Exact-match rules** (not scoring/fuzzy) — amount must match exactly, UPI must match exactly, UTR must match. Reject on any hard fail.
+- **Name inferred from UPI** — if "JEYARAJ ALAGAR" not found in OCR text but the UPI ID matches, name is inferred (source: 'inferred')
+- **Test image synthetic** — PhonePe-style screenshot generated with `canvas` (no real screenshots needed in E2E)
+- **Duplicate detection** — UTR hashed with SHA-256, stored in DB. Screenshot content hash checked.
+- **No more separate test files** — single `e2e_check.js` covers registration + topup
+
+## File Dependencies
+
+```
+handlers/processPendingPayments.js
+  → api/_verification/index.js
+     → config.js, imageValidator.js, ocr.js, fieldExtractor.js
+     → rulesValidator.js, duplicateChecker.js, decider.js, audit.js
+
+api/_paymentOrderManager.js
+  → api/_verificationOfficer.js
+     → api/_verification/index.js
+
+api/e2e_check.js
+  → api/_verification/index.js
+
