@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { runQuery } = require('../_supabase.js');
-const { COL_UPI_PAYMENTS } = require('../_shared.js');
+const { COL_UPI_PAYMENTS, COL_PROCESSED_PAYMENTS } = require('../_shared.js');
 
 function hashUtr(utr) {
   if (!utr) return null;
@@ -14,6 +14,7 @@ function hashBuffer(buf) {
 
 async function check(utr, imageBuffer, userId) {
   const result = { duplicateUtr: false, duplicateImage: false, existingPayment: null };
+
   const utrHash = hashUtr(utr);
   if (utrHash) {
     const matches = await runQuery(COL_UPI_PAYMENTS, [
@@ -27,13 +28,15 @@ async function check(utr, imageBuffer, userId) {
       }
     }
   }
+
   const imgHash = hashBuffer(imageBuffer);
   if (imgHash) {
-    const matches = await runQuery(COL_UPI_PAYMENTS, [
+    const imgMatches = await runQuery(COL_UPI_PAYMENTS, [
       { field: 'screenshot_hash', op: 'EQUAL', value: imgHash },
     ], { limit: 2 });
-    if (matches && matches.length > 0) result.duplicateImage = true;
+    if (imgMatches && imgMatches.length > 0) result.duplicateImage = true;
   }
+
   return result;
 }
 

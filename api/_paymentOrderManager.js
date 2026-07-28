@@ -8,7 +8,7 @@ const {
 } = require('./_shared.js');
 const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet, getSupabaseClient } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
-const { verify } = require('./verification6.js');
+const { verify } = require('./verification7.js');
 const cycleEngine = require('./_cycleEngine.js');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;
@@ -233,12 +233,11 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
 
   log('[SUBMIT] Pre-pipeline DB done: ' + (Date.now() - t0) + 'ms for ' + orderId);
 
-  // ── FAST PATH: V6 inline verification ──
+  // ── FAST PATH: V7 enterprise verification ──
   try {
-    log('[INLINE_VERIFY] order ' + orderId + ' starting (V6)');
+    log('[INLINE_VERIFY] order ' + orderId + ' starting (V7)');
     const v = await verify(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null, null);
     const finalStatus = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
-    const postDbT0 = Date.now();
     Promise.all([
       updateDoc(COL_ORDERS, orderId, {
         status: finalStatus, verification_status: v.status,
@@ -264,7 +263,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
           }
         } catch (_) {}
       })(),
-    ]).then(() => { log('[POST_DB] ' + orderId + ' done: ' + (Date.now() - postDbT0) + 'ms'); }).catch(() => {});
+    ]).then(() => { log('[POST_DB] ' + orderId + ' done'); }).catch(() => {});
     try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch {}
     log('[INLINE_VERIFY] order ' + orderId + ' done: status=' + finalStatus + ' score=' + (v.confidence || 0) + ' total=' + (Date.now() - t0) + 'ms');
     verifyingOrders.delete(orderId);
@@ -276,7 +275,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       matchedUtr: v.extractedFields && v.extractedFields.utr ? true : false,
       userEnteredUtr: extra?.userEnteredUtr || null,
       userEnteredUpi: extra?.userEnteredUpi || null,
-      fraudScore: 0, checks: v.checks || [],
+      fraudScore: v.checks?.fraud?.score || 0, checks: v.checks || [],
       ocrData: v.ocrData || null,
     };
     if (finalStatus === 'verified') {
@@ -337,7 +336,7 @@ async function runVerificationWorker() {
 
       log('Worker: processing order ' + orderId + ' type=' + order.type + ' amount=' + order.amount);
       const v = await verify(order, order.screenshot_url, order.user_id || null, order.utr || null, null, null);
-      log('Worker: V6 result — status=' + v.status + ' score=' + (v.confidence || 0));
+      log('Worker: V7 result — status=' + v.status + ' score=' + (v.confidence || 0));
       const isVerified = v.status === 'verified';
       const finalStatus = isVerified ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
       log('[STATUS_CHANGED] payment_sessions -> ' + finalStatus + ' for order ' + orderId);
@@ -348,6 +347,11 @@ async function runVerificationWorker() {
       });
       if (!dbResult) log('[ERROR_OCCURRED] COL_ORDERS update returned falsy for ' + orderId);
       log('[DATABASE_UPDATED] payment_sessions updated for ' + orderId);
+      if (isVerified) {
+        log('Worker: approved — executing post-approval for ' + orderId);
+        await executeVerifiedOrder(order, v, { userId: order.user_id, pendingRegId: order.pending_reg_id, userEnteredUtr: order.utr, userEnteredUpi: null })
+          .catch(e => log('Worker: post-approval exec err: ' + e.message));
+      }
       if (isVerified) {
         log('Worker: approved — executing post-approval for ' + orderId);
         await executeVerifiedOrder(order, v, { userId: order.user_id, pendingRegId: order.pending_reg_id, userEnteredUtr: order.utr, userEnteredUpi: null })
@@ -364,8 +368,8 @@ async function runVerificationWorker() {
           for (const p of ups) {
             await updateDoc(COL_UPI_PAYMENTS, p.id, {
               status: finalStatus, verification_locked: false,
-              ocr_result: v.ocrData || null, final_score: v.verificationScore || 0,
-              fraud_score: v.fraudScore || 0, rejection_reasons: v.reasons || [],
+              ocr_result: v.ocrData || null, final_score: 0,
+              fraud_score: 0, rejection_reasons: v.reasons || [],
               verified_at: now(), verification_completed_at: now(),
             }).catch(() => {});
           }
@@ -378,7 +382,7 @@ async function runVerificationWorker() {
         log('[NOTIFICATION_SENT] SSE paymentUpdated for ' + orderId + ' status=' + finalStatus);
       } catch {}
 
-      log('[PROCESS_COMPLETED] Worker finished ' + orderId + ' status=' + finalStatus + ' score=' + (v.verificationScore || 0));
+      log('[PROCESS_COMPLETED] Worker finished ' + orderId + ' status=' + finalStatus + ' score=' + (v.confidence || 0));
     } catch (e) {
       log('[ERROR_OCCURRED] Worker failed for ' + orderId + ': ' + e.message);
       try {

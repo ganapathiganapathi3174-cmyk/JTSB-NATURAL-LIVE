@@ -1,6 +1,6 @@
 const { COL_UPI_PAYMENTS } = require('../api/_shared.js');
 const { runQuery, updateDoc } = require('../api/_supabase.js');
-const v6 = require('../api/verification6.js');
+const v7 = require('../api/verification7.js');
 
 async function processNextPayment() {
   const result = { processed: 0, approved: 0, rejected: 0, manualReview: 0, errors: [] };
@@ -11,7 +11,7 @@ async function processNextPayment() {
     if (!payment.screenshot_url) { result.errors.push({ paymentId: payment.id, error: 'No screenshot' }); continue; }
     result.processed++;
     try {
-      const v = await v6.verify(payment, payment.screenshot_url, payment.user_id, payment.utr, null, null);
+      const v = await v7.verify(payment, payment.screenshot_url, payment.user_id, payment.utr, null, null);
       const fs = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
       await updateDoc(COL_UPI_PAYMENTS, payment.id, {
         status: fs, ocr_result: v.ocrData || null, final_score: v.confidence || 0,

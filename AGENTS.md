@@ -735,3 +735,93 @@ api/_paymentOrderManager.js
   → api/verification6.js
     → api/_verification6/index.js (same pipeline)
 
+---
+
+# ENTERPRISE V7 (Jul 28, 2026) — JSREE APEX Enterprise AI Verification Platform
+
+## Goal
+Complete architectural reverse-engineering of entire project → delete current V6 engine → build enterprise-grade 10-module, 9-stage AI verification platform. Multi-engine OCR (Tesseract.js primary + optional Python PaddleOCR/EasyOCR via bridge), image preprocessing, fraud detection, majority voting.
+
+## What Changed
+
+### Phase 1 — System Understanding
+- Mapped entire project: 52 API modules, 70+ handlers, 26 frontend pages, 20+ DB tables
+- Identified payment lifecycle: `createPaymentOrder` → `submitPaymentProof` → verify → approve/reject
+- Identified existing Python AI infrastructure: `_ai_bridge.js`, `_paddle_ocr.py`, `_easyOcrRunner.py`, `_ai_engine.py`, `_pipelineEngine.js`, `_votingEngine.js`, `_fraudDetection.js`
+- All existing AI infra left intact (separate from verification subsystem)
+
+### Phase 2 — Delete V6 Engine
+| File | Action |
+|------|--------|
+| `api/_verification6/` (10 files) | DELETED |
+| `api/verification6.js` | DELETED |
+
+### Phase 3 — Build Enterprise V7 (14 files created)
+
+| Module | File | Purpose |
+|--------|------|---------|
+| Config | `_verification7/config.js` | Central config: receiver, amounts, fraud thresholds, decision thresholds |
+| Stage 1 | `_verification7/uploadValidator.js` | File type (PNG/JPEG/WEBP), size, magic-byte integrity |
+| Stage 2 | `_verification7/imageProcessor.js` | Jimp autocrop, contrast, normalize, greyscale |
+| Stage 3 | `_verification7/ocrService.js` | Multi-engine: Tesseract.js primary + Python bridge (PaddleOCR/EasyOCR), majority voting |
+| Stage 4 | `_verification7/fieldExtractor.js` | Extracts structured fields with confidence levels |
+| Stage 5 | `_verification7/fieldNormalizer.js` | Date/time format normalization, amount parsing, today/yesterday check |
+| Stage 6 | `_verification7/businessValidator.js` | Exact-match rules: amount, UPI, name, status, date; hard/soft fail separation |
+| Stage 7 | `_verification7/duplicateDetector.js` | SHA-256 UTR hash + screenshot hash against DB |
+| Stage 8 | `_verification7/fraudDetector.js` | Blur detection, size check, amount anomalies, rapid submissions |
+| Stage 9 | `_verification7/decisionEngine.js` | 3-way: reject (hard fail/fraud/duplicate), manual (soft fail/medium fraud), approve (all pass) |
+| Stage 10 | `_verification7/auditLogger.js` | Writes to `verification_logs` table |
+| Orchestrator | `_verification7/index.js` | 9-stage pipeline orchestrator |
+| Wrapper | `verification7.js` | Public `verify()` entry point |
+
+## Architecture
+```
+verification7.verify(order, url, userId, utr, upi, buf)
+  → _verification7/index.js
+    1. uploadValidator.validate(buf)     — format, size
+    2. imageProcessor.process(buf)        — autocrop, contrast, normalize
+    3. ocrService.runMultiEngineOcr()     — Tesseract + optional Python bridge
+    4. fieldExtractor.extract()           — structured fields with confidence
+    5. fieldNormalizer.normalize()        — date/time/amount normalization
+    6. businessValidator.validate()       — exact-match business rules
+    7. duplicateDetector.check()          — UTR hash + screenshot hash
+    8. fraudDetector.detect()             — blur, size, amount, rapid submissions
+    9. decisionEngine.decide()            — 3-way final decision
+    10. auditLogger.record()              — DB audit trail
+```
+
+## Result Shape
+```json
+{
+  "status": "verified|rejected|manual_review",
+  "confidence": 0-100,
+  "ocrData": { "raw", "confidence", "engines": [...], "fields": {...} },
+  "extractedFields": { "amount", "utr", "upi", "name", "date", "time", "status" },
+  "reasons": [...],
+  "stages": [{ "name", "ms" }],
+  "checks": { "format", "ocr", "business", "duplicate", "fraud" },
+  "normalizedFields": { "amount", "utr", "upi", "name", "date", "time", "status" },
+  "totalMs": 1234
+}
+```
+
+## Verification Results
+| Test | Result |
+|------|--------|
+| `npm run build` | ✅ **520 modules, 0 errors, 1.58s** |
+| `npm run test:run` | ✅ **47/47 tests passed** |
+| Syntax check all 14 files | ✅ **ALL PASS** |
+| Legacy verification refs | ✅ **ZERO** |
+
+## File Dependencies
+```
+handlers/processPendingPayments.js
+  → api/verification7.js
+    → api/_verification7/index.js
+      → 10 modules (stages 1-10)
+
+api/_paymentOrderManager.js
+  → api/verification7.js
+    → api/_verification7/index.js (same pipeline)
+```
+
