@@ -1,14 +1,15 @@
 const PREFIXES = {
-  AUTH: '[AUTH]',
+  ENGINE: '[ENGINE]',
+  IMAGE: '[IMAGE]',
   ENHANCE: '[ENHANCE]',
   OCR: '[OCR]',
   EXTRACT: '[EXTRACT]',
+  NORMALIZE: '[NORMALIZE]',
   VALIDATE: '[VALIDATE]',
   DEDUP: '[DEDUP]',
   FRAUD: '[FRAUD]',
   DECIDE: '[DECIDE]',
-  PIPELINE: '[PIPELINE]',
-  STORE: '[STORE]',
+  AUDIT: '[AUDIT]',
 };
 
 function ts() {
@@ -17,9 +18,10 @@ function ts() {
 
 function makeLogger(prefix) {
   return {
-    info: (orderId, msg) => console.log(`[${ts()}] ${prefix} ${orderId} ${msg}`),
-    warn: (orderId, msg) => console.warn(`[${ts()}] ${prefix} ${orderId} WARN: ${msg}`),
-    error: (orderId, msg) => console.error(`[${ts()}] ${prefix} ${orderId} ERROR: ${msg}`),
+    info: (msg) => console.log(`[${ts()}] ${prefix} ${msg}`),
+    debug: (msg) => { if (process.env.VERBOSE) console.log(`[${ts()}] ${prefix} ${msg}`); },
+    warn: (msg) => console.warn(`[${ts()}] ${prefix} WARN: ${msg}`),
+    error: (msg) => console.error(`[${ts()}] ${prefix} ERROR: ${msg}`),
   };
 }
 

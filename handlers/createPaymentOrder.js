@@ -7,7 +7,7 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   } catch (setHeaderErr) {
     console.error('[CPO] setHeader failed:', setHeaderErr.message, setHeaderErr.stack);
-      if (!res.headersSent) { res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' })); }
+    if (!res.headersSent) { res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' })); }
     return;
   }
   if (req.method === 'OPTIONS') return res.writeHead(200).end();

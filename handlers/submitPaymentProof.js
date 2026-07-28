@@ -73,11 +73,11 @@ async function storeAndVerify(orderId, screenshot, utr, upiId) {
 
   // Step 1: Upload to R2 with 4s timeout
   let uploadedUrl = screenshot;
+  let r2TimeoutId;
   try {
     const parsed = parseBase64(screenshot);
     if (parsed && parsed.buffer.length <= 10 * 1024 * 1024) {
       const key = 'payments/' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + parsed.ext;
-      let r2TimeoutId;
       const r2Result = await Promise.race([
         r2.uploadFile(key, parsed.buffer, parsed.mimeType),
         new Promise((_, reject) => { r2TimeoutId = setTimeout(() => reject(new Error('R2_TIMEOUT')), 4000); }),
@@ -86,7 +86,10 @@ async function storeAndVerify(orderId, screenshot, utr, upiId) {
       if (r2Result && r2Result.url) uploadedUrl = r2Result.url;
       log('R2 upload done: ' + (Date.now() - bt0) + 'ms, url=' + (uploadedUrl || '').substring(0, 60));
     }
-  } catch (e) { log('R2 upload failed (using base64): ' + e.message); }
+  } catch (e) {
+    clearTimeout(r2TimeoutId);
+    log('R2 upload failed (using base64): ' + e.message);
+  }
 
   // Step 2: Get order + handle expiry — all with 5s combined timeout
   const dbT0 = Date.now();
