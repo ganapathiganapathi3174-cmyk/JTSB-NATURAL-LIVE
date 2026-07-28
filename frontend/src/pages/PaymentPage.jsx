@@ -32,7 +32,7 @@ export default function PaymentPage() {
     <div className="flex flex-center animate-fade-in-up" style={{ minHeight: '100vh' }}>
       <div className="text-center mb-lg">
         <div className="glass-strong text-lg font-bold mb-xs" style={{ padding: '0.5rem 1.5rem', borderRadius: 'var(--radius-lg)', display: 'inline-block' }}>
-          <span className="text-gradient">JsreeApex</span>
+          <span className="text-gradient">JSREE APEX</span>
         </div>
         <p className="text-muted text-sm">Premium FinTech Platform</p>
       </div>
