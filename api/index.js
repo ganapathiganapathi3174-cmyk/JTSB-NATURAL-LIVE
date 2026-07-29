@@ -119,7 +119,7 @@ for (const [name, modPath, needsAdmin] of handlerModules) {
     handlers[name] = h;
   } catch (e) {
     console.error('[INDEX] Handler load failed: ' + name + ': ' + e.message);
-    handlers[name] = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_unavailable'})); };
+    handlers[name] = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_unavailable', detail: e.message})); };
   }
 }
 
