@@ -1,12 +1,5 @@
 const crypto = require('crypto');
-let bcrypt;
-try { bcrypt = require('bcrypt'); } catch (e) { console.warn('[ADMIN LOGIN] bcrypt not available, falling back to SHA-256'); }
-const { signAdminToken } = require('../api/_auth.js');
-const { runQuery } = require('../api/_supabase.js');
-const { COL_ADMINS } = require('../api/_shared.js');
-const metrics = require('../api/_metrics.js');
 
-// In-memory login attempt tracking: email -> [{ timestamp }, ...]
 const loginAttempts = new Map();
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -58,16 +51,35 @@ module.exports = async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Login rate limiting
     if (isLoginRateLimited(normalizedEmail)) {
       console.log(`[ADMIN LOGIN] Rate limited: ${normalizedEmail}`);
       res.writeHead(429); res.end(JSON.stringify({ error: 'Too many attempts. Try again later.' }));
       return;
     }
 
-    // Check global admin from env vars first
-    // NOTE: env var admin always uses SHA-256 for backward compatibility
-    // Migration path: set ADMIN_PASSWORD_HASH to a bcrypt hash ($2b$...) to use bcrypt
+    let bcrypt;
+    try { bcrypt = require('bcrypt'); } catch (e) { /* bcrypt optional */ }
+    let signAdminToken, runQuery, COL_ADMINS, metrics;
+    try {
+      const auth = require('../api/_auth.js');
+      signAdminToken = auth.signAdminToken;
+    } catch (e) { console.error('[ADMIN LOGIN] _auth.js load failed:', e.message); }
+    try {
+      const supabase = require('../api/_supabase.js');
+      runQuery = supabase.runQuery;
+    } catch (e) { console.error('[ADMIN LOGIN] _supabase.js load failed:', e.message); }
+    try {
+      COL_ADMINS = require('../api/_shared.js').COL_ADMINS;
+    } catch (e) { console.error('[ADMIN LOGIN] _shared.js load failed:', e.message); }
+    try {
+      metrics = require('../api/_metrics.js');
+    } catch (e) { console.error('[ADMIN LOGIN] _metrics.js load failed:', e.message); }
+
+    if (!signAdminToken) {
+      res.writeHead(500); res.end(JSON.stringify({ error: 'Auth module unavailable' }));
+      return;
+    }
+
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
     if (adminEmail && adminPasswordHash) {
@@ -76,7 +88,7 @@ module.exports = async (req, res) => {
         const role = 'admin';
         const token = signAdminToken({ email: normalizedEmail, role, name: 'Admin' });
         console.log(`[ADMIN LOGIN] Super admin login success: ${normalizedEmail}`);
-        metrics.trackAuth(true);
+        if (metrics) metrics.trackAuth(true);
         res.writeHead(200); res.end(JSON.stringify({
           token, expiresIn: 86400,
           admin: { email: normalizedEmail, role, name: 'Admin' },
@@ -86,7 +98,11 @@ module.exports = async (req, res) => {
       console.log(`[ADMIN LOGIN] Env var admin password mismatch for: ${normalizedEmail}`);
     }
 
-    // Fallback: check admins table
+    if (!runQuery) {
+      res.writeHead(500); res.end(JSON.stringify({ error: 'Database module unavailable' }));
+      return;
+    }
+
     console.log(`[ADMIN LOGIN] Looking up admin in DB: ${normalizedEmail}`);
     const admins = await runQuery(COL_ADMINS, [{ field: 'email', op: 'EQUAL', value: normalizedEmail }]);
     if (admins && admins.length > 0) {
@@ -95,7 +111,6 @@ module.exports = async (req, res) => {
       if (admin.password_hash && admin.password_hash.startsWith('$2b$') && bcrypt) {
         passwordMatch = bcrypt.compareSync(password, admin.password_hash);
       } else {
-        // Fallback to SHA-256 for backward compatibility with existing hashes
         const hash = crypto.createHash('sha256').update(password).digest('hex');
         passwordMatch = (admin.password_hash === hash);
       }
@@ -104,7 +119,7 @@ module.exports = async (req, res) => {
         const name = admin.name || 'Admin';
         const token = signAdminToken({ email: admin.email, role, name });
         console.log(`[ADMIN LOGIN] DB admin login success: ${admin.email} (role=${role})`);
-        metrics.trackAuth(true);
+        if (metrics) metrics.trackAuth(true);
         res.writeHead(200); res.end(JSON.stringify({
           token, expiresIn: 86400,
           admin: { email: admin.email, role, name },
@@ -118,7 +133,7 @@ module.exports = async (req, res) => {
 
     recordLoginAttempt(normalizedEmail);
     console.log(`[ADMIN LOGIN] Login failed for: ${normalizedEmail}`);
-    metrics.trackAuth(false);
+    if (metrics) metrics.trackAuth(false);
     res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid credentials' }));
   } catch (err) {
     console.error(`[ADMIN LOGIN] Error: ${err.message}`);
