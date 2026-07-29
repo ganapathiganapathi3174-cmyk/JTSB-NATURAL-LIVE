@@ -10,10 +10,14 @@ try {
   }
 } catch (_) {}
 
-const { requireAdmin } = require('./_auth.js');
-const metrics = require('./_metrics.js');
-const { initSystemUsers } = require('./_systemInit.js');
-initSystemUsers().catch(err => console.error('[SYSTEM-INIT] Error: ' + err.message));
+let requireAdmin;
+try { requireAdmin = require('./_auth.js').requireAdmin; } catch (e) { console.error('[INDEX] _auth.js load failed: ' + e.message); requireAdmin = h => h; }
+let metrics;
+try { metrics = require('./_metrics.js'); } catch (e) { console.error('[INDEX] _metrics.js load failed: ' + e.message); metrics = { trackAPICall() {}, trackAuth() {} }; }
+try {
+  const { initSystemUsers } = require('./_systemInit.js');
+  initSystemUsers().catch(err => console.error('[SYSTEM-INIT] Error: ' + err.message));
+} catch (e) { console.error('[INDEX] _systemInit.js load failed: ' + e.message); }
 
 // Rate limiter with periodic cleanup to prevent memory leaks
 const rateLimitStore = new Map();
@@ -112,7 +116,13 @@ function getHandler(name) {
     if (!h) { console.error('[INDEX] ' + name + ' invalid export'); h = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_invalid'})); }; }
     else if (entry[2]) h = requireAdmin(h);
     handlerCache[name] = h;
-  } catch (e) { console.error('[INDEX] Handler load failed: ' + name + ': ' + e.message); handlerCache[name] = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_unavailable'})); }; }
+  } catch (e) {
+    console.error('[INDEX] Handler load failed: ' + name + ' -> ' + e.message);
+    if (e.stack) console.error('[INDEX] Stack: ' + e.stack.split('\n').slice(0,5).join('\n'));
+    handlerCache[name] = (r,s) => {
+      if (!s.headersSent) { s.writeHead(500, {'Content-Type':'application/json'}); s.end(JSON.stringify({error:'handler_unavailable',detail:e.message})); }
+    };
+  }
   return handlerCache[name];
 }
 
