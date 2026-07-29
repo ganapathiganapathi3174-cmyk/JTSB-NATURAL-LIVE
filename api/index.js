@@ -34,17 +34,8 @@ setInterval(() => {
   }
 }, 300000);
 
-// Load all handlers at top level so Vercel's static analyzer includes them.
-// Each is wrapped in try/catch so one failure doesn't crash the whole module.
-function safeHandler(name, fn) {
-  if (typeof fn === 'function') return fn;
-  if (fn && typeof fn.handler === 'function') return fn.handler;
-  if (fn && typeof fn.default === 'function') return fn.default;
-  console.error('[INDEX] ' + name + ' invalid export: ' + typeof fn);
-  return (r, s) => { s.writeHead(500); s.end(JSON.stringify({ error: name + ' invalid' })); };
-}
-
-let handlers = {};
+// Lazy handler loading — each handler module is loaded on first request
+// This avoids cold-start failures from any single module and is safer for Vercel.
 const handlerModules = [
   ['adminLogin', '../handlers/adminLogin.js', false],
   ['preRegister', '../handlers/preRegister.js', false],
@@ -66,7 +57,6 @@ const handlerModules = [
   ['paymentConfirm', '../handlers/paymentConfirm.js', false],
   ['createSmsSession', '../handlers/createSmsSession.js', false],
   ['smsPaymentConfirm', '../handlers/smsPaymentConfirm.js', false],
-
   ['companionPayment', '../handlers/companionPayment.js', false],
   ['adminLogout', '../handlers/adminLogout.js', false],
   ['getUPIPayments', '../handlers/getUPIPayments.js', true],
@@ -111,20 +101,20 @@ const handlerModules = [
   ['rejectSponsor', '../handlers/rejectSponsor.js', true],
   ['sponsorClaim', '../handlers/sponsorClaim.js', false],
 ];
-for (const [name, modPath, needsAdmin] of handlerModules) {
+const handlerCache = {};
+function getHandler(name) {
+  if (handlerCache[name]) return handlerCache[name];
+  const entry = handlerModules.find(e => e[0] === name);
+  if (!entry) return null;
   try {
-    const mod = require(modPath);
-    let h = safeHandler(name, mod);
-    if (needsAdmin) h = requireAdmin(h);
-    handlers[name] = h;
-  } catch (e) {
-    console.error('[INDEX] Handler load failed: ' + name + ': ' + e.message);
-    handlers[name] = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_unavailable', detail: e.message})); };
-  }
+    const mod = require(entry[1]);
+    let h = typeof mod === 'function' ? mod : (mod && typeof mod.handler === 'function' ? mod.handler : (mod && typeof mod.default === 'function' ? mod.default : null));
+    if (!h) { console.error('[INDEX] ' + name + ' invalid export'); h = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_invalid'})); }; }
+    else if (entry[2]) h = requireAdmin(h);
+    handlerCache[name] = h;
+  } catch (e) { console.error('[INDEX] Handler load failed: ' + name + ': ' + e.message); handlerCache[name] = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_unavailable'})); }; }
+  return handlerCache[name];
 }
-
-
-console.error('[INDEX] ' + Object.keys(handlers).length + ' handlers loaded');
 
 module.exports = async (req, res) => {
   const url = req.url.split('?')[0];
@@ -141,7 +131,7 @@ module.exports = async (req, res) => {
     }
   }
 
-  const handler = handlers[path];
+  const handler = getHandler(path);
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
   const rl = rateLimit(ip, 60, 60000);
   if (rl.limited) {
