@@ -1,5 +1,6 @@
 const crypto = require('crypto');
-const bcrypt = require('bcrypt');
+let bcrypt;
+try { bcrypt = require('bcrypt'); } catch (e) { console.warn('[ADMIN LOGIN] bcrypt not available, falling back to SHA-256'); }
 const { signAdminToken } = require('../api/_auth.js');
 const { runQuery } = require('../api/_supabase.js');
 const { COL_ADMINS } = require('../api/_shared.js');
@@ -91,7 +92,7 @@ module.exports = async (req, res) => {
     if (admins && admins.length > 0) {
       const admin = admins[0];
       let passwordMatch = false;
-      if (admin.password_hash && admin.password_hash.startsWith('$2b$')) {
+      if (admin.password_hash && admin.password_hash.startsWith('$2b$') && bcrypt) {
         passwordMatch = bcrypt.compareSync(password, admin.password_hash);
       } else {
         // Fallback to SHA-256 for backward compatibility with existing hashes
