@@ -153,12 +153,13 @@ module.exports = async (req, res) => {
     });
   }
 
-  const REQ_TIMEOUT_MS = 14000;
+  const isPaymentRoute = path.includes('submitPaymentProof') || path.includes('processPendingPayments') || path.includes('pipelinePayment');
+  const REQ_TIMEOUT_MS = isPaymentRoute ? 120000 : 14000;
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
       console.error('[API] HARD TIMEOUT for path=' + path + ' (' + (REQ_TIMEOUT_MS/1000) + 's limit)');
       res.writeHead(504, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Server processing took too long. Your payment is being reviewed by our team.' }));
+      res.end(JSON.stringify({ error: isPaymentRoute ? 'Payment verification is taking longer than expected. Your payment will be processed in the background.' : 'Request timed out. Please try again.' }));
     }
   }, REQ_TIMEOUT_MS);
   const origEnd = res.end.bind(res);

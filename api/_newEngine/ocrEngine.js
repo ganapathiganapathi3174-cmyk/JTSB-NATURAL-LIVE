@@ -109,4 +109,10 @@ async function runAllEngines(screenshotUrl, screenshotBuf) {
   return result;
 }
 
+getTesseractWorker().then(() => {
+  console.log('[OCR] Tesseract.js worker warmed up');
+}).catch(e => {
+  console.warn('[OCR] Tesseract.js warmup failed (deferred): ' + e.message);
+});
+
 module.exports = { runAllEngines, runTesseract, getTesseractWorker };
