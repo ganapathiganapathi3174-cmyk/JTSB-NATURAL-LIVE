@@ -1,4 +1,10 @@
 const crypto = require('crypto');
+let bcrypt;
+try { bcrypt = require('bcrypt'); } catch (e) { console.warn('[ADMIN LOGIN] bcrypt not available, falling back to SHA-256'); }
+const { signAdminToken } = require('../api/_auth.js');
+const { runQuery } = require('../api/_supabase.js');
+const { COL_ADMINS } = require('../api/_shared.js');
+const metrics = require('../api/_metrics.js');
 
 const loginAttempts = new Map();
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -32,31 +38,6 @@ function normalizeRole(role) {
   return normalized;
 }
 
-function getSecret() {
-  if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET;
-  const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV || !!process.env.VERCEL;
-  if (isDev) {
-    console.error('[ADMIN LOGIN] WARNING: Using dev JWT secret. Set ADMIN_JWT_SECRET in production.');
-    return 'dev-jwt-secret-not-for-production';
-  }
-  throw new Error('ADMIN_JWT_SECRET not configured');
-}
-
-function signAdminToken(payload) {
-  const secret = getSecret();
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const now = Math.floor(Date.now() / 1000);
-  const expiry = parseInt(process.env.ADMIN_JWT_EXPIRY || '86400', 10);
-  const body = Buffer.from(JSON.stringify({
-    ...payload,
-    iat: now,
-    exp: now + expiry,
-    jti: crypto.randomBytes(8).toString('hex'),
-  })).toString('base64url');
-  const signature = crypto.createHmac('sha256', secret).update(header + '.' + body).digest('base64url');
-  return header + '.' + body + '.' + signature;
-}
-
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -82,19 +63,6 @@ module.exports = async (req, res) => {
       return;
     }
 
-    let bcrypt, runQuery, COL_ADMINS, metrics;
-    try { bcrypt = require('bcrypt'); } catch (e) { console.log('[ADMIN LOGIN] bcrypt unavailable, using SHA-256 fallback'); }
-    try {
-      const supabase = require('../api/_supabase.js');
-      runQuery = supabase.runQuery;
-    } catch (e) { console.error('[ADMIN LOGIN] _supabase.js load failed:', e.message); }
-    try {
-      COL_ADMINS = require('../api/_shared.js').COL_ADMINS;
-    } catch (e) { console.error('[ADMIN LOGIN] _shared.js load failed:', e.message); }
-    try {
-      metrics = require('../api/_metrics.js');
-    } catch (e) { console.error('[ADMIN LOGIN] _metrics.js load failed:', e.message); }
-
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
     if (adminEmail && adminPasswordHash) {
@@ -103,7 +71,7 @@ module.exports = async (req, res) => {
         const role = 'admin';
         const token = signAdminToken({ email: normalizedEmail, role, name: 'Admin' });
         console.log('[ADMIN LOGIN] Super admin login success: ' + normalizedEmail);
-        if (metrics) metrics.trackAuth(true);
+        metrics.trackAuth(true);
         res.writeHead(200); res.end(JSON.stringify({
           token, expiresIn: 86400,
           admin: { email: normalizedEmail, role, name: 'Admin' },
@@ -113,45 +81,37 @@ module.exports = async (req, res) => {
       console.log('[ADMIN LOGIN] Env var admin password mismatch for: ' + normalizedEmail);
     }
 
-    if (runQuery && COL_ADMINS) {
-      console.log('[ADMIN LOGIN] Looking up admin in DB: ' + normalizedEmail);
-      try {
-        const admins = await runQuery(COL_ADMINS, [{ field: 'email', op: 'EQUAL', value: normalizedEmail }]);
-        if (admins && admins.length > 0) {
-          const admin = admins[0];
-          let passwordMatch = false;
-          if (admin.password_hash && admin.password_hash.startsWith('$2b$') && bcrypt) {
-            passwordMatch = bcrypt.compareSync(password, admin.password_hash);
-          } else {
-            const hash = crypto.createHash('sha256').update(password).digest('hex');
-            passwordMatch = (admin.password_hash === hash);
-          }
-          if (passwordMatch) {
-            const role = normalizeRole(admin.role);
-            const name = admin.name || 'Admin';
-            const token = signAdminToken({ email: admin.email, role, name });
-            console.log('[ADMIN LOGIN] DB admin login success: ' + admin.email + ' (role=' + role + ')');
-            if (metrics) metrics.trackAuth(true);
-            res.writeHead(200); res.end(JSON.stringify({
-              token, expiresIn: 86400,
-              admin: { email: admin.email, role, name },
-            }));
-            return;
-          }
-          console.log('[ADMIN LOGIN] Password hash mismatch for DB admin: ' + normalizedEmail);
-        } else {
-          console.log('[ADMIN LOGIN] Admin not found in DB: ' + normalizedEmail);
-        }
-      } catch (dbErr) {
-        console.error('[ADMIN LOGIN] DB query error: ' + dbErr.message);
+    console.log('[ADMIN LOGIN] Looking up admin in DB: ' + normalizedEmail);
+    const admins = await runQuery(COL_ADMINS, [{ field: 'email', op: 'EQUAL', value: normalizedEmail }]);
+    if (admins && admins.length > 0) {
+      const admin = admins[0];
+      let passwordMatch = false;
+      if (admin.password_hash && admin.password_hash.startsWith('$2b$') && bcrypt) {
+        passwordMatch = bcrypt.compareSync(password, admin.password_hash);
+      } else {
+        const hash = crypto.createHash('sha256').update(password).digest('hex');
+        passwordMatch = (admin.password_hash === hash);
       }
+      if (passwordMatch) {
+        const role = normalizeRole(admin.role);
+        const name = admin.name || 'Admin';
+        const token = signAdminToken({ email: admin.email, role, name });
+        console.log('[ADMIN LOGIN] DB admin login success: ' + admin.email + ' (role=' + role + ')');
+        metrics.trackAuth(true);
+        res.writeHead(200); res.end(JSON.stringify({
+          token, expiresIn: 86400,
+          admin: { email: admin.email, role, name },
+        }));
+        return;
+      }
+      console.log('[ADMIN LOGIN] Password hash mismatch for DB admin: ' + normalizedEmail);
     } else {
-      console.log('[ADMIN LOGIN] Database module not available (supabase or shared not loaded)');
+      console.log('[ADMIN LOGIN] Admin not found in DB: ' + normalizedEmail);
     }
 
     recordLoginAttempt(normalizedEmail);
     console.log('[ADMIN LOGIN] Login failed for: ' + normalizedEmail);
-    if (metrics) metrics.trackAuth(false);
+    metrics.trackAuth(false);
     res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid credentials' }));
   } catch (err) {
     console.error('[ADMIN LOGIN] Error: ' + err.message);

@@ -10,14 +10,10 @@ try {
   }
 } catch (_) {}
 
-let requireAdmin;
-try { requireAdmin = require('./_auth.js').requireAdmin; } catch (e) { console.error('[INDEX] _auth.js load failed: ' + e.message); requireAdmin = h => h; }
-let metrics;
-try { metrics = require('./_metrics.js'); } catch (e) { console.error('[INDEX] _metrics.js load failed: ' + e.message); metrics = { trackAPICall() {}, trackAuth() {} }; }
-try {
-  const { initSystemUsers } = require('./_systemInit.js');
-  initSystemUsers().catch(err => console.error('[SYSTEM-INIT] Error: ' + err.message));
-} catch (e) { console.error('[INDEX] _systemInit.js load failed: ' + e.message); }
+const { requireAdmin } = require('./_auth.js');
+const metrics = require('./_metrics.js');
+const { initSystemUsers } = require('./_systemInit.js');
+initSystemUsers().catch(err => console.error('[SYSTEM-INIT] Error: ' + err.message));
 
 // Rate limiter with periodic cleanup to prevent memory leaks
 const rateLimitStore = new Map();
@@ -38,8 +34,6 @@ setInterval(() => {
   }
 }, 300000);
 
-// Lazy handler loading — each handler module is loaded on first request
-// This avoids cold-start failures from any single module and is safer for Vercel.
 const handlerModules = [
   ['adminLogin', '../handlers/adminLogin.js', false],
   ['preRegister', '../handlers/preRegister.js', false],
@@ -116,13 +110,7 @@ function getHandler(name) {
     if (!h) { console.error('[INDEX] ' + name + ' invalid export'); h = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_invalid'})); }; }
     else if (entry[2]) h = requireAdmin(h);
     handlerCache[name] = h;
-  } catch (e) {
-    console.error('[INDEX] Handler load failed: ' + name + ' -> ' + e.message);
-    if (e.stack) console.error('[INDEX] Stack: ' + e.stack.split('\n').slice(0,5).join('\n'));
-    handlerCache[name] = (r,s) => {
-      if (!s.headersSent) { s.writeHead(500, {'Content-Type':'application/json'}); s.end(JSON.stringify({error:'handler_unavailable',detail:e.message})); }
-    };
-  }
+  } catch (e) { console.error('[INDEX] Handler load failed: ' + name + ': ' + e.message); handlerCache[name] = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_unavailable'})); }; }
   return handlerCache[name];
 }
 
@@ -179,7 +167,6 @@ module.exports = async (req, res) => {
   res.writeHead = function (code, ...a) {
     clearTimeout(timeout);
     metrics.trackAPICall(path, req.method, code);
-    // Security headers — use setHeader to preserve any CORS/existing headers
     for (const [k, v] of Object.entries({
       'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none';",
       'X-Content-Type-Options': 'nosniff',
@@ -189,7 +176,6 @@ module.exports = async (req, res) => {
     })) {
       if (!res.getHeader(k)) res.setHeader(k, v);
     }
-    // Auto-set Content-Type for JSON responses
     if (code >= 200 && code < 300 && code !== 204) {
       if (!res.getHeader('Content-Type') && !res.getHeader('content-type')) {
         res.setHeader('Content-Type', 'application/json');
