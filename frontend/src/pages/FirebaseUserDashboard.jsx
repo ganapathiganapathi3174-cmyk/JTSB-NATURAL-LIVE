@@ -380,34 +380,33 @@ export default function FirebaseUserDashboard() {
   return (
     <div className="page-wrap has-bottom-nav">
       {/* Top Bar */}
-      <div className="glass-strong flex flex-between items-center mb-md" style={{ padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)' }}>
+      <div className="glass-strong flex-between items-center mb-md topbar">
         <div className="text-lg font-bold"><span className="text-gradient">JSREE APEX</span></div>
         <div className="flex items-center gap-md">
-          <div style={{ position: 'relative' }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowBellDropdown(v => !v)}
-              style={{ position: 'relative', padding: '0.35rem', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+          <div className="relative">
+            <button className="btn-ghost-icon" onClick={() => setShowBellDropdown(v => !v)}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
-              {unreadCount > 0 && <span className="badge badge-danger badge-xs" style={{ position: 'absolute', top: '-4px', right: '-4px' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
+              {unreadCount > 0 && <span className="badge badge-danger badge-xs badge-abs-tr">{unreadCount > 9 ? '9+' : unreadCount}</span>}
             </button>
               {showBellDropdown && (
                 <>
-                  <div className="modal-overlay" style={{ background: 'transparent' }} onClick={() => setShowBellDropdown(false)} />
-                  <div className="glass-strong card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, width: '340px', maxHeight: '420px', overflowY: 'auto', marginTop: '4px', padding: 0 }}>
-                  <div className="flex-between items-center" style={{ padding: '0.7rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
+                  <div className="modal-overlay is-transparent" onClick={() => setShowBellDropdown(false)} />
+                  <div className="glass-strong card dropdown-notifs">
+                  <div className="flex-between items-center dropdown-notifs-header">
                     <span className="font-semibold text-sm">Notifications</span>
                     <Link to="/fb/messages" className="text-sm font-semibold" onClick={() => setShowBellDropdown(false)}>View all</Link>
                   </div>
                   {recentNotifications.length === 0 ? (
-                    <div className="text-muted text-sm text-center" style={{ padding: '1.5rem' }}>No notifications yet</div>
+                    <div className="text-muted text-sm text-center p-lg">No notifications yet</div>
                   ) : (
                     recentNotifications.map(n => (
-                      <Link to="/fb/messages" key={n.id} className="flex flex-col" style={{ padding: '0.6rem 1rem', borderBottom: '1px solid var(--border-light)', textDecoration: 'none', color: 'inherit', background: n.status === 'unread' ? 'var(--accent-light)' : 'transparent' }}
+                      <Link to="/fb/messages" key={n.id} className={`flex flex-col notif-item ${n.status === 'unread' ? 'notif-unread' : ''}`}
                         onClick={() => setShowBellDropdown(false)}>
-                        <div className="text-sm" style={{ fontWeight: n.status === 'unread' ? 600 : 400, marginBottom: '0.15rem' }}>{n.title || 'Notification'}</div>
+                        <div className={`text-sm ${n.status === 'unread' ? 'font-semibold' : ''}`}>{n.title || 'Notification'}</div>
                         <div className="text-muted text-sm truncate">{n.message}</div>
-                        <div className="text-xs" style={{ color: 'var(--muted-2)', marginTop: '0.2rem' }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</div>
+                        <div className="text-xs text-muted-2">{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</div>
                       </Link>
                     ))
                   )}
@@ -612,7 +611,7 @@ export default function FirebaseUserDashboard() {
               <h3 className="text-gradient font-semibold mb-xs">Refer & Earn</h3>
               <p className="text-muted text-sm mb-md">Invite friends to earn rewards</p>
 
-              <div className="flex items-center gap-sm mb-md" style={{ flexWrap: 'wrap' }}>
+              <div className="flex items-center gap-sm mb-md flex-wrap">
                 <span className="chip">Code: <strong>{user?.referral_code}</strong></span>
                 <button className={`btn btn-sm ${copied ? 'btn-success' : 'btn-primary'}`} onClick={copyReferralCode}>
                   {copied ? '✓ Copied!' : 'Copy Code'}
@@ -625,7 +624,7 @@ export default function FirebaseUserDashboard() {
                 )}
               </div>
 
-              <div className="flex items-center gap-lg mb-md" style={{ flexWrap: 'wrap' }}>
+              <div className="flex items-center gap-lg mb-md flex-wrap">
                 <div className="flex items-center gap-sm">
                   <span className={`text-lg font-bold ${approvedReferralCount >= MAX_REFERRALS ? 'text-gradient-success' : ''}`}>
                     {approvedReferralCount}
@@ -634,7 +633,7 @@ export default function FirebaseUserDashboard() {
                 </div>
                 {pendingReferralCount > 0 && (
                   <div className="flex items-center gap-sm">
-                    <span className="text-lg font-bold" style={{ color: 'var(--warning)' }}>{pendingReferralCount}</span>
+                    <span className="text-lg font-bold text-warning">{pendingReferralCount}</span>
                     <span className="text-muted text-sm">Pending</span>
                   </div>
                 )}
@@ -689,17 +688,17 @@ export default function FirebaseUserDashboard() {
         </h3>
         <p className="text-muted text-sm mb-md">Add funds to your wallet via UPI. Payment is verified automatically.</p>
 
-        <div className="stats-grid mb-md" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="stats-grid-4 mb-md">
           <div className="glass stat-card text-center">
-            <div className="text-lg font-bold" style={{ color: 'var(--success)' }}>{approvedTopups.length}</div>
+            <div className="text-lg font-bold text-success">{approvedTopups.length}</div>
             <div className="text-sm text-muted">Approved</div>
           </div>
           <div className="glass stat-card text-center">
-            <div className="text-lg font-bold" style={{ color: 'var(--warning)' }}>{pendingTopups.length}</div>
+            <div className="text-lg font-bold text-warning">{pendingTopups.length}</div>
             <div className="text-sm text-muted">Pending</div>
           </div>
           <div className="glass stat-card text-center">
-            <div className="text-lg font-bold" style={{ color: 'var(--danger)' }}>{rejectedTopups.length}</div>
+            <div className="text-lg font-bold text-danger">{rejectedTopups.length}</div>
             <div className="text-sm text-muted">Rejected</div>
           </div>
           <div className="glass stat-card text-center">
@@ -862,7 +861,7 @@ export default function FirebaseUserDashboard() {
           {approvedReferralCount === 0 ? (
             <p className="text-muted text-sm">No referrals yet. Share your referral code to invite members.</p>
           ) : (
-            <div className="card-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+            <div className="card-grid">
               {referrals.map(ref => (
                 <div key={ref.id} className="card-dim">
                   <div className="font-semibold text-sm">{ref.name}</div>

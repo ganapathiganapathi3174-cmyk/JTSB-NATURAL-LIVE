@@ -24,11 +24,27 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
+          vendor: ['react', 'react-dom', 'react-router-dom', 'framer-motion'],
+          admin: [
+            './src/pages/FirebaseAdminDashboardPage.jsx',
+            './src/pages/FirebaseAdminPaymentsPage.jsx',
+            './src/pages/FirebaseAdminUsersPage.jsx',
+            './src/pages/FirebaseAdminTopupsPage.jsx',
+            './src/pages/FirebaseAdminUPIPaymentsPage.jsx',
+            './src/pages/FirebaseAdminToolsPage.jsx',
+            './src/pages/FirebaseAdminQueuePage.jsx',
+            './src/pages/FirebaseAdminStatusPage.jsx',
+            './src/pages/FirebaseAdminCyclesPage.jsx',
+            './src/pages/AdminChat.jsx',
+            './src/pages/AdminMessageHistory.jsx',
+            './src/pages/AdminPendingPaymentsPage.jsx',
+            './src/pages/AdminUpgradeRequestsPage.jsx',
+            './src/pages/AdminSponsorTransfersPage.jsx',
+          ],
         },
       },
     },
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 600,
   },
   optimizeDeps: {
     include: [],

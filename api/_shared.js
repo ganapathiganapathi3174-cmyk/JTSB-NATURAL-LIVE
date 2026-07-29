@@ -3,7 +3,8 @@ const crypto = require('crypto');
 // ── TEST MODE CONFIGURATION ──
 // Set TEST_MODE=true to use ₹1 fixed amount across all payment modules
 // All existing business logic is preserved: referral, wallet, sponsor, OTP
-const TEST_MODE = true;
+// In production, set NODE_ENV=production or TEST_MODE=false in .env.local to disable
+const TEST_MODE = process.env.NODE_ENV === 'production' ? false : (process.env.TEST_MODE !== 'false');
 const TEST_PAYMENT_AMOUNT = 1;
 const TEST_UPI_ID = 'jayarajj126-3@okicici';
 const TEST_PAYEE_NAME = 'Test Payment';

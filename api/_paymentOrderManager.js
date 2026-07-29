@@ -352,11 +352,6 @@ async function runVerificationWorker() {
         await executeVerifiedOrder(order, v, { userId: order.user_id, pendingRegId: order.pending_reg_id, userEnteredUtr: order.utr, userEnteredUpi: null })
           .catch(e => log('Worker: post-approval exec err: ' + e.message));
       }
-      if (isVerified) {
-        log('Worker: approved — executing post-approval for ' + orderId);
-        await executeVerifiedOrder(order, v, { userId: order.user_id, pendingRegId: order.pending_reg_id, userEnteredUtr: order.utr, userEnteredUpi: null })
-          .catch(e => log('Worker: post-approval exec err: ' + e.message));
-      }
       // Update upi_payments status
       try {
         const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
@@ -501,7 +496,7 @@ async function executeVerifiedOrder(order, verificationResult, extra) {
       screenshot_url: order.screenshot_url,
       status: 'verified',
       ocr_result: verificationResult.ocrData || null,
-      final_score: verificationResult.confidence || 0 || 0,
+      final_score: verificationResult.confidence || 0,
       fraud_score: 0,
       user_id: newUserId,
       pending_reg_id: pendingRegId,
@@ -584,7 +579,7 @@ async function executeVerifiedOrder(order, verificationResult, extra) {
       screenshot_url: order.screenshot_url,
       status: 'verified',
       ocr_result: verificationResult.ocrData || null,
-      final_score: verificationResult.confidence || 0 || 0,
+      final_score: verificationResult.confidence || 0,
       fraud_score: 0,
       user_id: userId,
       payment_date: completedAt,

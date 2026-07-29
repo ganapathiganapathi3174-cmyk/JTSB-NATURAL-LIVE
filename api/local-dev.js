@@ -18,10 +18,16 @@ function rateLimit(key, maxRequests = 60, windowMs = 60000) {
   if (entry.count > maxRequests) return { limited: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
   return { limited: false };
 }
+// Periodically purge stale rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore) {
+    if (now > entry.resetAt) rateLimitStore.delete(key);
+  }
+}, 300000);
 
-// Silence expected dev warnings
-const origWarn = console.warn; console.warn = (...a) => { const m = a.join(' '); if (m.includes('not set') || m.includes('unhealthy') || m.includes('Connection failed') || m.includes('[HEALTH]') || m.includes('[TURSO]') || m.includes('[NEON]') || m.includes('[R2]')) return; origWarn(...a); };
-const origLog = console.log; console.log = (...a) => { const m = a.join(' '); if (m.includes('[HEALTH]') || m.includes('[TURSO]') || m.includes('[NEON]') || m.includes('[R2]')) return; origLog(...a); };
+// Suppress expected non-critical health check noise only
+const origWarn = console.warn; console.warn = (...a) => { const m = a.join(' '); if (m.includes('not set') && (m.includes('TURSO') || m.includes('NEON') || m.includes('R2'))) return; origWarn(...a); };
 try { require('./_turso.js').ensureBackupTables().catch(() => {}); } catch (_) { console.log('[TURSO] Skipped — native module not available'); }
 require('./_queue.js').ensureQueueTables().then(() => require('./_queue.js').recoverPending()).catch(() => {});
 require('./_health.js').startHealthChecks();

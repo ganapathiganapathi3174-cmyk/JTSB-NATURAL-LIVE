@@ -4,127 +4,123 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 const ADMIN_KEY = 'fb_admin_token';
 
 function IconDashboard() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-    </svg>
-  );
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>;
 }
-
 function IconPayments() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="1" y="5" width="22" height="14" rx="2" />
-      <line x1="1" y1="10" x2="23" y2="10" />
-      <circle cx="12" cy="13" r="2" />
-    </svg>
-  );
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="5" width="22" height="14" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /><circle cx="12" cy="13" r="2" /></svg>;
 }
-
 function IconTopups() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-    </svg>
-  );
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>;
 }
-
 function IconUsers() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
 }
-
 function IconStatus() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <line x1="3" y1="9" x2="21" y2="9" />
-      <line x1="9" y1="21" x2="9" y2="9" />
-    </svg>
-  );
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>;
 }
-
 function IconMessages() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-      <polyline points="22,6 12,13 2,6" />
-    </svg>
-  );
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>;
 }
-
 function IconChat() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      <line x1="12" y1="8" x2="12" y2="12" />
-      <line x1="12" y1="16" x2="12.01" y2="16" />
-    </svg>
-  );
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>;
 }
-
 function IconUPI() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <line x1="2" y1="10" x2="22" y2="10" />
-      <polyline points="16 14 18 16 20 14" />
-    </svg>
-  );
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /><polyline points="16 14 18 16 20 14" /></svg>;
 }
-
-function IconLogout() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
 function IconCycles() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-    </svg>
-  );
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>;
+}
+function IconTools() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>;
+}
+function IconQueue() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>;
+}
+function IconLogout() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>;
+}
+function IconSun() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>;
+}
+function IconMoon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>;
 }
 
-const navItems = [
-  { path: '/fb-admin/dashboard', label: 'Dashboard', icon: IconDashboard },
-  { path: '/fb-admin/payments', label: 'Payments', icon: IconPayments },
-  { path: '/fb-admin/topups', label: 'Topups', icon: IconTopups },
-  { path: '/fb-admin/upi-payments', label: 'UPI Payments', icon: IconUPI },
-  { path: '/fb-admin/users', label: 'Users', icon: IconUsers },
-  { path: '/fb-admin/cycles', label: 'Cycles', icon: IconCycles },
-  { path: '/fb-admin/status', label: 'Status Board', icon: IconStatus },
-  { path: '/fb-admin/tools', label: 'Tools', icon: IconStatus },
-  { path: '/fb-admin/queue', label: 'Queue', icon: IconStatus },
-  { path: '/fb-admin/pending-queue', label: 'Pending Queue', icon: IconStatus },
-  { path: '/fb-admin/upgrade-requests', label: 'Upgrade Requests', icon: IconTopups },
-  { path: '/fb-admin/sponsor-transfers', label: 'Sponsor Transfers', icon: IconStatus },
-  { path: '/fb-admin/messages', label: 'Messages', icon: IconMessages },
-  { path: '/fb-admin/chat', label: 'Chat', icon: IconChat },
+const navGroups = [
+  {
+    label: 'Overview',
+    items: [
+      { path: '/fb-admin/dashboard', label: 'Dashboard', icon: IconDashboard },
+      { path: '/fb-admin/queue', label: 'Queue', icon: IconQueue },
+      { path: '/fb-admin/pending-queue', label: 'Pending Queue', icon: IconQueue },
+    ],
+  },
+  {
+    label: 'Payments',
+    items: [
+      { path: '/fb-admin/payments', label: 'Payments', icon: IconPayments },
+      { path: '/fb-admin/topups', label: 'Topups', icon: IconTopups },
+      { path: '/fb-admin/upi-payments', label: 'UPI Payments', icon: IconUPI },
+    ],
+  },
+  {
+    label: 'Users & Referrals',
+    items: [
+      { path: '/fb-admin/users', label: 'Users', icon: IconUsers },
+      { path: '/fb-admin/status', label: 'Status Board', icon: IconStatus },
+      { path: '/fb-admin/cycles', label: 'Cycles', icon: IconCycles },
+      { path: '/fb-admin/sponsor-transfers', label: 'Sponsor Transfers', icon: IconUsers },
+      { path: '/fb-admin/upgrade-requests', label: 'Upgrades', icon: IconTopups },
+    ],
+  },
+  {
+    label: 'Support',
+    items: [
+      { path: '/fb-admin/messages', label: 'Messages', icon: IconMessages },
+      { path: '/fb-admin/chat', label: 'Chat', icon: IconChat },
+    ],
+  },
+  {
+    label: 'Admin',
+    items: [
+      { path: '/fb-admin/tools', label: 'Tools', icon: IconTools },
+    ],
+  },
 ];
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('jsree-theme', theme);
+}
+
+function getInitialTheme() {
+  const stored = localStorage.getItem('jsree-theme');
+  if (stored === 'light' || stored === 'dark') return stored;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 
 export default function AdminSidebar({ pendingCounts = {}, userName }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [theme, setTheme] = useState(getInitialTheme);
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   useEffect(() => {
     setOpen(false);
   }, [location.pathname]);
+
+  function toggleTheme() {
+    setTheme(t => t === 'light' ? 'dark' : 'light');
+  }
+
+  function toggleGroup(label) {
+    setCollapsedGroups(g => ({ ...g, [label]: !g[label] }));
+  }
 
   function logout() {
     localStorage.removeItem(ADMIN_KEY);
@@ -139,12 +135,12 @@ export default function AdminSidebar({ pendingCounts = {}, userName }) {
 
   return (
     <>
-      <button className="sidebar-toggle" onClick={() => setOpen(!open)} aria-label="Toggle sidebar">
+      <button className="sidebar-toggle" onClick={() => setOpen(o => !o)} aria-label={open ? 'Close sidebar' : 'Open sidebar'}>
         {open ? '\u2715' : '\u2630'}
       </button>
-      <div className={`sidebar-overlay${open ? ' open' : ''}`} onClick={() => setOpen(false)} />
+      <div className={`sidebar-overlay${open ? ' open' : ''}`} onClick={() => setOpen(false)} aria-hidden="true" />
       <aside className={`sidebar${open ? ' open' : ''}`}>
-        <div className="sidebar-header glass-strong" style={{ margin: '0.5rem', borderRadius: 'var(--radius-lg)' }}>
+        <div className="sidebar-header">
           <div className="sidebar-brand">
             <div className="sidebar-brand-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -153,11 +149,14 @@ export default function AdminSidebar({ pendingCounts = {}, userName }) {
                 <path d="M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className="sidebar-brand-text text-gradient">JSREE APEX</span>
+            <span className="sidebar-brand-text">JSREE APEX</span>
           </div>
+          <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
+            {theme === 'light' ? <IconMoon /> : <IconSun />}
+          </button>
         </div>
 
-        <div className="sidebar-user glass" style={{ margin: '0 0.5rem 0.5rem', borderRadius: 'var(--radius-lg)' }}>
+        <div className="sidebar-user">
           <div className="sidebar-user-avatar">{(userName || 'A')[0].toUpperCase()}</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">{userName || 'Admin'}</div>
@@ -165,23 +164,45 @@ export default function AdminSidebar({ pendingCounts = {}, userName }) {
           </div>
         </div>
 
-        <nav className="sidebar-nav">
-          {navItems.map(item => {
-            const isActive = location.pathname === item.path;
-            const Icon = item.icon;
-            const badge = getBadgeCount(item.path);
+        <nav className="sidebar-nav" aria-label="Admin navigation">
+          {navGroups.map(group => {
+            const isCollapsed = collapsedGroups[group.label];
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`sidebar-link${isActive ? ' active' : ''}`}
-              >
-                <span className="sidebar-link-icon"><Icon /></span>
-                <span className="sidebar-link-label">{item.label}</span>
-                {badge != null && badge > 0 && (
-                  <span className="sidebar-badge">{badge > 99 ? '99+' : badge}</span>
-                )}
-              </Link>
+              <div key={group.label} className="sidebar-group">
+                <button
+                  className="sidebar-group-label"
+                  onClick={() => toggleGroup(group.label)}
+                  aria-expanded={!isCollapsed}
+                >
+                  <span>{group.label}</span>
+                  <svg
+                    width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ transform: `rotate(${isCollapsed ? 0 : 180}deg)`, transition: 'transform 0.2s ease' }}
+                  >
+                    <polyline points="6 15 12 9 18 15" />
+                  </svg>
+                </button>
+                {!isCollapsed && group.items.map(item => {
+                  const isActive = location.pathname === item.path;
+                  const Icon = item.icon;
+                  const badge = getBadgeCount(item.path);
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`sidebar-link${isActive ? ' active' : ''}`}
+                      aria-current={isActive ? 'page' : undefined}
+                    >
+                      <span className="sidebar-link-icon"><Icon /></span>
+                      <span className="sidebar-link-label">{item.label}</span>
+                      {badge != null && badge > 0 && (
+                        <span className="sidebar-badge">{badge > 99 ? '99+' : badge}</span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>

@@ -435,25 +435,21 @@ export default function FirebaseAdminDashboardPage() {
           </div>
         </div>
 
-        <div className="stats-grid animate-fade-in" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-          <div className="card card-hover glass-card" style={{ padding: '1.5rem' }}>
+        <div className="stats-grid-2 animate-fade-in">
+          <div className="card card-hover glass-card stat-card-lg">
             <div className="flex items-center gap-sm mb-sm">
-              <div style={{ fontSize: '1.5rem', opacity: 0.6 }}>{'\u{1F4B0}'}</div>
+              <span className="stat-icon">{'\u{1F4B0}'}</span>
               <span className="text-sm text-muted font-medium">Total Payment Amount</span>
             </div>
-            <div className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>
-              {'\u20B9'}{stats.totalPackagePaymentAmount.toLocaleString('en-IN')}
-            </div>
+            <div className="text-2xl font-bold text-primary">{'\u20B9'}{stats.totalPackagePaymentAmount.toLocaleString('en-IN')}</div>
             <div className="text-xs text-muted mt-xs">{'\u20B9'}120 + {'\u20B9'}500 + {'\u20B9'}1,000 packages</div>
           </div>
-          <div className="card card-hover glass-card" style={{ padding: '1.5rem' }}>
+          <div className="card card-hover glass-card stat-card-lg">
             <div className="flex items-center gap-sm mb-sm">
-              <div style={{ fontSize: '1.5rem', opacity: 0.6 }}>{'\u{1F4B3}'}</div>
+              <span className="stat-icon">{'\u{1F4B3}'}</span>
               <span className="text-sm text-muted font-medium">Total Topup Amount</span>
             </div>
-            <div className="text-2xl font-bold" style={{ color: 'var(--success)' }}>
-              {'\u20B9'}{stats.totalTopupAmount.toLocaleString('en-IN')}
-            </div>
+            <div className="text-2xl font-bold text-success">{'\u20B9'}{stats.totalTopupAmount.toLocaleString('en-IN')}</div>
             <div className="text-xs text-muted mt-xs">Topup transactions only</div>
           </div>
         </div>
@@ -501,26 +497,26 @@ export default function FirebaseAdminDashboardPage() {
           </div>
           <div className="card-body">
             <div className="priority-grid">
-              <Link to="/fb-admin/topups" className="priority-card" style={{ textDecoration: 'none' }}>
+              <Link to="/fb-admin/topups" className="priority-card">
                 <div>{'\u{1F4E4}'}</div>
-                <div className="stat-value" style={{ color: 'var(--accent)' }}>{stats.pendingTopups}</div>
+                <div className="stat-value text-accent">{stats.pendingTopups}</div>
                 <div className="stat-label">Pending Topups</div>
                 <span className="priority-link">View {'\u2192'}</span>
               </Link>
-              <Link to="/fb-admin/upgrade-requests" className="priority-card" style={{ textDecoration: 'none' }}>
+              <Link to="/fb-admin/upgrade-requests" className="priority-card">
                 <div>{'\u{1F51D}'}</div>
-                <div className="stat-value" style={{ color: 'var(--warning)' }}>{sseCounts.pending_upgrade_requests}</div>
+                <div className="stat-value text-warning">{sseCounts.pending_upgrade_requests}</div>
                 <div className="stat-label">Upgrade Requests</div>
                 <span className="priority-link">View {'\u2192'}</span>
               </Link>
-              <Link to="/fb-admin/payments?status=approved" className="priority-card" style={{ textDecoration: 'none' }}>
+              <Link to="/fb-admin/payments?status=approved" className="priority-card">
                 <div>{'\u{1F4B3}'}</div>
-                <div className="stat-value" style={{ color: 'var(--success)' }}>{stats.approvedPayments}</div>
+                <div className="stat-value text-success">{stats.approvedPayments}</div>
                 <div className="stat-label">Approved Payments</div>
               </Link>
-              <Link to="/fb-admin/topups?status=approved" className="priority-card" style={{ textDecoration: 'none' }}>
+              <Link to="/fb-admin/topups?status=approved" className="priority-card">
                 <div>{'\u{1F4E4}'}</div>
-                <div className="stat-value" style={{ color: 'var(--success)' }}>{stats.approvedTopups}</div>
+                <div className="stat-value text-success">{stats.approvedTopups}</div>
                 <div className="stat-label">Approved Top-Ups</div>
                 <span className="priority-link">View {'\u2192'}</span>
               </Link>
@@ -560,33 +556,33 @@ export default function FirebaseAdminDashboardPage() {
                   <div className="stat-sub">{verificationMetrics.rejectionRate}% rate</div>
                 </div>
               </div>
-              <div className="stats-grid mt-md" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+              <div className="stats-grid-4 mt-md">
                 <div className="card-dim text-center">
                   <div className="text-xs text-muted mb-xs">Avg OCR Confidence</div>
-                  <div className="stat-value" style={{ color: verificationMetrics.avgOcrConfidence > 80 ? 'var(--success)' : verificationMetrics.avgOcrConfidence > 50 ? 'var(--warning)' : 'var(--danger)' }}>
+                  <div className={`stat-value ${verificationMetrics.avgOcrConfidence > 80 ? 'text-success' : verificationMetrics.avgOcrConfidence > 50 ? 'text-warning' : ''}`}>
                     {verificationMetrics.avgOcrConfidence}%
                   </div>
                 </div>
                 <div className="card-dim text-center">
                   <div className="text-xs text-muted mb-xs">Avg Final Score</div>
-                  <div className="stat-value" style={{ color: verificationMetrics.avgFinalScore > 80 ? 'var(--success)' : verificationMetrics.avgFinalScore > 50 ? 'var(--warning)' : 'var(--danger)' }}>
+                  <div className={`stat-value ${verificationMetrics.avgFinalScore > 80 ? 'text-success' : verificationMetrics.avgFinalScore > 50 ? 'text-warning' : ''}`}>
                     {verificationMetrics.avgFinalScore}%
                   </div>
                 </div>
                 <div className="card-dim text-center">
                   <div className="text-xs text-muted mb-xs">Avg Fraud Score</div>
-                  <div className="stat-value" style={{ color: verificationMetrics.avgFraudScore < 20 ? 'var(--success)' : verificationMetrics.avgFraudScore < 50 ? 'var(--warning)' : 'var(--danger)' }}>
+                  <div className={`stat-value ${verificationMetrics.avgFraudScore < 20 ? 'text-success' : verificationMetrics.avgFraudScore < 50 ? 'text-warning' : ''}`}>
                     {verificationMetrics.avgFraudScore}/100
                   </div>
                 </div>
                 <div className="card-dim text-center">
                   <div className="text-xs text-muted mb-xs">Fraud Detected</div>
-                  <div className="stat-value" style={{ color: verificationMetrics.fraudDetected > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                  <div className={`stat-value ${verificationMetrics.fraudDetected > 0 ? '' : 'text-success'}`}>
                     {verificationMetrics.fraudDetected}
                   </div>
                 </div>
               </div>
-              <div className="stats-grid mt-sm" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+              <div className="stats-grid-2 mt-sm">
                 <div className="card-dim text-center">
                   <div className="text-xs text-muted mb-xs">Pending Queue</div>
                   <div className="stat-value" style={{ color: verificationMetrics.pending > 0 ? 'var(--warning)' : 'var(--success)' }}>
@@ -746,7 +742,7 @@ export default function FirebaseAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="stats-grid">
+            <div className="stats-grid-4">
               <div className="stat-card">
                 <div className="stat-value text-lg">₹{paymentAnalytics.todayCollection.toFixed(2)}</div>
                 <div className="stat-label text-xs">Daily Collection</div>
@@ -766,7 +762,7 @@ export default function FirebaseAdminDashboardPage() {
             </div>
 
             <div className="mt-lg">
-              <div className="flex flex-between items-center mb-md" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div className="flex flex-between items-center mb-md border-bottom">
                 <h3 className="card-title text-gradient-success" style={{ fontSize: '0.95rem' }}>
                   {'\u{1F4CB}'} Payment Collection Records
                   <span className="text-xs text-muted font-semibold">
@@ -820,7 +816,7 @@ export default function FirebaseAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="stats-grid mt-lg" style={{ gap: '0.5rem' }}>
+            <div className="stats-grid-4 mt-lg" style={{ gap: '0.5rem' }}>
               <div className="card-dim text-center">
                 <div className="text-xs text-muted mb-xs">Payments</div>
                 <div className="stat-value" style={{ color: 'var(--success)' }}>{paymentAnalytics.approvedPaymentsCount}</div>
