@@ -66,16 +66,7 @@ const handlerModules = [
   ['paymentConfirm', '../handlers/paymentConfirm.js', false],
   ['createSmsSession', '../handlers/createSmsSession.js', false],
   ['smsPaymentConfirm', '../handlers/smsPaymentConfirm.js', false],
-  ['enterprisePayment', '../handlers/enterprisePaymentSubmit.js', false],
-  ['enterpriseVerifyOtp', '../handlers/enterpriseVerifyOtp.js', false],
-  ['enterpriseResendOtp', '../handlers/enterpriseResendOtp.js', false],
-  ['pipelinePayment', '../handlers/pipelinePaymentSubmit.js', false],
-  ['pipelineVerifyOtp', '../handlers/pipelineVerifyOtp.js', false],
-  ['pipelineResendOtp', '../handlers/pipelineResendOtp.js', false],
-  ['createUPIOrder', '../handlers/createUPIOrder.js', false],
-  ['getUPIOrderStatus', '../handlers/getUPIOrderStatus.js', false],
-  ['webhookUPIConfirm', '../handlers/webhookUPIConfirm.js', false],
-  ['retryUPIOrder', '../handlers/retryUPIOrder.js', false],
+
   ['companionPayment', '../handlers/companionPayment.js', false],
   ['adminLogout', '../handlers/adminLogout.js', false],
   ['getUPIPayments', '../handlers/getUPIPayments.js', true],
@@ -119,7 +110,6 @@ const handlerModules = [
   ['approveSponsor', '../handlers/approveSponsor.js', true],
   ['rejectSponsor', '../handlers/rejectSponsor.js', true],
   ['sponsorClaim', '../handlers/sponsorClaim.js', false],
-  ['preRegisterFiles', '../handlers/preRegisterFiles.js', false],
 ];
 for (const [name, modPath, needsAdmin] of handlerModules) {
   try {
