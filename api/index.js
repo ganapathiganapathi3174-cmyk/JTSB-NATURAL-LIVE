@@ -179,23 +179,20 @@ module.exports = async (req, res) => {
   res.writeHead = function (code, ...a) {
     clearTimeout(timeout);
     metrics.trackAPICall(path, req.method, code);
-    // Security headers — injected on every response
-    const securityHeaders = {
+    // Security headers — use setHeader to preserve any CORS/existing headers
+    for (const [k, v] of Object.entries({
       'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none';",
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-    };
-    if (a.length === 0 || (a.length >= 1 && typeof a[0] === 'number')) {
-      const headers = { ...securityHeaders, 'Content-Type': 'application/json' };
-      origWH.call(res, code, ...a, headers);
-      return;
+    })) {
+      if (!res.getHeader(k)) res.setHeader(k, v);
     }
-    if (typeof a[0] === 'object') {
-      Object.assign(a[0], securityHeaders);
-      if (!a[0]['Content-Type'] && !a[0]['content-type'] && code >= 200 && code < 300 && code !== 204) {
-        a[0]['Content-Type'] = 'application/json';
+    // Auto-set Content-Type for JSON responses
+    if (code >= 200 && code < 300 && code !== 204) {
+      if (!res.getHeader('Content-Type') && !res.getHeader('content-type')) {
+        res.setHeader('Content-Type', 'application/json');
       }
     }
     return origWH(code, ...a);
