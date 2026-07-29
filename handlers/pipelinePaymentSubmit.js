@@ -1,8 +1,7 @@
 const {
   ALLOWED_AMOUNTS, ACCEPTED_UPI, OTP_EXPIRY_MS,
   otpSessions, generateSessionId,
-  runFullPipeline, createOtpSession,
-} = require('../api/_pipelineEngine.js');
+} = require('../api/_otpManager.js');
 const { COL_PENDING_REGS, COL_USERS, COL_UPI_PAYMENTS } = require('../api/_shared.js');
 const { runQuery, addDoc } = require('../api/_supabase.js');
 
@@ -41,41 +40,13 @@ module.exports = async (req, res) => {
     otpSessions.set(sessionId, session);
 
     log('SUBMIT', `Session ${sessionId}: ${paymentType}, amount=${amount}, utr=${utr.slice(0, 6)}****`);
-
-    const s5 = await runFullPipeline(session);
+    session.status = 'pending_review';
     otpSessions.set(sessionId, session);
-
-    const stages = {
-      imageIntegrity: session.stages.stage1?.passed,
-      ocrEngines: session.ocrEngineCount,
-      ocrConfidence: session.ocrConfidence,
-      visualCrossCheck: session.stages.stage3?.passed,
-      businessValidation: session.stages.stage4?.passed,
-    };
-
-    if (s5.decision === 'approve') {
-      createOtpSession(session);
-      otpSessions.set(sessionId, session);
-      log('SUBMIT', `Approve decision — OTP sent for session ${sessionId}`);
-      res.writeHead(200); res.end(JSON.stringify({
-        sessionId, status: 'otp_sent',
-        decision: 'approve', reasons: s5.reasons,
-        matchedFields: s5.matched_fields,
-        stages,
-        otpExpiresAt: session.otpExpiresAt,
-        otpLength: 6,
-      }));
-    } else {
-      session.status = s5.decision;
-      otpSessions.set(sessionId, session);
-      log('SUBMIT', `${s5.decision.toUpperCase()} — ${s5.reasons.join('; ')}`);
-      res.writeHead(200); res.end(JSON.stringify({
-        sessionId, status: s5.decision,
-        reasons: s5.reasons,
-        matchedFields: s5.matched_fields,
-        stages,
-      }));
-    }
+    res.writeHead(200); res.end(JSON.stringify({
+      sessionId, status: 'pending_review',
+      message: 'Payment submitted for verification. Admin will review shortly.',
+      paymentType, amount: Number(amount),
+    }));
 
     try {
       await addDoc(COL_UPI_PAYMENTS, {

@@ -1,4 +1,4 @@
-const { verifyOtp, processPaymentApproval } = require('../api/_pipelineEngine.js');
+const { verifyOtp, processPaymentApproval } = require('../api/_otpManager.js');
 
 module.exports = async (req, res) => {
   try {

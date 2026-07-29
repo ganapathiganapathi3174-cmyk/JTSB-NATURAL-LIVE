@@ -1,9 +1,7 @@
 const {
   ALLOWED_AMOUNTS, ACCEPTED_UPI, OTP_EXPIRY_MS, MAX_OTP_ATTEMPTS,
   otpSessions, generateOtp, generateSessionId,
-  stage1_imageIntegrity, stage2_multiOcr, stage3_visualCrossCheck,
-  stage4_businessValidation, stage5_evidenceFusion,
-} = require('../api/_enterpriseEngine.js');
+} = require('../api/_otpManager.js');
 const { COL_PENDING_REGS, COL_USERS, COL_UPI_PAYMENTS } = require('../api/_shared.js');
 const { runQuery, addDoc } = require('../api/_supabase.js');
 
@@ -43,74 +41,13 @@ module.exports = async (req, res) => {
     otpSessions.set(sessionId, session);
 
     log('ENTERPRISE', `Session ${sessionId}: ${paymentType}, amount=${amount}, utr=${utr.slice(0, 6)}****`);
-
-    const expected = { amount: Number(amount), utr: utr.toUpperCase().trim(), paymentDate: session.paymentDate };
-
-    const s1 = await stage1_imageIntegrity(screenshotUrl);
-    session.stages.stage1 = s1;
-    if (!s1.passed && s1.confidence < 20) {
-      session.status = 'failed';
-      otpSessions.set(sessionId, session);
-      res.writeHead(200); res.end(JSON.stringify({ sessionId, status: 'failed', stage: 1, reason: 'Image integrity check failed' })); return;
-    }
-
-    const s2 = await stage2_multiOcr(screenshotUrl, expected);
-    session.stages.stage2 = s2;
-    session.ocrEngineCount = s2.engineCount || 0;
-    session.ocrConfidence = s2.confidence || 0;
-
-    const s3 = await stage3_visualCrossCheck(s2);
-    session.stages.stage3 = s3;
-
-    const s4 = await stage4_businessValidation(s2, s3, expected);
-    session.stages.stage4 = s4;
-
-    const s5 = await stage5_evidenceFusion(s4, s3, s2, expected);
-    session.stages.stage5 = s5;
-    session.decision = s5.decision;
-    session.reasons = s5.reasons;
-    session.matchedFields = s5.matched_fields;
-
-    if (s5.decision === 'approve') {
-      const otp = generateOtp();
-      session.otp = otp;
-      session.otpExpiresAt = Date.now() + OTP_EXPIRY_MS;
-      session.otpAttempts = 0;
-      session.otpVerified = false;
-      session.status = 'otp_sent';
-      otpSessions.set(sessionId, session);
-      log('ENTERPRISE', `✅ Approve decision — OTP ${otp} sent for session ${sessionId}`);
-      res.writeHead(200); res.end(JSON.stringify({
-        sessionId, status: 'otp_sent',
-        decision: 'approve', reasons: s5.reasons,
-        matchedFields: s5.matched_fields,
-        stages: {
-          imageIntegrity: s1.passed,
-          ocrEngines: s2.engineCount || 0,
-          ocrConfidence: s2.confidence,
-          visualCrossCheck: s3.passed,
-          businessValidation: s4.passed,
-        },
-        otpExpiresAt: session.otpExpiresAt,
-        otpLength: 6,
-      }));
-    } else {
-      session.status = s5.decision;
-      otpSessions.set(sessionId, session);
-      log('ENTERPRISE', `${s5.decision === 'manual_review' ? '⏸' : '❌'} ${s5.decision.toUpperCase()} — ${s5.reasons.join('; ')}`);
-      res.writeHead(200); res.end(JSON.stringify({
-        sessionId, status: s5.decision,
-        reasons: s5.reasons,
-        matchedFields: s5.matched_fields,
-        stages: {
-          imageIntegrity: s1.passed,
-          ocrEngines: s2.engineCount || 0,
-          ocrConfidence: s2.confidence,
-          visualCrossCheck: s3.passed,
-          businessValidation: s4.passed,
-        },
-      }));
-    }
+    session.status = 'pending_review';
+    otpSessions.set(sessionId, session);
+    res.writeHead(200); res.end(JSON.stringify({
+      sessionId, status: 'pending_review',
+      message: 'Payment submitted for verification.',
+      paymentType, amount: Number(amount),
+    }));
 
     try { await addDoc(COL_UPI_PAYMENTS, { utr, upi_id: ACCEPTED_UPI, amount: Number(amount), amount_option: String(amount), payment_type: paymentType, screenshot_url: screenshotUrl, payment_date: session.paymentDate, status: session.status === 'otp_sent' ? 'pending_otp' : session.status, enterprise_session: sessionId, created_at: new Date().toISOString() }); } catch (e) { log('ENTERPRISE', `DB save skipped: ${e.message}`); }
   } catch (e) {

@@ -1,4 +1,4 @@
-const { otpSessions, MAX_OTP_ATTEMPTS, processPaymentApproval } = require('../api/_enterpriseEngine.js');
+const { otpSessions, MAX_OTP_ATTEMPTS, processPaymentApproval } = require('../api/_otpManager.js');
 
 module.exports = async (req, res) => {
   try {

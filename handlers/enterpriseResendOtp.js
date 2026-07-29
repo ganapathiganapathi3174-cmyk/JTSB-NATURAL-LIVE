@@ -1,4 +1,4 @@
-const { otpSessions, OTP_EXPIRY_MS, generateOtp } = require('../api/_enterpriseEngine.js');
+const { otpSessions, OTP_EXPIRY_MS, generateOtp } = require('../api/_otpManager.js');
 
 module.exports = async (req, res) => {
   try {

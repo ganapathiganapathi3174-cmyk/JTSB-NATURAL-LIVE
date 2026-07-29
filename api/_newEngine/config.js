@@ -1,0 +1,47 @@
+const { TEST_MODE, TEST_PAYMENT_AMOUNT } = require('../_shared.js');
+
+const BASE_AMOUNTS = [120, 540, 1200];
+const ALLOWED_AMOUNTS = TEST_MODE ? [...BASE_AMOUNTS, TEST_PAYMENT_AMOUNT] : BASE_AMOUNTS;
+
+module.exports = {
+  RECEIVER_NAME: 'JEYARAJ ALAGAR',
+  RECEIVER_UPI: 'jayarajj126-3@okicici',
+
+  ALLOWED_AMOUNTS,
+
+  TESSERACT_LANG: 'eng',
+  TESSERACT_CONFIG: { legacy: false, oem: 1, psm: 3 },
+
+  OCR_TIMEOUT_MS: 60000,
+  AI_VISION_TIMEOUT_MS: 30000,
+  VERIFY_TIMEOUT_MS: 180000,
+
+  MIN_IMAGE_SIZE: 1024,
+  MAX_IMAGE_SIZE: 20 * 1024 * 1024,
+  MIN_WIDTH: 320,
+  MIN_HEIGHT: 240,
+  MAX_WIDTH: 4096,
+  MAX_HEIGHT: 4096,
+  ALLOWED_MIME_TYPES: ['image/jpeg', 'image/png', 'image/webp'],
+
+  BLUR_THRESHOLD: 100,
+  DARK_THRESHOLD: 50,
+  MIN_OCR_CONFIDENCE: 30,
+  CONFIDENCE_APPROVE: 95,
+  CONFIDENCE_REJECT: 40,
+
+  FRAUD_RAPID_WINDOW_MS: 60000,
+  FRAUD_MAX_PER_WINDOW: 3,
+
+  DECISION: {
+    APPROVE: 'verified',
+    REJECT: 'rejected',
+    MANUAL_REVIEW: 'manual_review',
+  },
+
+  RESULTS: {
+    PASS: 'pass',
+    FAIL: 'fail',
+    UNCERTAIN: 'uncertain',
+  },
+};

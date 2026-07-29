@@ -1,4 +1,4 @@
-const { resendOtp } = require('../api/_pipelineEngine.js');
+const { resendOtp } = require('../api/_otpManager.js');
 
 module.exports = async (req, res) => {
   try {
