@@ -112,7 +112,7 @@ function getHandler(name) {
     if (!h) { console.error('[INDEX] ' + name + ' invalid export'); h = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_invalid'})); }; }
     else if (entry[2]) h = requireAdmin(h);
     handlerCache[name] = h;
-  } catch (e) { console.error('[INDEX] Handler load failed: ' + name + ': ' + e.message); handlerCache[name] = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_unavailable'})); }; }
+  } catch (e) { console.error('[INDEX] Handler load failed: ' + name + ': ' + e.message + (e.stack ? '\n' + e.stack.split('\n').slice(0,6).join('\n') : '')); handlerCache[name] = (r,s) => { s.writeHead(500); s.end(JSON.stringify({error:'handler_unavailable',detail:e.message,code:e.code||''})); }; }
   return handlerCache[name];
 }
 
