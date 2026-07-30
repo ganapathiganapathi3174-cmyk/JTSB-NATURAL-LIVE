@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { FirebaseUser, checkReferralLinkExpiry } from '../db/firebase-db.js';
 import { checkRateLimit } from '../utils/rateLimiter.js';
 import PaymentFlow from '../components/PaymentFlow.jsx';
 
@@ -11,7 +10,7 @@ export default function FirebaseRegisterPage() {
   const [searchParams] = useSearchParams();
   const urlReferralCode = searchParams.get('ref') || '';
 
-  const [step, setStep] = useState('form'); // form | payment | done
+  const [step, setStep] = useState('form');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -19,23 +18,9 @@ export default function FirebaseRegisterPage() {
   const [referralCode, setReferralCode] = useState(urlReferralCode);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [emailExists, setEmailExists] = useState(false);
-  const [checkingEmail, setCheckingEmail] = useState(false);
-  const [phoneExists, setPhoneExists] = useState(false);
-  const [checkingPhone, setCheckingPhone] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [pendingRegId, setPendingRegId] = useState(null);
-
-  const emailTimer = useRef(null);
-  const phoneTimer = useRef(null);
-
-  useEffect(() => {
-    return () => {
-      if (emailTimer.current) clearTimeout(emailTimer.current);
-      if (phoneTimer.current) clearTimeout(phoneTimer.current);
-    };
-  }, []);
 
   useEffect(() => {
     if (rateLimitCountdown <= 0) return;
@@ -48,44 +33,8 @@ export default function FirebaseRegisterPage() {
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
       /^[6-9]\d{9}$/.test(phone.trim()) &&
       password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) &&
-      !loading && !emailExists && !phoneExists;
-  }, [name, email, phone, password, loading, emailExists, phoneExists]);
-
-  function checkEmailDuplicate(val) {
-    if (emailTimer.current) clearTimeout(emailTimer.current);
-    const t = val.trim();
-    if (!t || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) { setEmailExists(false); setCheckingEmail(false); return; }
-    setCheckingEmail(true);
-    emailTimer.current = setTimeout(async () => {
-      try { const u = await FirebaseUser.findByEmail(t); setEmailExists(!!u); }
-      catch { setEmailExists(false); }
-      finally { setCheckingEmail(false); }
-    }, 500);
-  }
-
-  function checkPhoneDuplicate(val) {
-    if (phoneTimer.current) clearTimeout(phoneTimer.current);
-    const t = val.trim();
-    if (t.length < 10) { setPhoneExists(false); setCheckingPhone(false); return; }
-    setCheckingPhone(true);
-    phoneTimer.current = setTimeout(async () => {
-      try { const u = await FirebaseUser.findByPhone(t); setPhoneExists(!!u); }
-      catch { setPhoneExists(false); }
-      finally { setCheckingPhone(false); }
-    }, 500);
-  }
-
-  async function validateReferralCode(code) {
-    if (!code || !code.trim()) return true;
-    try {
-      const r = await checkReferralLinkExpiry(code.trim().toUpperCase());
-      if (!r.valid) { setError(r.reason === 'expired' ? 'Referral link has expired' : 'Invalid referral code'); return false; }
-      if (!r.referrer || (r.referrer.payment_status !== 'approved' && r.referrer.payment_status !== 'success' && r.referrer.membershipStatus !== 'active') || r.referrer.account_status !== 'active') {
-        setError('Referral code is no longer valid'); return false;
-      }
-      return true;
-    } catch { setError('Referral validation failed'); return false; }
-  }
+      !loading;
+  }, [name, email, phone, password, loading]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -93,16 +42,11 @@ export default function FirebaseRegisterPage() {
     if (!name.trim() || name.trim().length < 2) { setError('Full name must be at least 2 characters'); return; }
     const ev = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ev)) { setError('Please enter a valid email address'); return; }
-    if (emailExists) { setError('This email is already registered.'); return; }
     if (!/^[6-9]\d{9}$/.test(phone.trim())) { setError('Please enter a valid 10-digit Indian mobile number'); return; }
-    if (phoneExists) { setError('This mobile number is already registered.'); return; }
     if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
     if (!/[A-Z]/.test(password)) { setError('Password must include at least one uppercase letter'); return; }
     if (!/[a-z]/.test(password)) { setError('Password must include at least one lowercase letter'); return; }
     if (!/[0-9]/.test(password)) { setError('Password must include at least one number'); return; }
-
-    const rc = referralCode.trim();
-    if (rc) { const v = await validateReferralCode(rc); if (!v) return; }
 
     const rl = checkRateLimit('payment_submit');
     if (!rl.allowed) { setError(`Too many attempts. Try again in ${rl.retryAfter} seconds.`); setRateLimitCountdown(rl.retryAfter); return; }
@@ -113,7 +57,7 @@ export default function FirebaseRegisterPage() {
       const preResp = await fetch(`${API_BASE}/preRegister`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), email: ev, phone: phone.trim(), password, referralCode: rc || null }),
+        body: JSON.stringify({ name: name.trim(), email: ev, phone: phone.trim(), password, referralCode: referralCode.trim() || null }),
       });
       if (!preResp.ok) { const b = await preResp.json().catch(() => ({})); throw new Error(b.error || `Backend error (${preResp.status})`); }
       const session = await preResp.json();
@@ -177,18 +121,12 @@ export default function FirebaseRegisterPage() {
                 <input required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name *" className="glass-input" />
               </div>
               <div className="mb-md">
-                <input required type="email" value={email} onChange={e => { setEmail(e.target.value); setEmailExists(false); }}
-                  onBlur={e => checkEmailDuplicate(e.target.value)} placeholder="Email Address *"
-                  autoComplete="email" className={`glass-input${emailExists ? ' input-error' : ''}`} />
-                {checkingEmail && <span className="text-xs text-muted">checking...</span>}
-                {emailExists && <p className="text-xs" style={{ color: 'var(--danger)' }}>Already registered. <Link to="/fb/login">Login?</Link></p>}
+                <input required type="email" value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="Email Address *" autoComplete="email" className="glass-input" />
               </div>
               <div className="mb-md">
-                <input required inputMode="numeric" value={phone} onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setPhoneExists(false); }}
-                  onBlur={e => checkPhoneDuplicate(e.target.value)} placeholder="Phone Number * (10 digits)"
-                  autoComplete="tel" className={`glass-input${phoneExists ? ' input-error' : ''}`} />
-                {checkingPhone && <span className="text-xs text-muted">checking...</span>}
-                {phoneExists && <p className="text-xs" style={{ color: 'var(--danger)' }}>Mobile number already registered.</p>}
+                <input required inputMode="numeric" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="Phone Number * (10 digits)" autoComplete="tel" className="glass-input" />
               </div>
               <div className="mb-md">
                 <div style={{ position: 'relative' }}>
