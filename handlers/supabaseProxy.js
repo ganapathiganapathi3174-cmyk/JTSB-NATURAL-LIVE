@@ -1,5 +1,30 @@
 const { createClient } = require('@supabase/supabase-js');
 
+const REQUEST_TIMEOUT_MS = parseInt(process.env.SUPABASE_TIMEOUT || '8000', 10);
+
+function createSupabaseClient() {
+  let supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_KEY || '').trim();
+  supabaseUrl = supabaseUrl.replace(/\/+$/, '');
+  if (!supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
+    supabaseUrl = 'https://' + supabaseUrl;
+  }
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (url, options = {}) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        if (options.signal) {
+          options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+        }
+        return fetch(url, { ...options, signal: controller.signal })
+          .finally(() => clearTimeout(timeoutId));
+      },
+    },
+  });
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return; }
   try {
@@ -10,7 +35,7 @@ module.exports = async (req, res) => {
     const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
     if (!supabaseUrl || !supabaseKey) { res.writeHead(500); res.end(JSON.stringify({ error: 'Supabase not configured' })); return; }
 
-    const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+    const supabase = createSupabaseClient();
 
     let result;
     if (method === 'select') {
@@ -72,11 +97,14 @@ module.exports = async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, data: result }));
   } catch (err) {
-    console.error('[supabaseProxy] Error:', err.message);
+    const isAbort = err.name === 'AbortError' || err.message?.includes('abort') || err.message?.includes('timeout');
+    console.error('[supabaseProxy] ' + (isAbort ? 'TIMEOUT' : 'Error') + ':', err.message);
     console.error('[supabaseProxy] Path:', req.path, 'Method:', req.body?.method, 'Table:', req.body?.table);
-    console.error('[supabaseProxy] Stack:', err.stack?.split('\n').slice(0, 4).join('\n'));
+    if (!isAbort) console.error('[supabaseProxy] Stack:', err.stack?.split('\n').slice(0, 4).join('\n'));
     const isConfigError = err.message.includes('not configured') || err.message.includes('supabaseUrl');
-    res.writeHead(isConfigError ? 502 : 500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: isConfigError ? 'Server configuration error: ' + err.message : 'Internal server error' }));
+    const status = isAbort ? 504 : (isConfigError ? 502 : 500);
+    const errorMsg = isAbort ? 'Database request timed out. Please try again.' : (isConfigError ? 'Server configuration error: ' + err.message : 'Internal server error');
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: errorMsg }));
   }
 };
