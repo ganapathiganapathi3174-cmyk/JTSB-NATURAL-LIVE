@@ -94,12 +94,17 @@ function startHealthChecks() {
   runAllChecks();
   intervalHandle = setInterval(runAllChecks, CHECK_INTERVAL_MS);
 
-  // Log any unhealthy providers (once per change)
+  // Log any unhealthy providers (once per change); suppress expected non-critical ones
+  const EXPECTED_UNHEALTHY = ['turso', 'neon', 'r2'];
   logIntervalHandle = setInterval(() => {
     for (const [name, s] of Object.entries(status)) {
       if (s.status === 'unhealthy' && s._logged !== true) {
-        console.warn(`[HEALTH] ${name} is unhealthy: ${s.error}`);
-        s._logged = true;
+        if (EXPECTED_UNHEALTHY.includes(name)) {
+          s._logged = true; // mark as logged but don't print
+        } else {
+          console.warn(`[HEALTH] ${name} is unhealthy: ${s.error}`);
+          s._logged = true;
+        }
       }
       if (s.status === 'healthy') {
         s._logged = false;

@@ -247,13 +247,14 @@ async function addDoc(table, data) {
     }
     return result;
   } catch (err) {
-    console.error(`[ADD] Failed for ${table}`);
-    console.error(`[ADD]   Collection: ${table}`);
-    console.error(`[ADD]   Error: ${err.message}`);
-    console.error(`[ADD]   Stack: ${err.stack}`);
-    console.error(`[ADD]   PayloadSize: ${Buffer.byteLength(JSON.stringify(record), 'utf8')} bytes`);
+    const isTableMissing = err.message && (err.message.includes('Could not find the table') || err.message.includes('does not exist') || err.message.includes('relation') && err.message.includes('does not exist'));
+    if (isTableMissing) {
+      console.warn(`[ADD] Table "${table}" does not exist in DB — skipping write`);
+    } else {
+      console.error(`[ADD] Failed for ${table}: ${err.message}`);
+    }
     const fallbackId = 'pending_' + Date.now();
-    await queue.enqueue('write', table, fallbackId, record, 'write');
+    await queue.enqueue('write', table, fallbackId, record, 'write').catch(() => {});
     if (isAnalyticsTable(table)) {
       neon.insertAnalyticsLog(table, { ...record, id: fallbackId }).catch(() => {});
     }

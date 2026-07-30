@@ -7,6 +7,7 @@ const PENDING_TIMEOUT_MS = PENDING_TIMEOUT_MINUTES * 60 * 1000;
 const CHECK_INTERVAL_MS = 30000;
 
 let checkTimer = null;
+let lastErrorMsg = '';
 
 function log(tag, msg) {
   console.log(`[${new Date().toISOString().slice(0, 19).replace('T', ' ')}] [PAYMENT-MONITOR] [${tag}] ${msg}`);
@@ -75,7 +76,11 @@ async function checkAndExpirePendingPayments() {
       log('CLEANUP', `Expired ${expiredCount} pending payment(s)`);
     }
   } catch (e) {
-    log('CHECK-ERR', `Error checking pending payments: ${e.message}`);
+    const msg = e.message || '';
+    if (msg !== lastErrorMsg) {
+      log('CHECK-ERR', msg);
+      lastErrorMsg = msg;
+    }
   }
 }
 
