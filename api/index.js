@@ -153,13 +153,18 @@ module.exports = async (req, res) => {
     });
   }
 
-  const isPaymentRoute = path.includes('submitPaymentProof') || path.includes('processPendingPayments') || path.includes('pipelinePayment');
+  const isPaymentRoute = path.includes('submitPaymentProof') || path.includes('processPendingPayments') || path.includes('pipelinePayment') || path.includes('preRegister');
   const REQ_TIMEOUT_MS = isPaymentRoute ? 120000 : 14000;
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
       console.error('[API] HARD TIMEOUT for path=' + path + ' (' + (REQ_TIMEOUT_MS/1000) + 's limit)');
       res.writeHead(504, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: isPaymentRoute ? 'Payment verification is taking longer than expected. Your payment will be processed in the background.' : 'Request timed out. Please try again.' }));
+      const msg = path.includes('preRegister')
+        ? 'Registration is taking longer than expected due to server startup. Please try again in a few seconds.'
+        : path.includes('submitPaymentProof') || path.includes('processPendingPayments') || path.includes('pipelinePayment')
+          ? 'Payment verification is taking longer than expected. Your payment will be processed in the background.'
+          : 'Request timed out. Please try again.';
+      res.end(JSON.stringify({ error: msg }));
     }
   }, REQ_TIMEOUT_MS);
   const origEnd = res.end.bind(res);
