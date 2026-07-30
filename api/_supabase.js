@@ -25,6 +25,8 @@ function isSensitiveTable(table) {
   return SENSITIVE_TABLES.includes(table);
 }
 
+const REQUEST_TIMEOUT_MS = parseInt(process.env.SUPABASE_TIMEOUT || '8000', 10);
+
 function getSupabaseClient() {
   let supabaseUrl = (process.env.SUPABASE_URL || '').trim();
   const supabaseKey = (process.env.SUPABASE_SERVICE_KEY || '').trim();
@@ -40,6 +42,14 @@ function getSupabaseClient() {
   }
   return createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (url, options = {}) => {
+        const signal = options.signal
+          ? (AbortSignal.any ? AbortSignal.any([options.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]) : options.signal)
+          : AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+        return fetch(url, { ...options, signal });
+      },
+    },
   });
 }
 
@@ -75,7 +85,11 @@ async function withRetry(fn, label) {
   let lastError;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await fn();
+      const result = await Promise.race([
+        fn(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Query timeout after ${REQUEST_TIMEOUT_MS}ms`)), REQUEST_TIMEOUT_MS + 1000)),
+      ]);
+      return result;
     } catch (err) {
       lastError = err;
       if (attempt < MAX_RETRIES) {

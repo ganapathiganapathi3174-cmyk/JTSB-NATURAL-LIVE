@@ -39,6 +39,10 @@ function normalizeRole(role) {
 }
 
 module.exports = async (req, res) => {
+  const tStart = Date.now();
+  const steps = [];
+  function mark(name) { steps.push({ name, ms: Date.now() - tStart }); }
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -56,12 +60,14 @@ module.exports = async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    mark('parse_body');
 
     if (isLoginRateLimited(normalizedEmail)) {
       console.log('[ADMIN LOGIN] Rate limited: ' + normalizedEmail);
       res.writeHead(429); res.end(JSON.stringify({ error: 'Too many attempts. Try again later.' }));
       return;
     }
+    mark('rate_limit');
 
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
@@ -70,7 +76,8 @@ module.exports = async (req, res) => {
       if (normalizedEmail === adminEmail.toLowerCase() && hash === adminPasswordHash) {
         const role = 'admin';
         const token = signAdminToken({ email: normalizedEmail, role, name: 'Admin' });
-        console.log('[ADMIN LOGIN] Super admin login success: ' + normalizedEmail);
+        mark('jwt_sign');
+        console.log('[ADMIN LOGIN] Super admin login success: ' + normalizedEmail + ' | timing: ' + JSON.stringify(steps));
         metrics.trackAuth(true);
         res.writeHead(200); res.end(JSON.stringify({
           token, expiresIn: 86400,
@@ -80,9 +87,11 @@ module.exports = async (req, res) => {
       }
       console.log('[ADMIN LOGIN] Env var admin password mismatch for: ' + normalizedEmail);
     }
+    mark('env_var_check');
 
     console.log('[ADMIN LOGIN] Looking up admin in DB: ' + normalizedEmail);
     const admins = await runQuery(COL_ADMINS, [{ field: 'email', op: 'EQUAL', value: normalizedEmail }]);
+    mark('db_query');
     if (admins && admins.length > 0) {
       const admin = admins[0];
       let passwordMatch = false;
@@ -92,11 +101,13 @@ module.exports = async (req, res) => {
         const hash = crypto.createHash('sha256').update(password).digest('hex');
         passwordMatch = (admin.password_hash === hash);
       }
+      mark('password_verify');
       if (passwordMatch) {
         const role = normalizeRole(admin.role);
         const name = admin.name || 'Admin';
         const token = signAdminToken({ email: admin.email, role, name });
-        console.log('[ADMIN LOGIN] DB admin login success: ' + admin.email + ' (role=' + role + ')');
+        mark('jwt_sign');
+        console.log('[ADMIN LOGIN] DB admin login success: ' + admin.email + ' (role=' + role + ') | timing: ' + JSON.stringify(steps));
         metrics.trackAuth(true);
         res.writeHead(200); res.end(JSON.stringify({
           token, expiresIn: 86400,
@@ -110,11 +121,11 @@ module.exports = async (req, res) => {
     }
 
     recordLoginAttempt(normalizedEmail);
-    console.log('[ADMIN LOGIN] Login failed for: ' + normalizedEmail);
+    console.log('[ADMIN LOGIN] Login failed for: ' + normalizedEmail + ' | timing: ' + JSON.stringify(steps));
     metrics.trackAuth(false);
     res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid credentials' }));
   } catch (err) {
-    console.error('[ADMIN LOGIN] Error: ' + err.message);
+    console.error('[ADMIN LOGIN] Error: ' + err.message + ' | timing: ' + JSON.stringify(steps));
     if (err.stack) console.error('[ADMIN LOGIN] Stack: ' + err.stack);
     res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
   }

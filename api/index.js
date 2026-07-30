@@ -153,8 +153,8 @@ module.exports = async (req, res) => {
     });
   }
 
-  const isSlowRoute = path.includes('submitPaymentProof') || path.includes('processPendingPayments') || path.includes('pipelinePayment') || path.includes('preRegister') || path.includes('supabaseProxy');
-  const REQ_TIMEOUT_MS = isSlowRoute ? 120000 : 30000;
+  const isPaymentRoute = path.includes('submitPaymentProof') || path.includes('processPendingPayments') || path.includes('pipelinePayment');
+  const REQ_TIMEOUT_MS = isPaymentRoute ? 120000 : 14000;
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
       console.error('[API] HARD TIMEOUT for path=' + path + ' (' + (REQ_TIMEOUT_MS/1000) + 's limit)');
