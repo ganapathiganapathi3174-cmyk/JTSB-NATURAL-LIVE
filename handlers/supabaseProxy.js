@@ -73,7 +73,10 @@ module.exports = async (req, res) => {
     res.end(JSON.stringify({ success: true, data: result }));
   } catch (err) {
     console.error('[supabaseProxy] Error:', err.message);
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: 'Internal server error' }));
+    console.error('[supabaseProxy] Path:', req.path, 'Method:', req.body?.method, 'Table:', req.body?.table);
+    console.error('[supabaseProxy] Stack:', err.stack?.split('\n').slice(0, 4).join('\n'));
+    const isConfigError = err.message.includes('not configured') || err.message.includes('supabaseUrl');
+    res.writeHead(isConfigError ? 502 : 500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: isConfigError ? 'Server configuration error: ' + err.message : 'Internal server error' }));
   }
 };
