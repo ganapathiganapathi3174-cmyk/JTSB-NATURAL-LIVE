@@ -1,6 +1,5 @@
-const { Pool } = require('pg');
-
 let pool = null;
+let PoolCtor = null;
 
 function getPool() {
   if (pool) return pool;
@@ -9,7 +8,15 @@ function getPool() {
     console.warn('[NEON] NEON_DATABASE_URL not set — analytics disabled');
     return null;
   }
-  pool = new Pool({
+  if (!PoolCtor) {
+    try {
+      PoolCtor = require('pg').Pool;
+    } catch (e) {
+      console.warn('[NEON] pg module not available — analytics disabled');
+      return null;
+    }
+  }
+  pool = new PoolCtor({
     connectionString,
     max: 5,
     idleTimeoutMillis: 10000,

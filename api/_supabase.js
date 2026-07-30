@@ -44,10 +44,13 @@ function getSupabaseClient() {
     auth: { persistSession: false, autoRefreshToken: false },
     global: {
       fetch: (url, options = {}) => {
-        const signal = options.signal
-          ? (AbortSignal.any ? AbortSignal.any([options.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]) : options.signal)
-          : AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-        return fetch(url, { ...options, signal });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        if (options.signal) {
+          options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+        }
+        return fetch(url, { ...options, signal: controller.signal })
+          .finally(() => clearTimeout(timeoutId));
       },
     },
   });
@@ -85,11 +88,7 @@ async function withRetry(fn, label) {
   let lastError;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const result = await Promise.race([
-        fn(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error(`Query timeout after ${REQUEST_TIMEOUT_MS}ms`)), REQUEST_TIMEOUT_MS + 1000)),
-      ]);
-      return result;
+      return await fn();
     } catch (err) {
       lastError = err;
       if (attempt < MAX_RETRIES) {
