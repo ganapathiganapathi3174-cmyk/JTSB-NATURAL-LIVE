@@ -1,28 +1,43 @@
-const { createClient } = require('@supabase/supabase-js');
-
 const REQUEST_TIMEOUT_MS = parseInt(process.env.SUPABASE_TIMEOUT || '8000', 10);
 
-function createSupabaseClient() {
-  let supabaseUrl = (process.env.SUPABASE_URL || '').trim();
-  const supabaseKey = (process.env.SUPABASE_SERVICE_KEY || '').trim();
-  supabaseUrl = supabaseUrl.replace(/\/+$/, '');
-  if (!supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
-    supabaseUrl = 'https://' + supabaseUrl;
+function getRestUrl() {
+  let url = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+  if (!url) return null;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
+  return url + '/rest/v1';
+}
+
+function getApiKey() {
+  return (process.env.SUPABASE_SERVICE_KEY || '').trim() || null;
+}
+
+function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  if (options.signal) {
+    options.signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      fetch: (url, options = {}) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-        if (options.signal) {
-          options.signal.addEventListener('abort', () => controller.abort(), { once: true });
-        }
-        return fetch(url, { ...options, signal: controller.signal })
-          .finally(() => clearTimeout(timeoutId));
-      },
-    },
-  });
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timeoutId));
+}
+
+function buildFilterQuery(filters) {
+  if (!filters || !filters.length) return '';
+  return filters.map(f => {
+    const col = encodeURIComponent(f.field);
+    const val = encodeURIComponent(String(f.value));
+    if (f.op === 'EQUAL') return col + '=eq.' + val;
+    if (f.op === 'NOT_EQUAL') return col + '=neq.' + val;
+    if (f.op === 'IN') return col + '=in.(' + String(f.value).split(',').map(v => encodeURIComponent(String(v).trim())).join(',') + ')';
+    if (f.op === 'LIKE' || f.op === 'ILIKE') return col + '=ilike.' + val;
+    return col + '=eq.' + val;
+  }).join('&');
+}
+
+function buildOrderQuery(orderBy, ascending) {
+  if (!orderBy) return '';
+  const dir = ascending !== false ? '' : '.desc';
+  return '&order=' + encodeURIComponent(orderBy) + dir;
 }
 
 module.exports = async (req, res) => {
@@ -31,64 +46,86 @@ module.exports = async (req, res) => {
     const { table, method = 'select', filters = [], options = {}, id, data } = req.body || {};
     if (!table) { res.writeHead(400); res.end(JSON.stringify({ error: 'table required' })); return; }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-    if (!supabaseUrl || !supabaseKey) { res.writeHead(500); res.end(JSON.stringify({ error: 'Supabase not configured' })); return; }
+    const restUrl = getRestUrl();
+    const apiKey = getApiKey();
+    if (!restUrl || !apiKey) { res.writeHead(500); res.end(JSON.stringify({ error: 'Supabase not configured' })); return; }
 
-    const supabase = createSupabaseClient();
+    const tableUrl = restUrl + '/' + encodeURIComponent(table);
+    const headers = { 'apikey': apiKey, 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' };
 
     let result;
     if (method === 'select') {
-      let query = supabase.from(table).select(options.select || '*');
-      if (filters.length) {
-        for (const f of filters) {
-          if (f.op === 'EQUAL') query = query.eq(f.field, f.value);
-          else if (f.op === 'NOT_EQUAL') query = query.neq(f.field, f.value);
-          else if (f.op === 'IN') query = query.in(f.field, f.value);
-          else if (f.op === 'LIKE') query = query.ilike(f.field, f.value);
-        }
+      const select = options.select || '*';
+      const filterQ = buildFilterQuery(filters);
+      const orderQ = buildOrderQuery(options.orderBy, options.ascending);
+      const limitQ = options.limit ? '&limit=' + Number(options.limit) : '';
+      const url = tableUrl + '?select=' + encodeURIComponent(select) + (filterQ ? '&' + filterQ : '') + orderQ + limitQ;
+      const res2 = await fetchWithTimeout(url, { headers });
+      if (!res2.ok) {
+        const body = await res2.text().catch(() => '');
+        throw new Error('Supabase ' + res2.status + ': ' + (body || res2.statusText));
       }
-      if (options.orderBy) query = query.order(options.orderBy, { ascending: options.ascending !== false });
-      if (options.limit) query = query.limit(options.limit);
-      const { data, error } = await query;
-      if (error) throw new Error(error.message);
-      result = data || [];
+      result = await res2.json();
     } else if (method === 'get') {
       if (!id) { res.writeHead(400); res.end(JSON.stringify({ error: 'id required for get' })); return; }
-      const { data, error } = await supabase.from(table).select('*').eq('id', id).single();
-      if (error && error.code !== 'PGRST116') throw new Error(error.message);
-      result = data;
-    } else if (method === 'count') {
-      let query = supabase.from(table).select('*', { count: 'exact', head: true });
-      for (const f of filters) {
-        if (f.op === 'EQUAL') query = query.eq(f.field, f.value);
+      const url = tableUrl + '?id=eq.' + encodeURIComponent(String(id)) + '&select=*';
+      const res2 = await fetchWithTimeout(url, { headers });
+      if (!res2.ok) {
+        const body = await res2.text().catch(() => '');
+        throw new Error('Supabase ' + res2.status + ': ' + (body || res2.statusText));
       }
-      const { count, error } = await query;
-      if (error) throw new Error(error.message);
-      result = { count: count || 0 };
+      const rows = await res2.json();
+      result = (rows && rows.length > 0) ? rows[0] : null;
+    } else if (method === 'count') {
+      const filterQ = buildFilterQuery(filters);
+      const url = tableUrl + '?select=' + (filterQ ? filterQ + '&' : '') + '&head=true';
+      const res2 = await fetchWithTimeout(url, { method: 'HEAD', headers: { ...headers, 'Prefer': 'count=exact' } });
+      if (!res2.ok) {
+        const body = await res2.text().catch(() => '');
+        throw new Error('Supabase ' + res2.status + ': ' + (body || res2.statusText));
+      }
+      const count = parseInt(res2.headers.get('content-range')?.split('/')[1] || '0', 10);
+      result = { count: isNaN(count) ? 0 : count };
     } else if (method === 'update') {
       if (!id && !filters.length) { res.writeHead(400); res.end(JSON.stringify({ error: 'id or filters required for update' })); return; }
-      let query = supabase.from(table).update(data || {});
-      if (id) query = query.eq('id', id);
-      for (const f of filters) query = query.eq(f.field, f.value);
-      const { error } = await query;
-      if (error) throw new Error(error.message);
+      const filterQ = [];
+      if (id) filterQ.push('id=eq.' + encodeURIComponent(String(id)));
+      for (const f of filters) filterQ.push(encodeURIComponent(f.field) + '=eq.' + encodeURIComponent(String(f.value)));
+      const url = tableUrl + '?' + filterQ.join('&');
+      const res2 = await fetchWithTimeout(url, { method: 'PATCH', headers, body: JSON.stringify(data || {}) });
+      if (!res2.ok) {
+        const body = await res2.text().catch(() => '');
+        throw new Error('Supabase ' + res2.status + ': ' + (body || res2.statusText));
+      }
       result = { success: true };
     } else if (method === 'upsert') {
-      const { data: upserted, error } = await supabase.from(table).upsert(data || {}, { onConflict: options.onConflict || 'id' }).select('id').single();
-      if (error) throw new Error(error.message);
-      result = upserted;
+      const res2 = await fetchWithTimeout(tableUrl, {
+        method: 'POST', headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify(data || {}),
+      });
+      if (!res2.ok) {
+        const body = await res2.text().catch(() => '');
+        throw new Error('Supabase ' + res2.status + ': ' + (body || res2.statusText));
+      }
+      result = await res2.json();
     } else if (method === 'insert') {
-      const { data: inserted, error } = await supabase.from(table).insert(data || {}).select('id');
-      if (error) throw new Error(error.message);
-      result = inserted;
+      const res2 = await fetchWithTimeout(tableUrl, { method: 'POST', headers, body: JSON.stringify(data || {}) });
+      if (!res2.ok) {
+        const body = await res2.text().catch(() => '');
+        throw new Error('Supabase ' + res2.status + ': ' + (body || res2.statusText));
+      }
+      result = await res2.json();
     } else if (method === 'delete') {
       if (!id && !filters.length) { res.writeHead(400); res.end(JSON.stringify({ error: 'id or filters required for delete' })); return; }
-      let query = supabase.from(table).delete();
-      if (id) query = query.eq('id', id);
-      for (const f of filters) query = query.eq(f.field, f.value);
-      const { error } = await query;
-      if (error) throw new Error(error.message);
+      const filterQ = [];
+      if (id) filterQ.push('id=eq.' + encodeURIComponent(String(id)));
+      for (const f of filters) filterQ.push(encodeURIComponent(f.field) + '=eq.' + encodeURIComponent(String(f.value)));
+      const url = tableUrl + '?' + filterQ.join('&');
+      const res2 = await fetchWithTimeout(url, { method: 'DELETE', headers });
+      if (!res2.ok) {
+        const body = await res2.text().catch(() => '');
+        throw new Error('Supabase ' + res2.status + ': ' + (body || res2.statusText));
+      }
       result = { success: true };
     } else {
       res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid method' })); return;
@@ -99,11 +136,9 @@ module.exports = async (req, res) => {
   } catch (err) {
     const isAbort = err.name === 'AbortError' || err.message?.includes('abort') || err.message?.includes('timeout');
     console.error('[supabaseProxy] ' + (isAbort ? 'TIMEOUT' : 'Error') + ':', err.message);
-    console.error('[supabaseProxy] Path:', req.path, 'Method:', req.body?.method, 'Table:', req.body?.table);
     if (!isAbort) console.error('[supabaseProxy] Stack:', err.stack?.split('\n').slice(0, 4).join('\n'));
-    const isConfigError = err.message.includes('not configured') || err.message.includes('supabaseUrl');
-    const status = isAbort ? 504 : (isConfigError ? 502 : 500);
-    const errorMsg = isAbort ? 'Database request timed out. Please try again.' : (isConfigError ? 'Server configuration error: ' + err.message : 'Internal server error');
+    const status = isAbort ? 504 : 500;
+    const errorMsg = isAbort ? 'Database request timed out. Please try again.' : 'Internal server error';
     res.writeHead(status, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: false, error: errorMsg }));
   }
