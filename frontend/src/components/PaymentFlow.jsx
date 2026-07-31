@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 const API_BASE = import.meta.env.VITE_FUNCTIONS_URL || '/api';
 const AMOUNTS = [120, 500, 1000];
 const UPI_ID = 'jayarajj126-3@okicici';
-const UPI_NAME = 'JEYARAJ ALAG';
+const UPI_NAME = 'JEYARAJ ALAGAR';
 
 export default function PaymentFlow({ type, pendingRegId, userId, onSuccess, onError }) {
   const [step, setStep] = useState('amount'); // amount | pay | upload | processing | result

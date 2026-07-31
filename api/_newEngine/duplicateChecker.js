@@ -30,7 +30,26 @@ async function checkDuplicate(extractedUtr, screenshotBuf) {
         result.existingId = existing[0].id;
         result.reasons.push('UTR ' + utr.slice(0, 6) + '**** already exists');
       }
-    } catch {}
+    } catch (e) {
+      // utr_hash column may not exist yet — fall back to a plain-UTR scan so
+      // duplicate detection never silently disables.
+      console.warn('[DUPLICATE] utr_hash lookup failed, falling back to utr scan: ' + e.message);
+      try {
+        const dup = await runQuery(COL_UPI_PAYMENTS, [], { limit: 2000 });
+        const hit = (dup || []).find(p =>
+          p.utr && p.utr.toUpperCase().trim() === utr.toUpperCase().trim() &&
+          p.status !== 'rejected' && p.status !== 'failed'
+        );
+        if (hit) {
+          result.duplicate = true;
+          result.type = 'duplicate_utr';
+          result.existingId = hit.id;
+          result.reasons.push('UTR ' + utr.slice(0, 6) + '**** already exists');
+        }
+      } catch (scanErr) {
+        console.warn('[DUPLICATE] utr fallback scan failed: ' + scanErr.message);
+      }
+    }
   }
 
   if (screenshotBuf && Buffer.isBuffer(screenshotBuf)) {
@@ -47,7 +66,9 @@ async function checkDuplicate(extractedUtr, screenshotBuf) {
           result.existingId = existing[0].id;
           result.reasons.push('Screenshot already exists in system');
         }
-      } catch {}
+      } catch (e) {
+        console.warn('[DUPLICATE] screenshot_hash lookup failed (column may not exist yet): ' + e.message);
+      }
     }
   }
 

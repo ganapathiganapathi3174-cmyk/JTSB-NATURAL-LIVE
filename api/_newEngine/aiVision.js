@@ -25,18 +25,33 @@ function httpsPost(url, data, timeoutMs) {
   });
 }
 
+async function fetchImageBuffer(imageUrl) {
+  return new Promise((resolve, reject) => {
+    const mod = imageUrl.startsWith('https') ? require('https') : require('http');
+    const req = mod.get(imageUrl, { timeout: 20000 }, (res) => {
+      if (res.statusCode < 200 || res.statusCode >= 300) { reject(new Error('HTTP ' + res.statusCode)); return; }
+      const c = []; res.on('data', d => c.push(d)); res.on('end', () => resolve(Buffer.concat(c)));
+    });
+    req.on('error', reject);
+    req.on('timeout', function () { this.destroy(); reject(new Error('Timeout')); });
+  });
+}
+
 async function runGeminiVision(imageUrl) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) return { success: false, error: 'GEMINI_API_KEY not configured', engine: 'gemini' };
 
   try {
+    const buf = await fetchImageBuffer(imageUrl);
+    if (!buf || !buf.length) return { success: false, error: 'Failed to fetch image for Gemini', engine: 'gemini' };
+
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
     const prompt = 'Extract all text visible in this UPI payment screenshot. Provide structured JSON with: amount (number), utr (string), upi_id (string), receiver_name (string), date (YYYY-MM-DD), time (HH:MM), status (SUCCESS/FAILED/PENDING), bank_or_app (string). Only respond with valid JSON. If unsure, set the value to null.';
     const body = {
       contents: [{
         parts: [
           { text: prompt },
-          { inline_data: { mime_type: 'image/jpeg', data: 'PLACEHOLDER' } }
+          { inline_data: { mime_type: 'image/jpeg', data: buf.toString('base64') } }
         ]
       }]
     };
@@ -87,10 +102,12 @@ async function runGPTVision(imageUrl) {
 async function runAIVision(imageUrl) {
   const result = { success: false, engines: {}, bestFields: null, avgConfidence: 0 };
 
-  const gemini = await runGeminiVision(imageUrl);
-  result.engines.gemini = gemini;
+  const [gemini, gpt4] = await Promise.allSettled([
+    runGeminiVision(imageUrl),
+    runGPTVision(imageUrl),
+  ]).then(r => r.map(x => (x.status === 'fulfilled' ? x.value : { success: false, error: x.reason?.message || 'vision engine failed' })));
 
-  const gpt4 = await runGPTVision(imageUrl);
+  result.engines.gemini = gemini;
   result.engines.gpt4 = gpt4;
 
   const successful = [gemini, gpt4].filter(e => e.success);

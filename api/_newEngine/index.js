@@ -27,6 +27,8 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
     confidence: 0, ocrConfidence: 0, ocrEngines: 0,
     ocrData: null, extractedFields: null, normalizedFields: null,
     matchResults: {}, reasons: [], fraudScore: 0, fraudFlags: [],
+    riskScore: 0, riskLevel: 'low', integrity: null,
+    utrHash: null, screenshotHash: null,
     checks: {}, duplicateCheck: null, decisionFactors: {},
     stages: stages,
     durationMs: 0,
@@ -59,12 +61,14 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
     stages.validation = { valid: imgValidation.valid, mime: imgValidation.mime, size: buf?.length || 0, ms: Date.now() - t0 - stages.upload.ms };
 
     let imgProcessed = { buffer: buf, width: 0, height: 0, processed: false };
+    let integrity = { blurred: false, dark: false, score: 0, error: null };
     try {
       imgProcessed = await imageProcessor.processImage(buf, { contrast: true, normalize: true });
+      integrity = await imageProcessor.detectBlur(buf, imgProcessed.width, imgProcessed.height);
     } catch (e) {
       log('IMAGE PROCESS FAILED: ' + e.message);
     }
-    stages.process = { processed: imgProcessed.processed, width: imgProcessed.width, height: imgProcessed.height, ms: Date.now() - t0 };
+    stages.process = { processed: imgProcessed.processed, width: imgProcessed.width, height: imgProcessed.height, integrity, ms: Date.now() - t0 };
 
     const ocrStart = Date.now();
     const ocrResult = await ocrEngine.runAllEngines(screenshotUrl, imgProcessed.buffer || buf);
@@ -121,13 +125,15 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
     const fraud = fraudDetector.detectFraud(normalized, {
       width: imgProcessed.width,
       height: imgProcessed.height,
-      blurScore: 0,
+      blurScore: integrity?.score || 0,
+      dark: integrity?.dark || false,
     }, { expectedAmount: expected.amount });
     stages.fraud = { score: fraud.score, flags: fraud.flags, ms: Date.now() - t0 };
     result.fraudScore = fraud.score;
     result.fraudFlags = fraud.flags;
+    result.integrity = integrity || null;
 
-    const decision = decider.decide(rules, duplicate, fraud, normalized, { expected });
+    const decision = decider.decide(rules, duplicate, fraud, normalized, { expected, ocrConfidence: ocrResult.avgConfidence || 0 });
     stages.decision = { status: decision.status, confidence: decision.confidence, ms: Date.now() - t0 };
 
     result.status = decision.status;
@@ -135,6 +141,25 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
     result.reasons = decision.reasons;
     result.decisionFactors = decision.decisionFactors;
     result.checks = rules.checks;
+
+    // ── RISK ENGINE ──
+    // Composite risk score (0-100). Combines fraud signals, missing evidence,
+    // and integrity failures. Higher = riskier.
+    let riskScore = fraud.score || 0;
+    if (rules.hardFail) riskScore += 30;
+    if (rules.softFail) riskScore += 10;
+    if (integrity?.blurred) riskScore += 15;
+    if (integrity?.dark) riskScore += 12;
+    if (duplicate?.duplicate) riskScore = 100;
+    riskScore = Math.min(100, riskScore);
+    result.riskScore = riskScore;
+    result.riskLevel = riskScore >= 60 ? 'high' : (riskScore >= 30 ? 'medium' : 'low');
+
+    // ── FINGERPRINTS ──
+    // Persistent hashes written to upi_payments.utr_hash / screenshot_hash so the
+    // duplicate checker works across requests and process restarts.
+    result.utrHash = normalized?.utr ? crypto.createHash('sha256').update(normalized.utr.toUpperCase()).digest('hex') : null;
+    result.screenshotHash = buf && Buffer.isBuffer(buf) ? crypto.createHash('sha256').update(buf).digest('hex') : null;
 
     const ocrData = {
       raw: (ocrResult.rawText || '').substring(0, 5000),

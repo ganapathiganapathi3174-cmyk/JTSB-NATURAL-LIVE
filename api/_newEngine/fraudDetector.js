@@ -16,12 +16,18 @@ function detectFraud(extracted, imageInfo, options) {
     }
   }
 
-  if (imageInfo?.blurScore !== undefined && imageInfo.blurScore > 0) {
-    if (imageInfo.blurScore < C.BLUR_THRESHOLD) {
+  if (imageInfo?.blurScore !== undefined) {
+    if (imageInfo.blurScore > 0 && imageInfo.blurScore < C.BLUR_THRESHOLD) {
       result.flags.push('blurred');
-      result.reasons.push('Image appears blurry (score=' + imageInfo.blurScore + ')');
+      result.reasons.push('Image appears blurry (Laplacian variance=' + imageInfo.blurScore + ')');
       signals += 15;
     }
+  }
+
+  if (imageInfo?.dark) {
+    result.flags.push('dark');
+    result.reasons.push('Image is too dark to verify');
+    signals += 12;
   }
 
   if (extracted?.amount !== null && extracted?.amount !== undefined && options?.expectedAmount) {

@@ -1,6 +1,10 @@
 const { COL_UPI_PAYMENTS } = require('../api/_shared.js');
 const { runQuery, updateDoc } = require('../api/_supabase.js');
 const v7 = require('../api/verification7.js');
+const { executeVerifiedOrder } = require('../api/_paymentOrderManager.js');
+const { broadcast } = require('../api/_sse.js');
+
+function nowISO() { return new Date().toISOString(); }
 
 async function processNextPayment() {
   const result = { processed: 0, approved: 0, rejected: 0, manualReview: 0, errors: [] };
@@ -15,12 +19,35 @@ async function processNextPayment() {
       const fs = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
       await updateDoc(COL_UPI_PAYMENTS, payment.id, {
         status: fs, ocr_result: v.ocrData || null, final_score: v.confidence || 0,
-        rejection_reasons: v.reasons || [], verified_at: new Date().toISOString(),
-        verification_locked: false,
+        fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
+        utr_hash: v.utrHash || null, screenshot_hash: v.screenshotHash || null,
+        rejection_reasons: v.reasons || [], verified_at: nowISO(),
+        verification_locked: false, verification_completed_at: nowISO(),
       });
-      if (fs === 'verified') result.approved++;
-      else if (fs === 'rejected') result.rejected++;
-      else result.manualReview++;
+      if (fs === 'verified') {
+        // B2 FIX: execute full post-approval business logic (wallet credit for
+        // topups, user creation for registrations, referrals, notifications).
+        const orderLike = {
+          id: payment.id,
+          type: payment.payment_type,
+          amount: Number(payment.amount),
+          pending_reg_id: payment.pending_reg_id,
+          user_id: payment.user_id,
+          screenshot_url: payment.screenshot_url,
+        };
+        await executeVerifiedOrder(orderLike, v, {
+          userId: payment.user_id,
+          pendingRegId: payment.pending_reg_id,
+          userEnteredUtr: payment.utr || null,
+          upiPaymentId: payment.id,
+        }).catch(e => result.errors.push({ paymentId: payment.id, error: 'Post-approval: ' + e.message }));
+        result.approved++;
+      } else if (fs === 'rejected') {
+        result.rejected++;
+      } else {
+        result.manualReview++;
+      }
+      try { broadcast('paymentUpdated', { paymentId: payment.id, status: fs, type: payment.payment_type }); } catch {}
     } catch (e) {
       result.errors.push({ paymentId: payment.id, error: e.message });
       result.manualReview++;

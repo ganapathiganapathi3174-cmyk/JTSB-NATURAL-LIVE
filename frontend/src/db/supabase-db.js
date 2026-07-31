@@ -704,11 +704,18 @@ export const SupabaseStorage = {
 };
 
 export async function seedDefaultAdmin() {
+  // ⚠️ SECURITY: Removed hardcoded credential seeding. Admins must be
+  // provisioned via the database or env vars (ADMIN_EMAIL / ADMIN_PASSWORD_HASH),
+  // never via the client bundle.
+  if (import.meta.env.VITE_SEED_DEFAULT_ADMIN !== 'true') {
+    console.warn('seedDefaultAdmin: skipped (set VITE_SEED_DEFAULT_ADMIN=true in a non-production build to enable)');
+    return;
+  }
   try {
     const supabase = getSupabase();
     const { data: existing } = await supabase.from('admins').select().eq('email', 'jayaraj@gmail.com').maybeSingle();
     if (!existing) {
-      await supabase.from('admins').insert({ email: 'jayaraj@gmail.com', password: 'hashed_jayaraj7523', createdAt: new Date().toISOString() });
+      await supabase.from('admins').insert({ email: 'jayaraj@gmail.com', password: 'REPLACE_WITH_HASHED_PASSWORD', createdAt: new Date().toISOString() });
     }
   } catch (e) { console.error('seedDefaultAdmin:', e.message); }
 }

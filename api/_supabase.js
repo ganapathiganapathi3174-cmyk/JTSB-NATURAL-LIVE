@@ -10,9 +10,6 @@ const CRITICAL_TABLES = ['users', 'referrals', 'topups', 'wallet_balances', 'wal
 const ANALYTICS_TABLES = ['verification_logs', 'payment_logs', 'audit_logs', 'admin_logs', 'analytics_events'];
 const SENSITIVE_TABLES = ['users', 'upi_payments'];
 
-const MAX_RETRIES = 3;
-const RETRY_DELAYS = [500, 1500, 3000];
-
 function isCriticalTable(table) {
   return CRITICAL_TABLES.includes(table);
 }
@@ -27,7 +24,10 @@ function isSensitiveTable(table) {
 
 const REQUEST_TIMEOUT_MS = parseInt(process.env.SUPABASE_TIMEOUT || '8000', 10);
 
+let _supabaseClient = null;
+
 function getSupabaseClient() {
+  if (_supabaseClient) return _supabaseClient;
   let supabaseUrl = (process.env.SUPABASE_URL || '').trim();
   const supabaseKey = (process.env.SUPABASE_SERVICE_KEY || '').trim();
   if (!supabaseUrl || !supabaseKey) {
@@ -40,7 +40,7 @@ function getSupabaseClient() {
     supabaseUrl = 'https://' + supabaseUrl;
     console.warn('[SUPABASE] Added https:// prefix to SUPABASE_URL');
   }
-  return createClient(supabaseUrl, supabaseKey, {
+  _supabaseClient = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: {
       fetch: (url, options = {}) => {
@@ -54,6 +54,7 @@ function getSupabaseClient() {
       },
     },
   });
+  return _supabaseClient;
 }
 
 function encryptSensitive(data, table) {
@@ -84,30 +85,10 @@ function decryptSensitive(data, table) {
   return result;
 }
 
-async function withRetry(fn, label) {
-  let lastError;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastError = err;
-      if (attempt < MAX_RETRIES) {
-        const delay = RETRY_DELAYS[Math.min(attempt - 1, RETRY_DELAYS.length - 1)];
-        console.warn(`[RETRY] ${label} attempt ${attempt}/${MAX_RETRIES} failed: ${err.message}. Retrying in ${delay}ms`);
-        await new Promise(r => setTimeout(r, delay));
-      }
-    }
-  }
-  throw lastError;
-}
-
 async function getDoc(table, id) {
   try {
     const supabase = getSupabaseClient();
-    const { data, error } = await withRetry(() =>
-      supabase.from(table).select('*').eq('id', id).single(),
-      `getDoc ${table}/${id}`
-    );
+    const { data, error } = await supabase.from(table).select('*').eq('id', id).single();
     if (error && (error.code === 'PGRST116' || error.code === '22P02')) return null;
     if (error) throw new Error(`GET error: ${JSON.stringify(error)}`);
     return decryptSensitive(data, table);
@@ -125,10 +106,7 @@ async function getDoc(table, id) {
 async function deleteDoc(table, id) {
   try {
     const supabase = getSupabaseClient();
-    await withRetry(() =>
-      supabase.from(table).delete().eq('id', id),
-      `deleteDoc ${table}/${id}`
-    );
+    await supabase.from(table).delete().eq('id', id);
     if (isCriticalTable(table)) {
       turso.deleteBackup(table, id).catch(() => {});
     }
@@ -158,7 +136,7 @@ async function runQuery(table, filters, options = {}) {
     }
     if (options.orderBy) query = query.order(options.orderBy, { ascending: options.ascending !== false });
     if (options.limit) query = query.limit(options.limit);
-    const { data, error } = await withRetry(() => query, `runQuery ${table}`);
+    const { data, error } = await query;
     if (error) throw new Error(`QUERY error ${JSON.stringify(error)}`);
     const decrypted = (data || []).map(d => decryptSensitive(d, table));
     return decrypted;
@@ -183,10 +161,7 @@ async function writeDoc(table, id, data) {
   if (!data.created_at) record.created_at = now;
 
   try {
-    await withRetry(() =>
-      supabase.from(table).upsert(record, { onConflict: 'id' }),
-      `writeDoc ${table}/${id}`
-    );
+    await supabase.from(table).upsert(record, { onConflict: 'id' });
 
     if (isCriticalTable(table)) {
       turso.syncBackup(table, id, record).catch(() => {});
@@ -207,10 +182,7 @@ async function updateDoc(table, id, data) {
   const encrypted = encryptSensitive(data, table);
 
   try {
-    const result = await withRetry(() =>
-      supabase.from(table).update({ ...encrypted, updated_at: new Date().toISOString() }).eq('id', id).select('id'),
-      `updateDoc ${table}/${id}`
-    );
+    const result = await supabase.from(table).update({ ...encrypted, updated_at: new Date().toISOString() }).eq('id', id).select('id');
     if (result && result.error) throw new Error(`UPDATE error ${JSON.stringify(result.error)}`);
 
     if (isCriticalTable(table)) {
@@ -233,10 +205,7 @@ async function addDoc(table, data) {
   const record = { ...encrypted, created_at: now };
 
   try {
-    const { data: result, error } = await withRetry(() =>
-      supabase.from(table).insert(record).select('id').single(),
-      `addDoc ${table}`
-    );
+    const { data: result, error } = await supabase.from(table).insert(record).select('id').single();
     if (error) throw new Error(`ADD error ${JSON.stringify(error)}`);
 
     if (isCriticalTable(table) && result && result.id) {
@@ -268,7 +237,7 @@ async function countQuery(table, filters = []) {
   for (const f of filters) {
     if (f.op === 'EQUAL') query = query.eq(f.field, f.value);
   }
-  const { count, error } = await withRetry(() => query, `countQuery ${table}`);
+  const { count, error } = await query;
   if (error) throw new Error(`COUNT error ${JSON.stringify(error)}`);
   return count || 0;
 }
@@ -304,7 +273,7 @@ async function conditionalUpdateDoc(table, id, conditions, data) {
       else if (cond.op === 'GREATER_OR_EQUAL') query = query.gte(cond.field, cond.value);
       else if (cond.op === 'LESS_OR_EQUAL') query = query.lte(cond.field, cond.value);
     }
-    const { data: result, error } = await withRetry(() => query.select('id'), `conditionalUpdateDoc ${table}/${id}`);
+    const { data: result, error } = await query.select('id');
     if (error) throw new Error(`CONDITIONAL_UPDATE error ${JSON.stringify(error)}`);
     const affected = result && result.length ? result.length : 0;
     if (affected > 0 && isCriticalTable(table)) {
@@ -350,7 +319,7 @@ async function runQueryDecrypted(table, filters, options = {}) {
     let query = supabase.from(table).select(options.select || '*');
     if (options.orderBy) query = query.order(options.orderBy, { ascending: options.ascending !== false });
     query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    const { data, error } = await withRetry(() => query, `runQueryDecrypted ${table} page ${page}`);
+    const { data, error } = await query;
     const fetchTime = Date.now() - tPage;
     if (fetchTime > 2000) {
       console.log(`[SLOW QUERY] ⚠️ Page ${page} fetch took ${fetchTime}ms (exceeds 2s)`);
@@ -436,46 +405,109 @@ async function atomicCreditWallet(userId, amount, paymentId, description, txType
 
 // ── Targeted lookup helpers (indexed queries, decrypt only matching row) ──
 
+// Cache whether the hash columns exist in the users table.
+// The schema defines email_hash/phone_hash, but if the migration was never
+// applied the lookup throws 42703 and falls back to a full scan. Detect once,
+// then skip the doomed hash query (re-check every 5 min so a later migration
+// is picked up automatically).
+let _hashColumnMissing = null;
+let _hashColumnCheckedAt = 0;
+const HASH_COLUMN_RECHECK_MS = 5 * 60 * 1000;
+
+function hashColumnMissing() {
+  if (_hashColumnMissing === true && Date.now() - _hashColumnCheckedAt < HASH_COLUMN_RECHECK_MS) {
+    return true;
+  }
+  return false;
+}
+
+function markHashColumnState(missing) {
+  _hashColumnMissing = missing;
+  _hashColumnCheckedAt = Date.now();
+}
+
+// Detect whether the users table has email_hash/phone_hash ONCE per process and
+// share that result across every finder. Without this, each findUserByEmail /
+// findUserByPhone call issues a doomed query against the missing column (42703)
+// before falling back to a scan — doubling the number of round trips on every
+// registration/login and burning ~0.5s of latency each.
+let _hashColumnPromise = null;
+
+function ensureHashColumnDetection() {
+  const shouldRecheck = _hashColumnMissing === true && Date.now() - _hashColumnCheckedAt >= HASH_COLUMN_RECHECK_MS;
+  if (_hashColumnPromise && !shouldRecheck) return _hashColumnPromise;
+  _hashColumnPromise = (async () => {
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.from('users').select('email_hash').limit(1);
+      markHashColumnState(!!error);
+    } catch (err) {
+      markHashColumnState(true);
+    }
+  })();
+  _hashColumnPromise.catch(() => {});
+  return _hashColumnPromise;
+}
+
 async function findUserByEmail(email) {
   if (!email) return null;
-  const emailHash = crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
+  const target = email.toLowerCase().trim();
+  const emailHash = crypto.createHash('sha256').update(target).digest('hex');
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('users').select('*').eq('email_hash', emailHash).limit(1);
-  if (error) {
-    console.warn(`[findUserByEmail] Hash query failed: ${error.message}`);
-    // Column may not exist (pre-migration) — scan one page
-    const { data: fallback } = await supabase.from('users').select('*').limit(1000);
-    if (!fallback) return null;
-    const target = email.toLowerCase().trim();
-    for (const row of fallback) {
-      const decrypted = decryptSensitive(row, 'users');
-      if (decrypted.email && decrypted.email.toLowerCase().trim() === target) return decrypted;
+
+  await ensureHashColumnDetection();
+  if (!hashColumnMissing()) {
+    const { data, error } = await supabase.from('users').select('*').eq('email_hash', emailHash).limit(1);
+    if (!error) {
+      markHashColumnState(false);
+      if (data && data.length > 0) return decryptSensitive(data[0], 'users');
+      return null;
     }
-    return null;
+    // Column may not exist (pre-migration) — fall back to scan, cache the state
+    markHashColumnState(true);
   }
-  if (!data || data.length === 0) return null;
-  return decryptSensitive(data[0], 'users');
+
+  // Fallback scan — single query, no extra getDoc round trip. The scan row
+  // already carries the decrypted email/phone needed for duplicate checks.
+  const { data: fallback } = await supabase.from('users').select('id,email,phone').limit(1000);
+  if (!fallback) return null;
+  for (const row of fallback) {
+    const decrypted = decryptSensitive(row, 'users');
+    if (decrypted.email && decrypted.email.toLowerCase().trim() === target) {
+      return decrypted;
+    }
+  }
+  return null;
 }
 
 async function findUserByPhone(phone) {
   if (!phone) return null;
-  const phoneHash = crypto.createHash('sha256').update(phone.trim()).digest('hex');
+  const target = phone.trim();
+  const phoneHash = crypto.createHash('sha256').update(target).digest('hex');
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('users').select('*').eq('phone_hash', phoneHash).limit(1);
-  if (error) {
-    console.warn(`[findUserByPhone] Hash query failed: ${error.message}`);
-    // Column may not exist (pre-migration) — scan one page
-    const { data: fallback } = await supabase.from('users').select('*').limit(1000);
-    if (!fallback) return null;
-    const target = phone.trim();
-    for (const row of fallback) {
-      const decrypted = decryptSensitive(row, 'users');
-      if (decrypted.phone && decrypted.phone.trim() === target) return decrypted;
+
+  await ensureHashColumnDetection();
+  if (!hashColumnMissing()) {
+    const { data, error } = await supabase.from('users').select('*').eq('phone_hash', phoneHash).limit(1);
+    if (!error) {
+      markHashColumnState(false);
+      if (data && data.length > 0) return decryptSensitive(data[0], 'users');
+      return null;
     }
-    return null;
+    // Column may not exist (pre-migration) — fall back to scan, cache the state
+    markHashColumnState(true);
   }
-  if (!data || data.length === 0) return null;
-  return decryptSensitive(data[0], 'users');
+
+  // Fallback scan — single query, no extra getDoc round trip.
+  const { data: fallback } = await supabase.from('users').select('id,email,phone').limit(1000);
+  if (!fallback) return null;
+  for (const row of fallback) {
+    const decrypted = decryptSensitive(row, 'users');
+    if (decrypted.phone && decrypted.phone.trim() === target) {
+      return decrypted;
+    }
+  }
+  return null;
 }
 
 async function findUserBySponsorCode(code) {

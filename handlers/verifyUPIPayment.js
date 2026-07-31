@@ -50,7 +50,7 @@ module.exports = async (req, res) => {
       userEnteredUtr: utr || null,
     });
 
-    const paymentId = proofResult.paymentId || orderResult.orderId;
+    const paymentId = orderResult.upiPaymentId || proofResult.paymentId || orderResult.orderId;
 
     const statusMessage = proofResult.status === 'verified'
       ? 'Payment verified successfully'

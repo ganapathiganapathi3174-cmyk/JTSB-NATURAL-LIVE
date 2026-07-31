@@ -85,6 +85,7 @@ create table if not exists public.upi_payments (
   user_id uuid references public.users(id) on delete set null,
   pending_reg_id uuid references public.pending_registrations(id) on delete set null,
   utr text,
+  utr_hash text,
   upi_id text,
   amount numeric(12,2),
   amount_option text,
@@ -95,6 +96,7 @@ create table if not exists public.upi_payments (
   ocr_result jsonb,
   final_score numeric(5,2),
   fraud_score numeric(5,2),
+  risk_score numeric(5,2),
   screenshot_hash text,
   payment_date timestamptz,
   verified_at timestamptz,
@@ -109,6 +111,8 @@ create table if not exists public.upi_payments (
 
 create index if not exists idx_upi_user_id on public.upi_payments(user_id);
 create index if not exists idx_upi_utr on public.upi_payments(utr);
+create index if not exists idx_upi_utr_hash on public.upi_payments(utr_hash);
+create index if not exists idx_upi_screenshot_hash on public.upi_payments(screenshot_hash);
 create index if not exists idx_upi_status on public.upi_payments(status);
 
 -- ==================== PROCESSED PAYMENTS ====================
@@ -347,6 +351,12 @@ create table if not exists public.payment_sessions (
   ocr_result jsonb,
   rejection_reasons jsonb,
   final_score numeric(5,2),
+  utr_hash text,
+  screenshot_hash text,
+  fraud_score numeric(5,2),
+  risk_score numeric(5,2),
+  verification_locked boolean default false,
+  verification_locked_at timestamptz,
   customer_email text,
   customer_name text,
   paymentId text,
@@ -356,6 +366,34 @@ create table if not exists public.payment_sessions (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+create index if not exists idx_sessions_utr_hash on public.payment_sessions(utr_hash);
+create index if not exists idx_sessions_screenshot_hash on public.payment_sessions(screenshot_hash);
+create index if not exists idx_sessions_status on public.payment_sessions(status);
+
+-- ============================================================
+-- TABLE: payment_confirm_sessions
+-- ============================================================
+create table if not exists public.payment_confirm_sessions (
+  id uuid primary key default uuid_generate_v4(),
+  type text,
+  plan text,
+  amount numeric(12,2),
+  status text default 'pending',
+  transactionReference text,
+  transactionTime timestamptz,
+  createdAt timestamptz default now(),
+  expiresAt timestamptz,
+  approvedAt timestamptz,
+  pendingRegId uuid references public.pending_registrations(id) on delete set null,
+  userId uuid references public.users(id) on delete set null,
+  metadata jsonb,
+  approvalError text
+);
+
+create index if not exists idx_pcs_status on public.payment_confirm_sessions(status);
+create index if not exists idx_pcs_amount on public.payment_confirm_sessions(amount);
+create index if not exists idx_pcs_ref on public.payment_confirm_sessions(transactionReference);
 
 -- ============================================================
 -- TABLE: verification_logs
@@ -436,8 +474,10 @@ create policy "Users can view own notifications"
   using (auth.uid() = user_id);
 
 -- ==================== DEFAULT ADMIN ====================
--- Insert default admin (password: jayaraj7523)
--- SHA-256 hash matches handlers/adminLogin.js which uses crypto.createHash('sha256')
+-- ⚠️ SECURITY: This default admin is DEV ONLY. `handlers/adminLogin.js` disables
+-- the default-admin login path when NODE_ENV=production or Vercel. In production,
+-- change the password_hash (or delete this row and provision via ADMIN_EMAIL +
+-- ADMIN_PASSWORD_HASH env vars). SHA-256 hash shown matches jayaraj7523.
 insert into public.admins (email, password_hash, name)
 values ('jayaraj@gmail.com', 'bc21f55e8275b8274e8e704fe2de13a43a46f70cc602e6888ec52893ab790b13', 'Admin')
 on conflict (email) do nothing;

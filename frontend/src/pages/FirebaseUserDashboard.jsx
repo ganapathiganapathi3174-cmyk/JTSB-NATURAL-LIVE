@@ -268,6 +268,7 @@ export default function FirebaseUserDashboard() {
       const token = localStorage.getItem('fb_admin_token');
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = 'Bearer ' + token;
+      if (userId) headers['x-user-id'] = userId;
       const res = await fetch(`${API_BASE}/sponsorClaim`, { method: 'POST', headers, body: JSON.stringify({ userId }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to claim sponsor bonus');

@@ -33,8 +33,9 @@ function validateRules(extracted, expected) {
     const partial = utr.includes(expectedUtr) || expectedUtr.includes(utr);
     result.checks.utr = exact ? 'matched' : (partial ? 'partial_match' : 'mismatch');
     if (!exact && !partial) {
+      // OCR of UTRs is error-prone; a single mismatch is a SOFT signal.
       result.reasons.push('UTR mismatch: extracted=' + utr + ' expected=' + expectedUtr);
-      result.hardFail = true;
+      result.softFail = true;
     } else if (!exact) {
       result.reasons.push('UTR partial match');
     }
@@ -53,8 +54,9 @@ function validateRules(extracted, expected) {
     const partial = upi.includes(expectedUpi) || expectedUpi.includes(upi);
     result.checks.upi_id = exact ? 'matched' : (partial ? 'partial_match' : 'mismatch');
     if (!exact && !partial) {
+      // Single UPI mismatch is a SOFT signal (handled by the risk/decision engine).
       result.reasons.push('UPI mismatch: extracted=' + upi + ' expected=' + expectedUpi);
-      result.hardFail = true;
+      result.softFail = true;
     }
   } else if (!upi) {
     result.checks.upi_id = 'unreadable';
@@ -66,6 +68,7 @@ function validateRules(extracted, expected) {
   if (status) {
     result.checks.status = status === 'SUCCESS' ? 'success' : (status === 'FAILED' ? 'failed' : 'pending');
     if (status === 'FAILED') {
+      // A confirmed FAILED status is the single strongest independent reject signal.
       result.reasons.push('Payment status indicates failure');
       result.hardFail = true;
     } else if (status !== 'SUCCESS') {

@@ -38,6 +38,17 @@ require('./_systemInit.js').initSystemUsers().then(created => {
 }).catch(err => {
   console.error('[SYSTEM-INIT] Startup initialization error: ' + err.message);
 });
+// Warm the Supabase connection pool at boot so the first user request doesn't pay the cold-start penalty
+const { getSupabaseClient } = require('./_supabase.js');
+(async () => {
+  try {
+    const t0 = Date.now();
+    const { data } = await getSupabaseClient().from('users').select('id').limit(1);
+    console.log('[WARMUP] Supabase connection established in ' + (Date.now() - t0) + 'ms' + (data ? ' (' + data.length + ' users present)' : ''));
+  } catch (e) {
+    console.warn('[WARMUP] Supabase warmup failed (will retry on first request): ' + e.message);
+  }
+})();
 
 function wrapHandler(handler) {
   return (req, res) => {

@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
     res.writeHead(200); res.end(JSON.stringify(mapped));
   } catch (err) {
     console.error('[getUPIPayments] Error:', err.message);
-    res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' }));
+    if (!res.headersSent) { res.writeHead(500); res.end(JSON.stringify({ error: 'Internal server error' })); }
   }
 };
 

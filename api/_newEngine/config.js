@@ -1,6 +1,7 @@
 const { TEST_MODE, TEST_PAYMENT_AMOUNT } = require('../_shared.js');
 
-const BASE_AMOUNTS = [120, 540, 1200];
+// Canonical package amounts (single source of truth; matches _shared.js PACKAGES).
+const BASE_AMOUNTS = [120, 500, 1000];
 const ALLOWED_AMOUNTS = TEST_MODE ? [...BASE_AMOUNTS, TEST_PAYMENT_AMOUNT] : BASE_AMOUNTS;
 
 module.exports = {
@@ -27,7 +28,8 @@ module.exports = {
   BLUR_THRESHOLD: 100,
   DARK_THRESHOLD: 50,
   MIN_OCR_CONFIDENCE: 30,
-  CONFIDENCE_APPROVE: 95,
+  // STRICT auto-approval confidence floor (enterprise rule). Tunable via env for ops flexibility.
+  CONFIDENCE_APPROVE: parseInt(process.env.AUTO_APPROVE_CONFIDENCE || '98', 10),
   CONFIDENCE_REJECT: 40,
 
   FRAUD_RAPID_WINDOW_MS: 60000,

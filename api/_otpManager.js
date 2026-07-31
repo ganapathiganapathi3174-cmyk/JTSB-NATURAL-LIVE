@@ -4,7 +4,7 @@ const { runQuery, addDoc, getDoc, updateDoc, deleteDoc, atomicCreditWallet } = r
 const { broadcast } = require('./_sse.js');
 const cycleEngine = require('./_cycleEngine.js');
 
-const BASE_AMOUNTS = [120, 540, 1200];
+const BASE_AMOUNTS = [120, 500, 1000];
 const ALLOWED_AMOUNTS = TEST_MODE ? [...BASE_AMOUNTS, TEST_PAYMENT_AMOUNT] : BASE_AMOUNTS;
 const ACCEPTED_UPI = 'jayarajj126-3@okicici';
 const OTP_EXPIRY_MS = 300000;

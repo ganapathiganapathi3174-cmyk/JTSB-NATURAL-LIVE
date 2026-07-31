@@ -1,6 +1,26 @@
 const C = require('./config.js');
 
+// ENTERPRISE DECISION ENGINE (strict rule set)
+//
+// AUTO-APPROVE only when ALL of the following hold:
+//   - amount matches (extracted == expected)
+//   - receiver UPI matches
+//   - transaction status = SUCCESS
+//   - transaction date = today (tolerance 1 day)
+//   - UTR is unique (no prior non-rejected payment with same UTR)
+//   - screenshot is unique (no prior non-rejected payment with same hash)
+//   - image is authentic (valid format/size, not blurry, not dark, no tamper flag)
+//   - OCR confidence >= CONFIDENCE_APPROVE (default 98)
+//
+// REJECT only on strong independent signals:
+//   - confirmed duplicate UTR or duplicate screenshot
+//   - transaction status is FAILED
+//   - fraud score >= 40 (suspicious)
+//
+// EVERYTHING ELSE -> MANUAL_REVIEW (never auto-approve on partial evidence).
+
 function decide(rules, duplicate, fraud, extracted, options) {
+  const checks = rules.checks || {};
   const result = {
     status: C.DECISION.MANUAL_REVIEW,
     confidence: 0,
@@ -9,31 +29,33 @@ function decide(rules, duplicate, fraud, extracted, options) {
     decisionFactors: {},
   };
 
-  const checks = rules.checks || {};
   result.matchedFields = {
     amount: checks.amount === 'matched',
-    utr: checks.utr === 'matched' || checks.utr === 'partial_match',
+    utr: checks.utr === 'matched',
     upi_id: checks.upi_id === 'matched' || checks.upi_id === 'partial_match',
     date: checks.date === 'today_or_near',
     status: checks.status === 'success',
   };
 
   const matchedCount = Object.values(result.matchedFields).filter(Boolean).length;
+  const fraudFlags = (fraud?.flags || []);
+  const ocrConfidence = options?.ocrConfidence || 0;
 
+  // ── HARD REJECTS ──
   if (duplicate?.duplicate) {
     result.status = C.DECISION.REJECT;
     result.reasons = duplicate.reasons || ['Duplicate transaction detected'];
     result.confidence = 100;
-    result.decisionFactors = { duplicate: true, matchedCount };
+    result.decisionFactors = { reject: 'duplicate', matchedCount };
     return result;
   }
 
   if (rules.hardFail) {
     result.status = C.DECISION.REJECT;
-    result.reasons = rules.reasons.filter(r => !r.includes('Amount'));
-    if (result.reasons.length === 0) result.reasons = ['Hard validation failed'];
+    result.reasons = rules.reasons.filter(r => r.includes('failure') || r.includes('FAILED'));
+    if (result.reasons.length === 0) result.reasons = ['Transaction status indicates failure'];
     result.confidence = 100;
-    result.decisionFactors = { hardFail: true, matchedCount };
+    result.decisionFactors = { reject: 'failed_status', matchedCount };
     return result;
   }
 
@@ -41,67 +63,57 @@ function decide(rules, duplicate, fraud, extracted, options) {
     result.status = C.DECISION.REJECT;
     result.reasons = (fraud.reasons || []).concat(['Suspicious activity detected']);
     result.confidence = fraud.score;
-    result.decisionFactors = { fraud: true, fraudScore: fraud.score, matchedCount };
+    result.decisionFactors = { reject: 'fraud', fraudScore: fraud.score, matchedCount };
     return result;
   }
 
-  const utrMatched = checks.utr === 'matched' || checks.utr === 'partial_match';
-  const dateMatched = checks.date === 'today_or_near';
-  const amountMatched = checks.amount === 'matched' || checks.amount === 'close_match';
-  const upiMatched = checks.upi_id === 'matched' || checks.upi_id === 'partial_match';
-  const statusMatched = checks.status === 'success';
+  // ── STRICT AUTO-APPROVE ──
+  const amountOk = checks.amount === 'matched';
+  const upiOk = checks.upi_id === 'matched' || checks.upi_id === 'partial_match';
+  const statusOk = checks.status === 'success';
+  const dateOk = checks.date === 'today_or_near';
+  const utrOk = checks.utr === 'matched';
+  const confidenceOk = ocrConfidence >= C.CONFIDENCE_APPROVE;
+  const imageOk = !fraudFlags.includes('blurred') && !fraudFlags.includes('dark') &&
+                  !fraudFlags.includes('low_resolution') && !fraudFlags.includes('tampered');
 
-  if (utrMatched && dateMatched) {
+  const allStrictConditions = amountOk && upiOk && statusOk && dateOk && utrOk && confidenceOk && imageOk;
+
+  if (allStrictConditions) {
     result.status = C.DECISION.APPROVE;
-    result.reasons = ['UTR matched', 'Date matches'];
-    if (amountMatched) result.reasons.push('Amount matches');
-    if (!amountMatched) result.reasons.push('Amount unclear but UTR+Date confirmed');
-    if (upiMatched) result.reasons.push('UPI ID matches');
-    result.confidence = Math.max(95, matchedCount * 20);
-    result.decisionFactors = { utrDateMatch: true, matchedCount };
+    result.reasons = [
+      'Amount matches',
+      'Receiver UPI matches',
+      'Transaction status SUCCESS',
+      'Transaction date is today',
+      'UTR matched',
+      'UTR unique',
+      'Screenshot unique',
+      'Image authentic',
+      'OCR confidence ' + ocrConfidence + '% >= ' + C.CONFIDENCE_APPROVE + '%',
+    ];
+    result.confidence = Math.min(100, ocrConfidence);
+    result.decisionFactors = { strictApprove: true, matchedCount, ocrConfidence };
     return result;
   }
 
-  if (utrMatched && amountMatched) {
-    result.status = C.DECISION.APPROVE;
-    result.reasons = ['UTR matched', 'Amount matches'];
-    if (upiMatched) result.reasons.push('UPI ID matches');
-    result.confidence = 90;
-    result.decisionFactors = { utrAmountMatch: true, matchedCount };
-    return result;
-  }
-
-  if (amountMatched && upiMatched && dateMatched && statusMatched) {
-    result.status = C.DECISION.APPROVE;
-    result.reasons = ['Amount matches', 'UPI ID matches', 'Date matches', 'Payment status SUCCESS'];
-    result.confidence = 90;
-    result.decisionFactors = { fullMatch: true, matchedCount };
-    return result;
-  }
-
-  if (utrMatched) {
-    result.status = C.DECISION.MANUAL_REVIEW;
-    result.reasons = ['UTR found but insufficient confirmation'];
-    if (!dateMatched) result.reasons.push('Date not confirmed');
-    if (!amountMatched) result.reasons.push('Amount unclear');
-    result.confidence = 60;
-    result.decisionFactors = { utrOnly: true, matchedCount };
-    return result;
-  }
-
-  if (amountMatched && upiMatched) {
-    result.status = C.DECISION.MANUAL_REVIEW;
-    result.reasons = ['Amount and UPI matched, but UTR not found'];
-    result.confidence = 50;
-    result.decisionFactors = { amountUpiMatch: true, matchedCount };
-    return result;
-  }
+  // ── MANUAL REVIEW (default) ──
+  const missing = [];
+  if (!amountOk) missing.push('amount');
+  if (!upiOk) missing.push('receiver UPI');
+  if (!statusOk) missing.push('status SUCCESS');
+  if (!dateOk) missing.push('today date');
+  if (!utrOk) missing.push('UTR');
+  if (!confidenceOk) missing.push('OCR confidence >= ' + C.CONFIDENCE_APPROVE);
+  if (!imageOk) missing.push('image authenticity');
 
   result.status = C.DECISION.MANUAL_REVIEW;
   result.reasons = ['Insufficient evidence for auto-approval'];
-  if (rules.softFail) result.reasons = result.reasons.concat(rules.reasons);
-  result.confidence = Math.max(10, matchedCount * 15);
-  result.decisionFactors = { insufficient: true, matchedCount };
+  if (missing.length) result.reasons.push('Missing: ' + missing.join(', '));
+  if (rules.reasons && rules.reasons.length) result.reasons = result.reasons.concat(rules.reasons.slice(0, 3));
+  if (fraud?.reasons && fraud.reasons.length) result.reasons.push(fraud.reasons[0]);
+  result.confidence = Math.max(10, Math.min(90, Math.round(ocrConfidence || 0)));
+  result.decisionFactors = { manualReview: true, missing, matchedCount, ocrConfidence };
 
   return result;
 }

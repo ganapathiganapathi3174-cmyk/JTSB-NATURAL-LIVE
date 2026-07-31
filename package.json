@@ -12,5 +12,11 @@
     "pg": "^8.22.0",
     "tesseract.js": "^7.0.0"
   },
-  "description": "JSREE APEX - Enterprise Referral & Payment Management Platform"
+  "description": "JSREE APEX - Enterprise Referral & Payment Management Platform",
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "dev": "npm --prefix frontend run dev",
+    "test": "npm --prefix frontend run test:run",
+    "test:watch": "npm --prefix frontend run test"
+  }
 }

@@ -13,14 +13,17 @@ function isTokenBlacklisted(jti) {
 
 function getSecret() {
   if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET;
-  // Fall back to dev secret when running on Vercel (NODE_ENV=production by default)
-  // or in local dev. Set ADMIN_JWT_SECRET in production for real security.
-  const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV || !!process.env.VERCEL;
-  if (isDev) {
-    console.error('[AUTH] WARNING: Using dev JWT secret. Set ADMIN_JWT_SECRET in production.');
-    return 'dev-jwt-secret-not-for-production';
+  // FAIL CLOSED: never sign tokens with a well-known constant in production/Vercel.
+  // Any deployment without ADMIN_JWT_SECRET gets a null secret, which makes
+  // signAdminToken throw and verifyAdminToken reject every token.
+  const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+  if (isProduction) {
+    console.error('[AUTH] FATAL: ADMIN_JWT_SECRET is not configured. Authentication is disabled.');
+    return null;
   }
-  throw new Error('ADMIN_JWT_SECRET not configured');
+  // Local development only: permit the known dev secret (never exposed to production).
+  console.warn('[AUTH] WARNING: Using dev JWT secret. Set ADMIN_JWT_SECRET for any deployed environment.');
+  return 'dev-jwt-secret-not-for-production';
 }
 
 function signAdminToken(payload) {

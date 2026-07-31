@@ -1,4 +1,4 @@
-const { COL_PENDING_REGS, hashPassword, isSystemReferralCode, getPackageByReferral, getReferrerPackage, validatePackageAmount } = require('../api/_shared.js');
+const { COL_PENDING_REGS, COL_USERS, hashPassword, isSystemReferralCode, getPackageByReferral, getReferrerPackage, validatePackageAmount } = require('../api/_shared.js');
 const { addDoc, writeDoc, findUserByEmail, findUserByPhone, findUserBySponsorCode, getDoc, runQuery, deleteDoc } = require('../api/_supabase.js');
 
 // OCR is NOT imported here — preRegister never triggers OCR (Requirement #4)
@@ -55,29 +55,32 @@ module.exports = async (req, res) => {
     }
     STEP(2, 'Form validation passed ✓');
 
-    // Step 2-4: Run ALL independent DB queries in PARALLEL (email, phone, referral)
-    // This collapses 6-8 sequential queries into a single parallel batch,
-    // reducing cold-start registration time from 18-40s to 3-8s.
-    STEP(3, 'Before parallel DB queries — checking email/phone/referral');
+    // Step 2-4: Run ALL independent DB queries in ONE PARALLEL BATCH
+    // (email lookup, phone lookup, referral lookup, pending-email, pending-phone).
+    // These queries are fully independent — running them together collapses 5
+    // sequential round trips into a single latency window. On a high-latency
+    // Supabase connection (~400-1200ms RTT each) this is what keeps the whole
+    // registration under the gateway timeout instead of exceeding it.
+    STEP(3, 'Before parallel DB queries — checking email/phone/referral/pending');
     const normalizedEmail = email.toLowerCase().trim();
-    const [existingEmailUser, existingPhoneUser, refUser] = await Promise.all([
+    const [existingEmailUser, existingPhoneUser, refUser, existingEmailPending, existingPhonePending] = await Promise.all([
       MEASURE('findUserByEmail', () => findUserByEmail(email), 'handlers/preRegister.js', 'module.exports', 58).catch(() => null),
       MEASURE('findUserByPhone', () => findUserByPhone(phone), 'handlers/preRegister.js', 'module.exports', 73).catch(() => null),
       refCode
         ? MEASURE('findUserBySponsorCode', () => findUserBySponsorCode(refCode), 'handlers/preRegister.js', 'module.exports', 90).catch(() => null)
         : Promise.resolve(null),
+      MEASURE(
+        'findPendingEmail',
+        () => runQuery(COL_PENDING_REGS, [{ field: 'email', op: 'EQUAL', value: normalizedEmail }], { limit: 1 }),
+        'handlers/preRegister.js', 'module.exports', 64
+      ).catch((e) => { LOG('Email duplicate query failed: ' + (e?.message || e)); return []; }),
+      MEASURE(
+        'findPendingPhone',
+        () => runQuery(COL_PENDING_REGS, [{ field: 'phone', op: 'EQUAL', value: phone.trim() }], { limit: 1 }),
+        'handlers/preRegister.js', 'module.exports', 79
+      ).catch((e) => { LOG('Phone duplicate query failed: ' + (e?.message || e)); return []; }),
     ]);
-    const existingEmailPending = await MEASURE(
-      'findPendingEmail',
-      () => runQuery(COL_PENDING_REGS, [{ field: 'email', op: 'EQUAL', value: normalizedEmail }], { limit: 1 }),
-      'handlers/preRegister.js', 'module.exports', 64
-    ).catch((e) => { LOG('Email duplicate query failed: ' + (e?.message || e)); return []; });
-    const existingPhonePending = await MEASURE(
-      'findPendingPhone',
-      () => runQuery(COL_PENDING_REGS, [{ field: 'phone', op: 'EQUAL', value: phone.trim() }], { limit: 1 }),
-      'handlers/preRegister.js', 'module.exports', 79
-    ).catch((e) => { LOG('Phone duplicate query failed: ' + (e?.message || e)); return []; });
-    STEP(3, 'After parallel DB queries — email/phone/referral checked');
+    STEP(3, 'After parallel DB queries — email/phone/referral/pending checked');
 
     // Email duplicate check
     if (existingEmailUser) {
@@ -166,7 +169,7 @@ module.exports = async (req, res) => {
     if (refCode) {
       referrer = refUser;
 
-      if (referrer && referrer.referral_active === false) {
+      if (referrer && referrer.referral_active === false && !isSystemReferralCode(referrer.referral_code)) {
         res.writeHead(400); res.end(JSON.stringify({ error: 'This referral link is currently inactive. Please contact the owner or administrator.' }));
         LOG(`Response: referral inactive — total ${Date.now() - reqStart}ms`);
         return;

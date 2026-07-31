@@ -43,8 +43,14 @@ export default function SponsorRequestsPage() {
       const body = { requestId, action };
       if (action === 'reject') body.rejectionReason = rejectionReason || 'Declined';
 
+      const headers = { 'Content-Type': 'application/json' };
+      const adminToken = localStorage.getItem('fb_admin_token');
+      if (adminToken) headers['Authorization'] = 'Bearer ' + adminToken;
+      const uid = localStorage.getItem('fb_user_id');
+      if (uid) headers['x-user-id'] = uid;
+
       const res = await fetch(`${API_BASE}/handleSponsorTransfer`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers,
         body: JSON.stringify(body),
       });
       const data = await res.json();

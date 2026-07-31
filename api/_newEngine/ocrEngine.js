@@ -4,7 +4,6 @@ const os = require('os');
 const crypto = require('crypto');
 const C = require('./config.js');
 const bridge = require('./bridge.js');
-const { fetchBufferFromURL } = require('./imageValidator.js');
 
 let tesseractWorker = null;
 
@@ -108,11 +107,5 @@ async function runAllEngines(screenshotUrl, screenshotBuf) {
 
   return result;
 }
-
-getTesseractWorker().then(() => {
-  console.log('[OCR] Tesseract.js worker warmed up');
-}).catch(e => {
-  console.warn('[OCR] Tesseract.js warmup failed (deferred): ' + e.message);
-});
 
 module.exports = { runAllEngines, runTesseract, getTesseractWorker };

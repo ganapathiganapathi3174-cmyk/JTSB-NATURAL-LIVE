@@ -81,6 +81,14 @@ async function initSystemUsers() {
       try {
         await supabase.from('users').update({ password: hashPassword(userDef.password) }).eq('id', existingId);
       } catch (_) {}
+      // Backfill email_hash/phone_hash once the migration adds the columns —
+      // findUserByEmail/Phone use them as their indexed lookup key.
+      try {
+        await supabase.from('users').update({
+          email_hash: crypto.createHash('sha256').update(userDef.email.toLowerCase().trim()).digest('hex'),
+          phone_hash: crypto.createHash('sha256').update(userDef.phone.trim()).digest('hex'),
+        }).eq('id', existingId);
+      } catch (_) {}
       console.log('[SYSTEM-INIT] User ' + userDef.referral_code + ' already exists (id=' + existingId + '), skipping');
       continue;
     }
@@ -135,6 +143,14 @@ async function initSystemUsers() {
       console.error('[SYSTEM-INIT] Failed to create user ' + userDef.referral_code + ': ' + insertError.message);
       continue;
     }
+
+    // Populate email_hash/phone_hash once the migration adds the columns
+    try {
+      await supabase.from('users').update({
+        email_hash: crypto.createHash('sha256').update(userDef.email.toLowerCase().trim()).digest('hex'),
+        phone_hash: crypto.createHash('sha256').update(userDef.phone.trim()).digest('hex'),
+      }).eq('id', userId);
+    } catch (_) {}
 
     await supabase.from('wallet_balances').insert({
       id: userId,

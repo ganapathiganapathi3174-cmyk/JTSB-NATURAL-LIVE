@@ -21,8 +21,27 @@ module.exports = async (req, res) => {
   const idempotencyKey = generateIdempotencyKey();
 
   try {
-    const { paymentId } = req.body || {};
+    let { paymentId } = req.body || {};
     if (!paymentId) { res.writeHead(400); res.end(JSON.stringify({ error: 'Payment ID is required' })); return; }
+
+    // Resolve ORD-* order ID → upi_payments UUID (order row stores it in paymentId column)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paymentId);
+    if (!isUuid) {
+      const orderRow = await getDoc('payment_sessions', paymentId).catch(() => null);
+      if (orderRow && orderRow.paymentId && /^[0-9a-f]{8}-/.test(orderRow.paymentId)) {
+        paymentId = orderRow.paymentId;
+      } else if (orderRow) {
+        const searchField = orderRow.pending_reg_id ? 'pending_reg_id' : 'user_id';
+        const searchValue = orderRow.pending_reg_id || orderRow.user_id;
+        if (searchValue) {
+          const ups = await runQuery(COL_UPI_PAYMENTS, [
+            { field: searchField, op: 'EQUAL', value: searchValue },
+            { field: 'status', op: 'IN', value: ['pending', 'manual_review', 'pending_review'] },
+          ], { limit: 1 });
+          if (ups.length) paymentId = ups[0].id;
+        }
+      }
+    }
 
     // ATOMIC: Claim payment — only succeeds if status is processable
     const now = new Date().toISOString();
@@ -116,8 +135,9 @@ module.exports = async (req, res) => {
           // Increment referrer's referral count
           const referrerDoc = await getDoc(COL_USERS, referredByUserId);
           if (referrerDoc) {
+            const isSystemCode = isSystemReferralCode(referredByCode);
             const currentCount = (referrerDoc.referrals_count || 0) + 1;
-            const limitReached = currentCount >= MAX_REFERRALS;
+            const limitReached = !isSystemCode && currentCount >= MAX_REFERRALS;
             const updates = {
               referrals_count: currentCount,
               total_referral_count: (referrerDoc.total_referral_count || 0) + 1,

@@ -1,4 +1,4 @@
-const { COL_USERS, COL_NOTIFICATIONS, COL_AUDIT_LOGS, MAX_REFERRALS } = require('./_shared.js');
+const { COL_USERS, COL_NOTIFICATIONS, COL_AUDIT_LOGS, MAX_REFERRALS, isSystemReferralCode } = require('./_shared.js');
 const { getDoc, runQuery, updateDoc, addDoc } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
 
@@ -26,7 +26,8 @@ async function onReferralApproved(sponsorUserId, referralUserId, referralCode, a
   const currentCount = (sponsor.current_cycle_referral_count || 0) + 1;
   const totalReferrals = (sponsor.total_referrals || 0) + 1;
   const cycleNumber = sponsor.referral_cycle_number || 1;
-  const limitReached = currentCount >= MAX_REFERRALS;
+  const isSystemCode = isSystemReferralCode(referralCode);
+  const limitReached = !isSystemCode && currentCount >= MAX_REFERRALS;
 
   const updates = {
     current_cycle_referral_count: currentCount,

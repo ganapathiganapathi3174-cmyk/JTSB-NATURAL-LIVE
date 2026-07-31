@@ -22,13 +22,18 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // ⚠️ SECURITY: This endpoint auto-approves payments. It is a server-to-server
+    // webhook only and MUST be protected by a shared secret. Fail-closed: if the
+    // secret is not configured, the endpoint refuses to serve.
     const secret = process.env.PAYMENT_CONFIRM_SECRET;
-    if (secret) {
-      const provided = req.headers['x-payment-secret'] || '';
-      if (provided !== secret) {
-        res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid secret' }));
-        return;
-      }
+    if (!secret) {
+      res.writeHead(503); res.end(JSON.stringify({ error: 'paymentConfirm not configured (PAYMENT_CONFIRM_SECRET missing)' }));
+      return;
+    }
+    const provided = req.headers['x-payment-secret'] || '';
+    if (provided !== secret) {
+      res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid secret' }));
+      return;
     }
 
     const { amount, transactionReference, transactionTime } = req.body || {};

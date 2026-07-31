@@ -1,11 +1,12 @@
 const { COL_USERS, COL_SPONSOR_TRANSFERS, COL_NOTIFICATIONS, COL_REFERRALS, MAX_REFERRALS } = require('../api/_shared.js');
 const { runQuery, updateDoc, addDoc } = require('../api/_supabase.js');
+const { verifyAdminToken } = require('../api/_auth.js');
 
 module.exports = async (req, res) => {
   try {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
     if (req.method !== 'POST') {
       res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return;
@@ -32,6 +33,17 @@ module.exports = async (req, res) => {
     }
 
     const transfer = transfers[0];
+
+    // ⚠️ SECURITY: Owner-or-admin gate. Only the target sponsor (new_sponsor_id)
+    // or an authenticated admin may accept/reject a transfer request.
+    const authHeader = req.headers?.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    const admin = token ? verifyAdminToken(token) : null;
+    const callerUserId = req.headers['x-user-id'] || '';
+    const isTargetSponsor = callerUserId === transfer.new_sponsor_id;
+    if (!admin && !isTargetSponsor) {
+      res.writeHead(401); res.end(JSON.stringify({ error: 'Only the target sponsor or an admin can respond to this request' })); return;
+    }
 
     if (transfer.status !== 'pending') {
       res.writeHead(400); res.end(JSON.stringify({ error: 'Transfer request is already ' + transfer.status })); return;
@@ -125,7 +137,8 @@ module.exports = async (req, res) => {
       };
 
       if (oldSponsorDoc.account_status === 'inactive' &&
-          oldSponsorDoc.inactive_reason === 'Referral Limit Reached (2 Successful Referrals)') {
+          (oldSponsorDoc.inactive_reason === 'REFERRAL_LIMIT_COMPLETED' ||
+           oldSponsorDoc.inactive_reason === 'Referral Limit Reached (2 Successful Referrals)')) {
         oldUpdates.account_status = 'active';
         oldUpdates.inactive_reason = null;
       }
@@ -146,7 +159,7 @@ module.exports = async (req, res) => {
 
     if (newLimitReached) {
       newSponsorUpdates.account_status = 'inactive';
-      newSponsorUpdates.inactive_reason = 'Referral Limit Reached (2 Successful Referrals)';
+      newSponsorUpdates.inactive_reason = 'REFERRAL_LIMIT_COMPLETED';
     }
 
     await updateDoc(COL_USERS, newSponsor.id, newSponsorUpdates);

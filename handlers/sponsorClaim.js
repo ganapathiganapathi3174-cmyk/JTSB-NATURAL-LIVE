@@ -1,6 +1,7 @@
 const { COL_USERS, COL_SPONSOR_CLAIMS, COL_TOPUP_INCOME } = require('../api/_shared.js');
 const { runQuery, addDoc, updateDoc, getDoc } = require('../api/_supabase.js');
 const { broadcast } = require('../api/_sse.js');
+const { verifyAdminToken } = require('../api/_auth.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,6 +13,17 @@ module.exports = async (req, res) => {
   try {
     const { userId } = req.body || {};
     if (!userId) { res.writeHead(400); res.end(JSON.stringify({ error: 'userId is required' })); return; }
+
+    // ⚠️ SECURITY: Owner-or-admin gate. A claim must be initiated by the
+    // owning user (x-user-id header) or by an authenticated admin.
+    const authHeader = req.headers?.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    const admin = token ? verifyAdminToken(token) : null;
+    const callerUserId = req.headers['x-user-id'] || '';
+    const isOwner = callerUserId === userId;
+    if (!admin && !isOwner) {
+      res.writeHead(401); res.end(JSON.stringify({ error: 'You can only claim your own sponsor bonus' })); return;
+    }
 
     const users = await runQuery(COL_USERS, [{ field: 'id', op: 'EQUAL', value: userId }], { limit: 1 });
     if (!users.length) { res.writeHead(404); res.end(JSON.stringify({ error: 'User not found' })); return; }

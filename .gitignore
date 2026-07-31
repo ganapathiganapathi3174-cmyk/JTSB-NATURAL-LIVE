@@ -10,6 +10,7 @@ api/node_modules/
 *.zip
 .vercel
 .env*.local
+.env.production
 
 # Legacy
 my-worker/
