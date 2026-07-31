@@ -1,5 +1,8 @@
 const fs = require('fs');
 const p = require('path');
+
+const BUILD_COMMIT = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_COMMIT_SHA || '4f0935f662bd5eb6f896d28a004c030c79105248';
+const BUILD_TIME = process.env.VERCEL_GIT_COMMIT_AUTHOR_DATE || '2026-07-31T15:12:37+05:30';
 try {
   const envPath = p.join(__dirname, '..', '.env.local');
   if (fs.existsSync(envPath)) {
@@ -146,6 +149,17 @@ module.exports = async (req, res) => {
     }
   }
 
+  if (url === '/api/debug/version' || url === '/debug/version') {
+    res.setHeader('X-Debug-Version', BUILD_COMMIT);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      commit: BUILD_COMMIT,
+      buildTime: BUILD_TIME,
+      nodeVersion: process.version,
+    }));
+    return;
+  }
+
   const handler = getHandler(path);
   const ip = getClientIp(req);
   const rl = rateLimit(ip, 60, 60000);
@@ -199,6 +213,7 @@ module.exports = async (req, res) => {
     })) {
       if (!res.getHeader(k)) res.setHeader(k, v);
     }
+    if (!res.getHeader('X-Debug-Version')) res.setHeader('X-Debug-Version', BUILD_COMMIT);
     if (code >= 200 && code < 300 && code !== 204) {
       if (!res.getHeader('Content-Type') && !res.getHeader('content-type')) {
         res.setHeader('Content-Type', 'application/json');
