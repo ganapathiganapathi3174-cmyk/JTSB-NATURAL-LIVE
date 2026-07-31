@@ -8,14 +8,14 @@
 do $$ begin
   if not exists (
     select 1 from information_schema.columns
-    where table_name = 'notifications' and column_name = 'receiverId'
+    where table_name = 'notifications' and lower(column_name) = 'receiverid'
   ) then
     alter table public.notifications add column "receiverId" text;
     create index if not exists idx_notifications_receiver on public.notifications("receiverId");
   end if;
   if not exists (
     select 1 from information_schema.columns
-    where table_name = 'notifications' and column_name = 'createdAt'
+    where table_name = 'notifications' and lower(column_name) = 'createdat'
   ) then
     alter table public.notifications add column "createdAt" timestamptz default now();
   end if;
@@ -25,7 +25,7 @@ end $$;
 do $$ begin
   if not exists (
     select 1 from information_schema.columns
-    where table_name = 'payment_sessions' and column_name = 'paymentId'
+    where table_name = 'payment_sessions' and lower(column_name) = 'paymentid'
   ) then
     alter table public.payment_sessions add column "paymentId" text;
   end if;
