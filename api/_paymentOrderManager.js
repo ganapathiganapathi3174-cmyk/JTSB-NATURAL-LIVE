@@ -8,7 +8,6 @@ const {
 } = require('./_shared.js');
 const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet, getSupabaseClient } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
-const { verify } = require('./verification7.js');
 const cycleEngine = require('./_cycleEngine.js');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;
@@ -198,6 +197,7 @@ const IS_VERCEL = !!process.env.VERCEL;
 const VERIFY_INLINE_BUDGET_MS = 4500;
 
 async function submitPaymentProof(orderId, screenshotUrl, extra) {
+  const { verify } = require('./verification7.js');
   const t0 = Date.now();
 
   // ── FAST PATH: Minimal DB check (3s hard timeout) ──
@@ -321,6 +321,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
 // ── Background Verification Worker ──
 // Picks up orders from the queue, runs verification, updates DB, broadcasts SSE.
 async function runVerificationWorker() {
+  const { verify } = require('./verification7.js');
   verificationWorkerRunning = true;
   log('Verification worker started');
 

@@ -1,9 +1,5 @@
 const crypto = require('crypto');
 const C = require('./config.js');
-const imageValidator = require('./imageValidator.js');
-const imageProcessor = require('./imageProcessor.js');
-const ocrEngine = require('./ocrEngine.js');
-const aiVision = require('./aiVision.js');
 const fieldExtractor = require('./fieldExtractor.js');
 const fieldNormalizer = require('./fieldNormalizer.js');
 const rulesValidator = require('./rulesValidator.js');
@@ -11,6 +7,35 @@ const duplicateChecker = require('./duplicateChecker.js');
 const fraudDetector = require('./fraudDetector.js');
 const decider = require('./decider.js');
 const auditLogger = require('./auditLogger.js');
+
+let _imageValidator = null;
+let _imageProcessor = null;
+let _ocrEngine = null;
+let _aiVision = null;
+
+function getImageValidator() {
+  if (!_imageValidator) _imageValidator = require('./imageValidator.js');
+  return _imageValidator;
+}
+
+function getImageProcessor() {
+  if (!_imageProcessor) _imageProcessor = require('./imageProcessor.js');
+  return _imageProcessor;
+}
+
+function getOcrEngine() {
+  if (!_ocrEngine) _ocrEngine = require('./ocrEngine.js');
+  return _ocrEngine;
+}
+
+function getAiVision() {
+  if (!_aiVision) _aiVision = require('./aiVision.js');
+  return _aiVision;
+}
+
+function modFor(url) {
+  return url.startsWith('https') ? require('https') : require('http');
+}
 
 function log(msg) {
   console.log(`[${new Date().toISOString().slice(0, 19).replace('T', ' ')}] [NV] ${msg}`);
@@ -57,21 +82,21 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
 
     stages.upload = { ms: Date.now() - t0 };
 
-    const imgValidation = imageValidator.validateImage(buf);
+    const imgValidation = getImageValidator().validateImage(buf);
     stages.validation = { valid: imgValidation.valid, mime: imgValidation.mime, size: buf?.length || 0, ms: Date.now() - t0 - stages.upload.ms };
 
     let imgProcessed = { buffer: buf, width: 0, height: 0, processed: false };
     let integrity = { blurred: false, dark: false, score: 0, error: null };
     try {
-      imgProcessed = await imageProcessor.processImage(buf, { contrast: true, normalize: true });
-      integrity = await imageProcessor.detectBlur(buf, imgProcessed.width, imgProcessed.height);
+      imgProcessed = await getImageProcessor().processImage(buf, { contrast: true, normalize: true });
+      integrity = await getImageProcessor().detectBlur(buf, imgProcessed.width, imgProcessed.height);
     } catch (e) {
       log('IMAGE PROCESS FAILED: ' + e.message);
     }
     stages.process = { processed: imgProcessed.processed, width: imgProcessed.width, height: imgProcessed.height, integrity, ms: Date.now() - t0 };
 
     const ocrStart = Date.now();
-    const ocrResult = await ocrEngine.runAllEngines(screenshotUrl, imgProcessed.buffer || buf);
+    const ocrResult = await getOcrEngine().runAllEngines(screenshotUrl, imgProcessed.buffer || buf);
     stages.ocr = { engines: ocrResult.engineCount, avgConfidence: ocrResult.avgConfidence, ms: Date.now() - ocrStart };
 
     result.ocrEngines = ocrResult.engineCount;
@@ -81,7 +106,7 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
     log(`OCR RAW: ${(ocrResult.rawText || '').substring(0, 200)}`);
 
     const visionStart = Date.now();
-    const visionResult = await aiVision.runAIVision(screenshotUrl);
+    const visionResult = await getAiVision().runAIVision(screenshotUrl);
     stages.vision = { success: visionResult.success, engines: Object.keys(visionResult.engines).filter(k => visionResult.engines[k].success).length, ms: Date.now() - visionStart };
 
     if (visionResult.success) {
