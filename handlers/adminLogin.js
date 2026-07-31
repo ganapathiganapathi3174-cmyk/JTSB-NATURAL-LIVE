@@ -1,6 +1,5 @@
 const crypto = require('crypto');
-let bcrypt;
-try { bcrypt = require('bcrypt'); } catch (e) { console.warn('[ADMIN LOGIN] bcrypt not available, falling back to SHA-256'); }
+const bcrypt = require('bcrypt');
 const { signAdminToken } = require('../api/_auth.js');
 const { runQuery } = require('../api/_supabase.js');
 const { COL_ADMINS } = require('../api/_shared.js');
@@ -89,33 +88,7 @@ module.exports = async (req, res) => {
     }
     mark('env_var_check');
 
-    // Built-in default admin (jayaraj@gmail.com / jayaraj7523)
-    // DEV ONLY: disabled in production/Vercel. Production admins must be
-    // provisioned via ADMIN_EMAIL/ADMIN_PASSWORD_HASH env vars or the DB.
-    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
-    if (!isProduction) {
-      const DEFAULT_ADMIN_EMAIL = 'jayaraj@gmail.com';
-      const DEFAULT_ADMIN_HASH = 'bc21f55e8275b8274e8e704fe2de13a43a46f70cc602e6888ec52893ab790b13';
-      if (normalizedEmail === DEFAULT_ADMIN_EMAIL) {
-        const hash = crypto.createHash('sha256').update(password).digest('hex');
-        if (hash === DEFAULT_ADMIN_HASH) {
-          const role = 'admin';
-          const token = signAdminToken({ email: normalizedEmail, role, name: 'Admin' });
-          mark('jwt_sign');
-          console.log('[ADMIN LOGIN] Default admin login success (DEV): ' + normalizedEmail + ' | timing: ' + JSON.stringify(steps));
-          metrics.trackAuth(true);
-          res.writeHead(200); res.end(JSON.stringify({
-            token, expiresIn: 86400,
-            admin: { email: normalizedEmail, role, name: 'Admin' },
-          }));
-          return;
-        }
-        console.log('[ADMIN LOGIN] Default admin password mismatch for: ' + normalizedEmail);
-      }
-    } else {
-      console.log('[ADMIN LOGIN] Default admin login disabled in production');
-    }
-    mark('default_admin_check');
+    mark('env_var_check');
 
     console.log('[ADMIN LOGIN] Looking up admin in DB: ' + normalizedEmail);
     const admins = await runQuery(COL_ADMINS, [{ field: 'email', op: 'EQUAL', value: normalizedEmail }]);

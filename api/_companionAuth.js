@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { getClientIp } = require('./_rateLimit.js');
 
 const companionState = {
   connected: false,
@@ -25,7 +26,7 @@ function authenticateRequest(req) {
   companionState.connected = true;
   companionState.deviceName = deviceName;
   companionState.lastSyncAt = new Date().toISOString();
-  companionState.lastSyncIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  companionState.lastSyncIp = getClientIp(req);
   return { ok: true, deviceName };
 }
 

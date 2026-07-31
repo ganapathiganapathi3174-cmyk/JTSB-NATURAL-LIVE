@@ -12,18 +12,13 @@ function isTokenBlacklisted(jti) {
 }
 
 function getSecret() {
-  if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET;
-  // FAIL CLOSED: never sign tokens with a well-known constant in production/Vercel.
-  // Any deployment without ADMIN_JWT_SECRET gets a null secret, which makes
+  const secret = process.env.ADMIN_JWT_SECRET;
+  if (secret && secret.length >= 16) return secret;
+  // FAIL CLOSED: never sign tokens with a well-known constant. Any deployment
+  // without a strong ADMIN_JWT_SECRET gets a null secret, which makes
   // signAdminToken throw and verifyAdminToken reject every token.
-  const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
-  if (isProduction) {
-    console.error('[AUTH] FATAL: ADMIN_JWT_SECRET is not configured. Authentication is disabled.');
-    return null;
-  }
-  // Local development only: permit the known dev secret (never exposed to production).
-  console.warn('[AUTH] WARNING: Using dev JWT secret. Set ADMIN_JWT_SECRET for any deployed environment.');
-  return 'dev-jwt-secret-not-for-production';
+  console.error('[AUTH] FATAL: ADMIN_JWT_SECRET is not configured or too short (min 16 chars). Authentication is disabled.');
+  return null;
 }
 
 function signAdminToken(payload) {

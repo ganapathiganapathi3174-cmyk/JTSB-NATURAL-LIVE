@@ -2,6 +2,7 @@ const { COL_USERS, COL_SPONSOR_CLAIMS, COL_TOPUP_INCOME } = require('../api/_sha
 const { runQuery, addDoc, updateDoc, getDoc } = require('../api/_supabase.js');
 const { broadcast } = require('../api/_sse.js');
 const { verifyAdminToken } = require('../api/_auth.js');
+const { getClientIp } = require('../api/_rateLimit.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,15 +15,25 @@ module.exports = async (req, res) => {
     const { userId } = req.body || {};
     if (!userId) { res.writeHead(400); res.end(JSON.stringify({ error: 'userId is required' })); return; }
 
-    // ⚠️ SECURITY: Owner-or-admin gate. A claim must be initiated by the
-    // owning user (x-user-id header) or by an authenticated admin.
     const authHeader = req.headers?.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
     const admin = token ? verifyAdminToken(token) : null;
-    const callerUserId = req.headers['x-user-id'] || '';
-    const isOwner = callerUserId === userId;
-    if (!admin && !isOwner) {
-      res.writeHead(401); res.end(JSON.stringify({ error: 'You can only claim your own sponsor bonus' })); return;
+
+    // Require companion key + x-user-id for device-originated calls.
+    // Fail-closed: COMPANION_API_KEY must be set for companion to operate.
+    const companionKey = process.env.COMPANION_API_KEY;
+    const providedKey = req.headers['x-companion-key'] || '';
+    const ip = getClientIp(req);
+    if (!admin) {
+      if (!companionKey || !providedKey || providedKey !== companionKey) {
+        res.writeHead(401); res.end(JSON.stringify({ error: 'Companion authentication required' }));
+        return;
+      }
+      const callerUserId = req.headers['x-user-id'] || '';
+      if (!callerUserId || callerUserId !== userId) {
+        res.writeHead(401); res.end(JSON.stringify({ error: 'Caller user mismatch' }));
+        return;
+      }
     }
 
     const users = await runQuery(COL_USERS, [{ field: 'id', op: 'EQUAL', value: userId }], { limit: 1 });

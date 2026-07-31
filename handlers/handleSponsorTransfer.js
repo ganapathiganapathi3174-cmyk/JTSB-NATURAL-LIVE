@@ -1,12 +1,13 @@
 const { COL_USERS, COL_SPONSOR_TRANSFERS, COL_NOTIFICATIONS, COL_REFERRALS, MAX_REFERRALS } = require('../api/_shared.js');
 const { runQuery, updateDoc, addDoc } = require('../api/_supabase.js');
 const { verifyAdminToken } = require('../api/_auth.js');
+const { getClientIp } = require('../api/_rateLimit.js');
 
 module.exports = async (req, res) => {
   try {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Companion-Key');
     if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
     if (req.method !== 'POST') {
       res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return;
@@ -34,15 +35,23 @@ module.exports = async (req, res) => {
 
     const transfer = transfers[0];
 
-    // ⚠️ SECURITY: Owner-or-admin gate. Only the target sponsor (new_sponsor_id)
-    // or an authenticated admin may accept/reject a transfer request.
     const authHeader = req.headers?.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
     const admin = token ? verifyAdminToken(token) : null;
-    const callerUserId = req.headers['x-user-id'] || '';
-    const isTargetSponsor = callerUserId === transfer.new_sponsor_id;
-    if (!admin && !isTargetSponsor) {
-      res.writeHead(401); res.end(JSON.stringify({ error: 'Only the target sponsor or an admin can respond to this request' })); return;
+    const companionKey = process.env.COMPANION_API_KEY;
+    const providedKey = req.headers['x-companion-key'] || '';
+    const ip = getClientIp(req);
+    if (!admin) {
+      if (!companionKey || !providedKey || providedKey !== companionKey) {
+        res.writeHead(401); res.end(JSON.stringify({ error: 'Companion authentication required' }));
+        return;
+      }
+      const callerUserId = req.headers['x-user-id'] || '';
+      const isTargetSponsor = callerUserId === transfer.new_sponsor_id;
+      if (!isTargetSponsor) {
+        res.writeHead(401); res.end(JSON.stringify({ error: 'Only the target sponsor can respond' }));
+        return;
+      }
     }
 
     if (transfer.status !== 'pending') {

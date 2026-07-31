@@ -12,6 +12,7 @@ try {
 
 const { requireAdmin } = require('./_auth.js');
 const metrics = require('./_metrics.js');
+const { getClientIp } = require('./_rateLimit.js');
 const { initSystemUsers } = require('./_systemInit.js');
 initSystemUsers().catch(err => console.error('[SYSTEM-INIT] Error: ' + err.message));
 
@@ -134,7 +135,7 @@ module.exports = async (req, res) => {
   }
 
   const handler = getHandler(path);
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  const ip = getClientIp(req);
   const rl = rateLimit(ip, 60, 60000);
   if (rl.limited) {
     res.writeHead(429, { 'Content-Type': 'application/json' });

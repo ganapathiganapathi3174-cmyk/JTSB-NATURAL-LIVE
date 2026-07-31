@@ -1,4 +1,5 @@
 const { processSmsAndApprove } = require('../api/_smsEngine.js');
+const { getClientIp } = require('../api/_rateLimit.js');
 
 const rateLimitStore = new Map();
 const replayCache = new Map();
@@ -37,7 +38,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    const ip = getClientIp(req);
     const nowMs = Date.now();
     const rlEntry = rateLimitStore.get(ip) || { count: 0, resetAt: nowMs + 60000 };
     if (nowMs > rlEntry.resetAt) { rlEntry.count = 0; rlEntry.resetAt = nowMs + 60000; }
@@ -48,7 +49,17 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // FAIL-CLOSED authentication: this endpoint auto-approves payments and
+    // credits wallets. If neither secret is configured it refuses to operate
+    // rather than silently accepting unauthenticated requests.
     const bearerSecret = process.env.PAYMENT_CONFIRM_SECRET;
+    const apiSecret = process.env.SMS_PAYMENT_SECRET;
+    if (!bearerSecret && !apiSecret) {
+      log('Refusing unauthenticated request — PAYMENT_CONFIRM_SECRET and SMS_PAYMENT_SECRET not configured');
+      res.writeHead(503); res.end(JSON.stringify({ error: 'Payment confirm endpoint is not configured' }));
+      return;
+    }
+
     if (bearerSecret) {
       const bearerToken = verifyBearer(req);
       if (!bearerToken || bearerToken !== bearerSecret) {
@@ -58,7 +69,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    const apiSecret = process.env.SMS_PAYMENT_SECRET;
     if (apiSecret) {
       const provided = req.headers['x-api-secret'] || '';
       if (provided !== apiSecret) {

@@ -6,6 +6,7 @@ const http = require('http');
 const DIST = p.join(__dirname, '..', 'frontend', 'dist');
 const MIME = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.json': 'application/json', '.map': 'application/json' };
 const { requireAdmin } = require('./_auth.js');
+const { getClientIp } = require('./_rateLimit.js');
 const sseDashboard = require('../handlers/sseDashboard.js');
 
 const rateLimitStore = new Map();
@@ -183,8 +184,8 @@ if (routeCount !== 128) console.log('[ROUTE] Registered ' + routeCount + ' route
 
 const server = http.createServer((req, res) => {
   try {
-  // Rate limiting by IP
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  // Rate limiting by real IP (never trusts client-supplied X-Forwarded-For)
+  const ip = getClientIp(req);
   const rl = rateLimit(ip, 60, 60000);
   if (rl.limited) {
     res.writeHead(429, { 'Content-Type': 'application/json' });
