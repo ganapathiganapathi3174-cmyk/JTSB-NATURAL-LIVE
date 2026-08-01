@@ -61,6 +61,13 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
 
   try {
     let buf = screenshotBuf;
+    if (!buf && typeof screenshotUrl === 'string' && screenshotUrl.startsWith('data:image')) {
+      const m = screenshotUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
+      if (m) {
+        try { buf = Buffer.from(m[1], 'base64'); log('DATA-URL decoded: ' + buf.length + ' bytes'); }
+        catch (e) { log('DATA-URL DECODE FAILED: ' + e.message); }
+      }
+    }
     if (!buf && screenshotUrl) {
       try {
         const mod = screenshotUrl.startsWith('https') ? require('https') : require('http');

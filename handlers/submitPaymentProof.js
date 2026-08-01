@@ -1,8 +1,6 @@
-const { submitPaymentProof, retryPaymentOrder, getPaymentOrder } = require('../api/_paymentOrderManager.js');
-const { updateDoc, runQuery } = require('../api/_supabase.js');
-const { COL_ORDERS, COL_UPI_PAYMENTS } = require('../api/_shared.js');
+const { updateDoc } = require('../api/_supabase.js');
+const { COL_ORDERS } = require('../api/_shared.js');
 const r2 = require('../api/_r2.js');
-const { broadcast } = require('../api/_sse.js');
 
 function now() { return new Date().toISOString(); }
 
@@ -38,9 +36,41 @@ module.exports = async (req, res) => {
     if (!screenshot) { sendJSON(400, { error: 'screenshot is required' }); return; }
     if (!upiId) { sendJSON(400, { error: 'UPI ID is required' }); return; }
 
-    log('orderId=' + orderId + ' screenshot_len=' + (screenshot ? screenshot.length : 0) + ' (' + (Date.now() - t0) + 'ms validation)');
+    log('orderId=' + orderId + ' screenshot_len=' + (screenshot ? screenshot.length : 0));
 
-    // ── PHASE 1: Return "processing" IMMEDIATELY — zero blocking ops ──
+    const parsed = parseBase64(screenshot);
+    if (!parsed || !parsed.buffer || parsed.buffer.length < 1) { sendJSON(400, { error: 'Invalid screenshot image' }); return; }
+    if (parsed.buffer.length > 10 * 1024 * 1024) { sendJSON(400, { error: 'Screenshot must be under 10MB' }); return; }
+
+    // ── Phase 1: Store the screenshot SYNCHRONOUSLY (R2 preferred, data-URL fallback) ──
+    // This must complete before we respond, so the status-poll request can verify it.
+    let screenshotUrl = screenshot;
+    let r2TimeoutId;
+    try {
+      const key = 'payments/' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + parsed.ext;
+      const r2Result = await Promise.race([
+        r2.uploadFile(key, parsed.buffer, parsed.mimeType),
+        new Promise((_, reject) => { r2TimeoutId = setTimeout(() => reject(new Error('R2_TIMEOUT')), 3000); }),
+      ]);
+      clearTimeout(r2TimeoutId);
+      if (r2Result && r2Result.url) screenshotUrl = r2Result.url;
+      log('Screenshot stored (' + (screenshotUrl === screenshot ? 'data-URL fallback' : 'R2') + ') in ' + (Date.now() - t0) + 'ms');
+    } catch (e) {
+      clearTimeout(r2TimeoutId);
+      log('R2 upload failed (using data-URL fallback): ' + e.message);
+    }
+
+    // Persist the screenshot URL on the order so the poll (getPaymentOrderStatus)
+    // can find and verify it.
+    await updateDoc(COL_ORDERS, orderId, {
+      screenshot_url: screenshotUrl,
+      verification_status: 'pending',
+      updated_at: now(),
+    }).catch(e => log('Persist screenshot_url failed: ' + e.message));
+
+    // ── Phase 2: Respond immediately. Verification is driven synchronously by the
+    // frontend's status poll, because fire-and-forget background work after the
+    // response is NOT reliable on serverless functions. ──
     sendJSON(200, {
       orderId,
       paymentId: orderId,
@@ -55,78 +85,8 @@ module.exports = async (req, res) => {
       message: 'Payment screenshot received. Verifying...',
     });
 
-    log('Response sent in ' + (Date.now() - t0) + 'ms — starting background work');
-
-    // ── PHASE 2: Everything else is fire-and-forget ──
-    storeAndVerify(orderId, screenshot, utr, upiId).catch(e => {
-      log('Background error for ' + orderId + ': ' + e.message);
-    });
-
   } catch (err) {
     console.error('[SUBMIT-PROOF] Error:', err.message);
     sendJSON(err.status || 500, { error: 'Internal server error' });
   }
 };
-
-async function storeAndVerify(orderId, screenshot, utr, upiId) {
-  const bt0 = Date.now();
-
-  // Step 1: Upload to R2 with 4s timeout
-  let uploadedUrl = screenshot;
-  let r2TimeoutId;
-  try {
-    const parsed = parseBase64(screenshot);
-    if (parsed && parsed.buffer.length <= 10 * 1024 * 1024) {
-      const key = 'payments/' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + parsed.ext;
-      const r2Result = await Promise.race([
-        r2.uploadFile(key, parsed.buffer, parsed.mimeType),
-        new Promise((_, reject) => { r2TimeoutId = setTimeout(() => reject(new Error('R2_TIMEOUT')), 4000); }),
-      ]);
-      clearTimeout(r2TimeoutId);
-      if (r2Result && r2Result.url) uploadedUrl = r2Result.url;
-      log('R2 upload done: ' + (Date.now() - bt0) + 'ms, url=' + (uploadedUrl || '').substring(0, 60));
-    }
-  } catch (e) {
-    clearTimeout(r2TimeoutId);
-    log('R2 upload failed (using base64): ' + e.message);
-  }
-
-  // Step 2: Get order + handle expiry — all with 5s combined timeout
-  const dbT0 = Date.now();
-  try {
-    await Promise.race([
-      (async () => {
-        let order = await getPaymentOrder(orderId);
-        if (!order) { log('Order not found: ' + orderId); return; }
-        if (order.status === 'expired') {
-          log('Re-activating expired order ' + orderId);
-          const newExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-          await updateDoc(COL_ORDERS, orderId, {
-            status: 'pending', verification_status: null, verification_score: null,
-            ocr_result: null, rejection_reasons: [], screenshot_url: null,
-            expires_at: newExpiresAt, updated_at: now(),
-          }).catch(() => {});
-        }
-        if (order.status === 'verified') { log('Already verified: ' + orderId); return; }
-
-        // Store screenshot + trigger verification
-        await submitPaymentProof(orderId, uploadedUrl, { userEnteredUtr: utr || null, userEnteredUpi: upiId || null });
-      })(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 5000)),
-    ]);
-  } catch (e) {
-    log('Background store/verify failed for ' + orderId + ': ' + e.message);
-    // Try to mark as manual_review so admin can handle
-    try {
-      await updateDoc(COL_ORDERS, orderId, {
-        status: 'manual_review',
-        verification_status: 'manual_review',
-        rejection_reasons: ['Background processing failed: ' + e.message],
-        updated_at: now(),
-      });
-      broadcast('paymentUpdated', { orderId, status: 'manual_review' }).catch(() => {});
-    } catch (_) {}
-  }
-
-  log('Background work done for ' + orderId + ': ' + (Date.now() - bt0) + 'ms total');
-}

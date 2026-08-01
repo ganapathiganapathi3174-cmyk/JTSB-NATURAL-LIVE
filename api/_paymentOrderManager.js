@@ -243,7 +243,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     log('[INLINE_VERIFY] order ' + orderId + ' starting (V7)');
     const v = await verify(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null, null);
     const finalStatus = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
-    Promise.all([
+    await Promise.all([
       updateDoc(COL_ORDERS, orderId, {
         status: finalStatus, verification_status: v.status,
         verification_score: v.confidence || 0, ocr_result: v.ocrData || null,
@@ -270,7 +270,8 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
           }
         } catch (_) {}
       })(),
-    ]).then(() => { log('[POST_DB] ' + orderId + ' done'); }).catch(() => {});
+    ]);
+    log('[POST_DB] ' + orderId + ' done');
     try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch {}
     log('[INLINE_VERIFY] order ' + orderId + ' done: status=' + finalStatus + ' score=' + (v.confidence || 0) + ' total=' + (Date.now() - t0) + 'ms');
     verifyingOrders.delete(orderId);
