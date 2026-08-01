@@ -34,6 +34,9 @@ require('./_queue.js').ensureQueueTables().then(() => require('./_queue.js').rec
 require('./_health.js').startHealthChecks();
 require('./_cleanup.js').startDailyTasks();
 require('./_upiPaymentMonitor.js').startMonitor();
+// Production-hardening: DB-backed verification retry worker (local-dev only;
+// never started on Vercel — the status poll drives verification there).
+require('./_verifyQueue.js').startWorker(5000);
 require('./_systemInit.js').initSystemUsers().then(created => {
   console.log('[SYSTEM-INIT] Startup initialization complete: ' + created + ' users created');
 }).catch(err => {

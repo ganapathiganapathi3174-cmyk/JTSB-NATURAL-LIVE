@@ -7,6 +7,10 @@ const { runQuery, addDoc, updateDoc, getDoc, getSupabaseClient } = require('./_s
 const { broadcast } = require('./_sse.js');
 const { verifySession } = require('./_verificationEngine.js');
 const { executeVerifiedOrder } = require('./_approvalPipeline.js');
+const metrics = require('./_metrics.js');
+const audit = require('./_auditLogger.js');
+const verifyQueue = require('./_verifyQueue.js');
+const notify = require('./_notificationService.js');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;
 const VERIFY_TIMEOUT_MS = 180 * 1000;
@@ -129,6 +133,17 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
   log(`CREATE order=${finalOrderId} type=${type} amount=${amount} expectedUpi=${ADMIN_UPI_ID} upiPaymentId=${upiPaymentId || 'none'}`);
 
   try { broadcast('paymentCreated', { orderId: finalOrderId, type, amount, status: 'pending' }); } catch {}
+  try {
+    await audit.logOrderEvent({
+      action: 'session_created',
+      orderId: finalOrderId,
+      userId: paymentUserId || paymentPendingRegId,
+      type,
+      amount: Number(amount),
+      from: 'none',
+      to: 'pending',
+    });
+  } catch {}
 
   return {
     orderId: finalOrderId,
@@ -154,6 +169,10 @@ async function getPaymentOrder(orderId) {
     order.status = 'expired';
     await updateDoc(COL_ORDERS, orderId, { status: 'expired', updated_at: now() }).catch(() => {});
     try { broadcast('paymentUpdated', { orderId, status: 'expired' }); } catch {}
+    try {
+      await audit.logTransition(order, 'expired', { trigger: 'ttl', orderId });
+      await notify.notifySessionExpired(order);
+    } catch {}
   }
   return order;
 }
@@ -188,10 +207,14 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     await updateDoc(COL_ORDERS, orderId, {
       status: 'pending', verification_status: null, verification_score: null,
       ocr_result: null, rejection_reasons: [], screenshot_url: null,
+      verification_attempts: 0, next_retry_at: null, last_error: null,
       expires_at: newExpiresAt, updated_at: now(),
     }).catch(() => {});
     order.status = 'pending';
     order.expires_at = newExpiresAt;
+    try {
+      await audit.logTransition(order, 'pending', { trigger: 'reactivate', orderId });
+    } catch {}
   }
 
   if (order.status === 'verified') throw Object.assign(new Error('Order already verified'), { status: 400 });
@@ -222,12 +245,22 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       confidence: v.confidence || 0,
       fraudScore: v.fraudScore || 0,
       reasons: v.reasons || [],
+      screenshotPhash: v.screenshotPhash || null,
     };
+    metrics.trackVerificationResult(finalStatus, Date.now() - t0, v.stages);
+    const createdMs = order.created_at ? Date.now() - new Date(order.created_at).getTime() : null;
+    if (createdMs != null && createdMs >= 0) metrics.trackLifecycle('submit_to_verify_ms', createdMs);
+    try {
+      await audit.logTransition(order, finalStatus, { trigger: 'auto', orderId });
+    } catch {}
+    if (finalStatus === 'manual_review') { try { await notify.notifyManualReview(order); } catch {} }
     await Promise.all([
       updateDoc(COL_ORDERS, orderId, {
         status: finalStatus, verification_status: v.status,
         verification_score: v.confidence || 0, ocr_result: verificationData,
-        rejection_reasons: v.reasons || [], updated_at: now(),
+        rejection_reasons: v.reasons || [], screenshot_phash: v.screenshotPhash || null,
+        verification_attempts: 0, next_retry_at: null, last_error: null,
+        updated_at: now(),
       }).catch(e => log('DB update order failed: ' + e.message)),
       (async () => {
         try {
@@ -239,6 +272,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
               ocr_result: verificationData, final_score: v.confidence || 0,
               fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
               utr_hash: v.utrHash || null, screenshot_hash: v.screenshotHash || null,
+              screenshot_phash: v.screenshotPhash || null,
               rejection_reasons: v.reasons || [],
               verified_at: now(), verification_completed_at: now(),
             }).catch(() => {});
@@ -255,6 +289,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
                   ocr_result: verificationData, final_score: v.confidence || 0,
                   fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
                   utr_hash: v.utrHash || null, screenshot_hash: v.screenshotHash || null,
+                  screenshot_phash: v.screenshotPhash || null,
                   rejection_reasons: v.reasons || [],
                   verified_at: now(), verification_completed_at: now(),
                 }).catch(() => {});
@@ -293,6 +328,8 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
         log('Post-approval err: ' + e.message);
         await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['Post-approval failed: ' + e.message], updated_at: now() }).catch(() => {});
       }
+      const approveMs = order.created_at ? Date.now() - new Date(order.created_at).getTime() : null;
+      if (approveMs != null && approveMs >= 0) metrics.trackLifecycle('submit_to_approve_ms', approveMs);
     }
     return response;
   } catch (ocrErr) {
@@ -302,6 +339,15 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       rejection_reasons: ['Verification error: ' + ocrErr.message], updated_at: now(),
     }).catch(() => {});
     try { broadcast('paymentUpdated', { orderId, status: 'manual_review', type: order.type }); } catch {}
+    metrics.trackVerificationResult('failed', Date.now() - t0);
+    try {
+      await audit.logOrderEvent({
+        action: 'verify_failed', orderId, userId: order.user_id || order.pending_reg_id,
+        type: order.type, amount: order.amount, to: 'manual_review',
+        reason: ocrErr.message,
+      });
+      await notify.notifyVerificationFailed(order, ocrErr.message);
+    } catch {}
 
     verifyingOrders.delete(orderId);
     return {

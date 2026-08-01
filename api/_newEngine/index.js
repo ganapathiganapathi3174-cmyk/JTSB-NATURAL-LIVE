@@ -12,6 +12,7 @@ let _imageValidator = null;
 let _imageProcessor = null;
 let _ocrEngine = null;
 let _aiVision = null;
+let _phash = null;
 
 function getImageValidator() {
   if (!_imageValidator) _imageValidator = require('./imageValidator.js');
@@ -31,6 +32,11 @@ function getOcrEngine() {
 function getAiVision() {
   if (!_aiVision) _aiVision = require('./aiVision.js');
   return _aiVision;
+}
+
+function getPhash() {
+  if (!_phash) _phash = require('./phash.js');
+  return _phash;
 }
 
 function modFor(url) {
@@ -192,6 +198,10 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
     // duplicate checker works across requests and process restarts.
     result.utrHash = normalized?.utr ? crypto.createHash('sha256').update(normalized.utr.toUpperCase()).digest('hex') : null;
     result.screenshotHash = buf && Buffer.isBuffer(buf) ? crypto.createHash('sha256').update(buf).digest('hex') : null;
+    result.screenshotPhash = null;
+    if (buf && Buffer.isBuffer(buf)) {
+      try { result.screenshotPhash = await getPhash().computePhash(buf); } catch (_) {}
+    }
 
     const ocrData = {
       raw: (ocrResult.rawText || '').substring(0, 5000),

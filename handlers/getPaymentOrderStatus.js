@@ -74,6 +74,9 @@ module.exports = async (req, res) => {
       userEnteredUtr: order.utr || null,
       userEnteredUpi: order.expected_upi_id || null,
       fraudScore: vdata.fraudScore || 0,
+      verificationAttempts: order.verification_attempts || 0,
+      nextRetryAt: order.next_retry_at || null,
+      lastError: order.last_error || null,
     }));
   } catch (err) {
     console.error('[getPaymentOrderStatus] Error:', err.message);

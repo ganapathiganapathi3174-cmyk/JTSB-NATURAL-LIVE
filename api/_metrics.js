@@ -39,6 +39,26 @@ const metrics = {
     queue_errors: 0,
     last_error: null,
   },
+  // Production-hardening metrics (added 2026-08-01)
+  verification: {
+    attempts: 0,
+    successes: 0,
+    retries: 0,
+    retriesExhausted: 0,
+    recoveredStale: 0,
+    queueEnqueued: 0,
+    queueClaimed: 0,
+    queueCompleted: 0,
+    manualReview: 0,
+    failed: 0,
+  },
+  timings: {
+    verify_ms: { count: 0, sum: 0, min: 0, max: 0 },
+    ocr_ms: { count: 0, sum: 0, min: 0, max: 0 },
+    duplicate_ms: { count: 0, sum: 0, min: 0, max: 0 },
+    decision_ms: { count: 0, sum: 0, min: 0, max: 0 },
+    lifecycle: { submit_to_verify_ms: [], submit_to_approve_ms: [] },
+  },
   started_at: new Date().toISOString(),
 };
 
@@ -132,6 +152,76 @@ function trackDBError(service) {
   metrics.database.last_error = new Date().toISOString() + ' [' + service + ']';
 }
 
+// ── Production-hardening metric trackers ──
+function pushTiming(list, ms) {
+  const n = Math.round(ms || 0);
+  list.push(n);
+  if (list.length > 200) list.shift();
+  return list;
+}
+
+function recordWindow(window, ms) {
+  const n = Math.round(ms || 0);
+  if (!window.count) { window.count = 1; window.sum = n; window.min = n; window.max = n; }
+  else {
+    window.count++;
+    window.sum += n;
+    if (n < window.min) window.min = n;
+    if (n > window.max) window.max = n;
+  }
+}
+
+function trackVerificationAttempt() { metrics.verification.attempts++; }
+
+function trackVerificationResult(status, durationMs, stages) {
+  metrics.verification.attempts++;
+  if (status === 'verified') metrics.verification.successes++;
+  else if (status === 'manual_review') metrics.verification.manualReview++;
+  else if (status === 'rejected') { /* counted in payments.rejected via existing hooks */ }
+  else if (status === 'failed') metrics.verification.failed++;
+  if (durationMs) recordWindow(metrics.timings.verify_ms, durationMs);
+  if (stages) {
+    if (stages.ocr && stages.ocr.ms) recordWindow(metrics.timings.ocr_ms, stages.ocr.ms);
+    if (stages.duplicate && stages.duplicate.ms) recordWindow(metrics.timings.duplicate_ms, stages.duplicate.ms);
+    if (stages.decision && stages.decision.ms) recordWindow(metrics.timings.decision_ms, stages.decision.ms);
+  }
+}
+
+function trackRetry() { metrics.verification.retries++; }
+
+function trackRetryExhausted() { metrics.verification.retriesExhausted++; }
+
+function trackStaleRecovered() { metrics.verification.recoveredStale++; }
+
+function trackQueueEnqueued() { metrics.verification.queueEnqueued++; }
+
+function trackQueueClaimed() { metrics.verification.queueClaimed++; }
+
+function trackQueueCompleted() { metrics.verification.queueCompleted++; }
+
+// Lifecycle timing: submit → terminal verify (poll), submit → approve.
+function trackLifecycle(event, ms) {
+  if (!metrics.timings.lifecycle[event]) return;
+  pushTiming(metrics.timings.lifecycle[event], ms);
+}
+
+function windowSummary(window) {
+  return {
+    count: window.count,
+    avg_ms: window.count ? Math.round(window.sum / window.count) : 0,
+    min_ms: window.min,
+    max_ms: window.max,
+  };
+}
+
+function lifecycleSummary(list) {
+  if (!list || !list.length) return { count: 0, avg_ms: 0, min_ms: 0, max_ms: 0 };
+  const min = Math.min(...list);
+  const max = Math.max(...list);
+  const sum = list.reduce((a, b) => a + b, 0);
+  return { count: list.length, avg_ms: Math.round(sum / list.length), min_ms: min, max_ms: max };
+}
+
 // Get metrics snapshot
 function getMetrics() {
   const now = new Date().toISOString();
@@ -164,6 +254,17 @@ function getMetrics() {
     wallet: metrics.wallet,
     referral: metrics.referral,
     database: metrics.database,
+    verification: metrics.verification,
+    timings: {
+      verify_ms: windowSummary(metrics.timings.verify_ms),
+      ocr_ms: windowSummary(metrics.timings.ocr_ms),
+      duplicate_ms: windowSummary(metrics.timings.duplicate_ms),
+      decision_ms: windowSummary(metrics.timings.decision_ms),
+      lifecycle: {
+        submit_to_verify_ms: lifecycleSummary(metrics.timings.lifecycle.submit_to_verify_ms),
+        submit_to_approve_ms: lifecycleSummary(metrics.timings.lifecycle.submit_to_approve_ms),
+      },
+    },
   };
 }
 
@@ -185,6 +286,22 @@ function resetMetrics() {
   metrics.ocr.attempted = 0;
   metrics.ocr.success = 0;
   metrics.ocr.failure = 0;
+  metrics.verification.attempts = 0;
+  metrics.verification.successes = 0;
+  metrics.verification.retries = 0;
+  metrics.verification.retriesExhausted = 0;
+  metrics.verification.recoveredStale = 0;
+  metrics.verification.queueEnqueued = 0;
+  metrics.verification.queueClaimed = 0;
+  metrics.verification.queueCompleted = 0;
+  metrics.verification.manualReview = 0;
+  metrics.verification.failed = 0;
+  metrics.timings.verify_ms = { count: 0, sum: 0, min: 0, max: 0 };
+  metrics.timings.ocr_ms = { count: 0, sum: 0, min: 0, max: 0 };
+  metrics.timings.duplicate_ms = { count: 0, sum: 0, min: 0, max: 0 };
+  metrics.timings.decision_ms = { count: 0, sum: 0, min: 0, max: 0 };
+  metrics.timings.lifecycle.submit_to_verify_ms = [];
+  metrics.timings.lifecycle.submit_to_approve_ms = [];
 }
 
 module.exports = {
@@ -203,6 +320,15 @@ module.exports = {
   trackReferralBonus,
   trackReferralTopupIncome,
   trackDBError,
+  trackVerificationAttempt,
+  trackVerificationResult,
+  trackRetry,
+  trackRetryExhausted,
+  trackStaleRecovered,
+  trackQueueEnqueued,
+  trackQueueClaimed,
+  trackQueueCompleted,
+  trackLifecycle,
   getMetrics,
   resetMetrics,
 };

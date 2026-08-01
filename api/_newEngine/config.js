@@ -35,6 +35,11 @@ module.exports = {
   FRAUD_RAPID_WINDOW_MS: 60000,
   FRAUD_MAX_PER_WINDOW: 3,
 
+  // Perceptual-hash duplicate detection (dHash, 64-bit).
+  // Two screenshots are "same image" when hamming distance <= threshold.
+  PHASH_THRESHOLD: parseInt(process.env.PHASH_THRESHOLD || '10', 10),
+  PHASH_SCAN_LIMIT: parseInt(process.env.PHASH_SCAN_LIMIT || '300', 10),
+
   DECISION: {
     APPROVE: 'verified',
     REJECT: 'rejected',
