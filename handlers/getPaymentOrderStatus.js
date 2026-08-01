@@ -49,6 +49,10 @@ module.exports = async (req, res) => {
       if (!order) { res.writeHead(404); res.end(JSON.stringify({ error: 'Order not found' })); return; }
     }
 
+    // Surface the full UI contract: checks + matched flags persisted by the
+    // verification pipeline inside ocr_result (no extra DB columns needed).
+    const vdata = order.ocr_result && typeof order.ocr_result === 'object' ? order.ocr_result : {};
+
     res.writeHead(200); res.end(JSON.stringify({
       orderId: order.id,
       type: order.type,
@@ -60,6 +64,16 @@ module.exports = async (req, res) => {
       createdAt: order.created_at,
       expiresAt: order.expires_at,
       rejectionReasons: order.rejection_reasons,
+      checks: vdata.checks || [],
+      matchedAmount: !!vdata.matchedAmount,
+      matchedReceiver: !!vdata.matchedReceiver,
+      matchedUtr: !!vdata.matchedUtr,
+      matchedDate: !!vdata.matchedDate,
+      userUtrMatched: !!vdata.userUtrMatched,
+      userUpiMatched: !!vdata.userUpiMatched,
+      userEnteredUtr: order.utr || null,
+      userEnteredUpi: order.expected_upi_id || null,
+      fraudScore: vdata.fraudScore || 0,
     }));
   } catch (err) {
     console.error('[getPaymentOrderStatus] Error:', err.message);

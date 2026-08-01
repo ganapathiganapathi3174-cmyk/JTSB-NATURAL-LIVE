@@ -208,10 +208,25 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     log('[INLINE_VERIFY] order ' + orderId + ' starting (V7)');
     const v = await verifySession(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null, null);
     const finalStatus = v.status;
+    // Persist the full UI contract (checks + matched flags) inside ocr_result so
+    // the status poll can surface it without extra columns.
+    const verificationData = {
+      ...(v.ocrData || {}),
+      checks: v.checks || [],
+      matchedAmount: !!v.matchedAmount,
+      matchedReceiver: !!v.matchedReceiver,
+      matchedUtr: !!v.matchedUtr,
+      matchedDate: !!v.matchedDate,
+      userUtrMatched: !!v.userUtrMatched,
+      userUpiMatched: !!v.userUpiMatched,
+      confidence: v.confidence || 0,
+      fraudScore: v.fraudScore || 0,
+      reasons: v.reasons || [],
+    };
     await Promise.all([
       updateDoc(COL_ORDERS, orderId, {
         status: finalStatus, verification_status: v.status,
-        verification_score: v.confidence || 0, ocr_result: v.ocrData || null,
+        verification_score: v.confidence || 0, ocr_result: verificationData,
         rejection_reasons: v.reasons || [], updated_at: now(),
       }).catch(e => log('DB update order failed: ' + e.message)),
       (async () => {
@@ -221,7 +236,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
           if (upiId) {
             await updateDoc(COL_UPI_PAYMENTS, upiId, {
               status: finalStatus, verification_locked: false,
-              ocr_result: v.ocrData || null, final_score: v.confidence || 0,
+              ocr_result: verificationData, final_score: v.confidence || 0,
               fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
               utr_hash: v.utrHash || null, screenshot_hash: v.screenshotHash || null,
               rejection_reasons: v.reasons || [],
@@ -237,7 +252,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
               for (const p of ups) {
                 await updateDoc(COL_UPI_PAYMENTS, p.id, {
                   status: finalStatus, verification_locked: false,
-                  ocr_result: v.ocrData || null, final_score: v.confidence || 0,
+                  ocr_result: verificationData, final_score: v.confidence || 0,
                   fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
                   utr_hash: v.utrHash || null, screenshot_hash: v.screenshotHash || null,
                   rejection_reasons: v.reasons || [],
