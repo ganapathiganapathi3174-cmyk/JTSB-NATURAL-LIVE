@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
     const needsVerification =
       (order.status === 'pending' || order.status === 'expired') &&
       !!order.screenshot_url &&
-      !order.verification_status;
+      (!order.verification_status || order.verification_status === 'pending');
 
     if (needsVerification) {
       log('order=' + orderId + ' has screenshot but no verification — verifying synchronously');

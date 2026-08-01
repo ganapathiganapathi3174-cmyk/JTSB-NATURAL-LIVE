@@ -65,8 +65,10 @@ module.exports = async (req, res) => {
     await updateDoc(COL_ORDERS, orderId, {
       screenshot_url: screenshotUrl,
       verification_status: 'pending',
+      utr: utr || null,
+      expected_upi_id: upiId || null,
       updated_at: now(),
-    }).catch(e => log('Persist screenshot_url failed: ' + e.message));
+    }).catch(e => log('Persist order fields failed: ' + e.message));
 
     // ── Phase 2: Respond immediately. Verification is driven synchronously by the
     // frontend's status poll, because fire-and-forget background work after the
