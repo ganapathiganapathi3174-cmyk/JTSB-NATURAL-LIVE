@@ -72,10 +72,22 @@ function extractTime(text) {
 }
 
 function extractStatus(text) {
+  if (!text) return null;
   const t = text.toUpperCase();
-  if (/\b(SUCCESS|SUCCESSFUL|COMPLETED|PAID|CREDITED|DONE)\b/.test(t)) return 'SUCCESS';
+  // 1) Explicit Status/State field wins over any marketing footer text.
+  const line = text.match(/(?:Payment\s*Status|Status|State)\s*:?\s*([A-Za-z]{3,20})/i);
+  if (line && line[1]) {
+    const w = line[1].toUpperCase();
+    if (/\b(SUCCESS|SUCCESSFUL|COMPLETED|PAID|CREDITED|DONE)\b/.test(w)) return 'SUCCESS';
+    if (/\b(FAILED|REJECTED|DECLINED|CANCELLED|FAIL|UNSUCCESSFUL|REFUNDED)\b/.test(w)) return 'FAILED';
+    if (/\b(PENDING|PROCESSING|INITIATED|IN PROGRESS)\b/.test(w)) return 'PENDING';
+  }
+  // 2) FAILED/PENDING state words take priority over the SUCCESS tagline,
+  //    otherwise a "Transaction successful via PhonePe" footer would mask a
+  //    failed transaction that still carries the marketing line.
   if (/\b(FAILED|REJECTED|DECLINED|CANCELLED|FAIL|UNSUCCESSFUL|REFUNDED)\b/.test(t)) return 'FAILED';
   if (/\b(PENDING|PROCESSING|INITIATED|IN PROGRESS)\b/.test(t)) return 'PENDING';
+  if (/\b(SUCCESS|SUCCESSFUL|COMPLETED|PAID|CREDITED|DONE)\b/.test(t)) return 'SUCCESS';
   return null;
 }
 

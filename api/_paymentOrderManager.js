@@ -1,59 +1,25 @@
-const crypto = require('crypto');
 const {
   COL_USERS, COL_PENDING_REGS, COL_UPI_PAYMENTS, COL_ORDERS,
-  COL_WALLET_BALANCES, COL_WALLET_TX, COL_TOPUPS, COL_TOPUP_INCOME,
-  COL_REFERRALS, COL_NOTIFICATIONS, COL_VERIFICATION_LOGS,
-  MAX_REFERRALS, randomString, ADMIN_UPI_ID, isSystemReferralCode,
+  randomString, ADMIN_UPI_ID,
   getReferrerPackage, getPackageByReferral, validatePackageAmount,
 } = require('./_shared.js');
-const { runQuery, addDoc, writeDoc, updateDoc, getDoc, deleteDoc, conditionalUpdateDoc, atomicCreditWallet, getSupabaseClient } = require('./_supabase.js');
+const { runQuery, addDoc, updateDoc, getDoc, getSupabaseClient } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
-const cycleEngine = require('./_cycleEngine.js');
+const { verifySession } = require('./_verificationEngine.js');
+const { executeVerifiedOrder } = require('./_approvalPipeline.js');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;
 const VERIFY_TIMEOUT_MS = 180 * 1000;
 const VERIFY_LOCK_TIMEOUT_MS = 180000;
 
-// In-flight verification tracker
+// In-flight verification tracker (in-process only; the 409 lock + the
+// atomic status claim are the real serverless-safe concurrency guards)
 const verifyingOrders = new Set();
-// Background queue for pending payment verification
-const pendingVerificationQueue = new Set();
-let verificationWorkerRunning = false;
-const VERIFICATION_POLL_MS = 3000;
 
 function log(msg) {
   console.log(`[${new Date().toISOString().slice(0, 19).replace('T', ' ')}] [ORDER-MGR] ${msg}`);
 }
 function now() { return new Date().toISOString(); }
-
-function makeTimer() {
-  const marks = {};
-  const start = Date.now();
-  function mark(name) {
-    const elapsed = Date.now() - start;
-    const prev = marks[name];
-    if (prev) {
-      marks[name] = { at: elapsed, sincePrev: elapsed - (marks._last || 0) };
-    } else {
-      marks[name] = { at: elapsed, sincePrev: elapsed - (marks._last || 0) };
-    }
-    marks._last = elapsed;
-    const sp = marks[name].sincePrev;
-    log('[TIMING] ' + name + ' +' + elapsed + 'ms (+' + sp + 'ms since prev)');
-    if (sp > 2000) log('[BOTTLENECK] "' + name + '" took ' + sp + 'ms (> 2s threshold)');
-    return elapsed;
-  }
-  function summary() {
-    const total = Date.now() - start;
-    log('=== TIMING TABLE (total=' + total + 'ms) ===');
-    for (const [k, v] of Object.entries(marks)) {
-      if (k === '_last') continue;
-      log('  ' + k + ': ' + v.sincePrev + 'ms');
-    }
-    return total;
-  }
-  return { mark, summary, start: () => Date.now() - start };
-}
 
 async function lookupUser(userId) {
   try { const u = await getDoc(COL_USERS, userId); if (u) return u; } catch {}
@@ -197,7 +163,6 @@ const IS_VERCEL = !!process.env.VERCEL;
 const VERIFY_INLINE_BUDGET_MS = 4500;
 
 async function submitPaymentProof(orderId, screenshotUrl, extra) {
-  const { verify } = require('./verification7.js');
   const t0 = Date.now();
 
   // ── FAST PATH: Minimal DB check (3s hard timeout) ──
@@ -238,11 +203,11 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
 
   log('[SUBMIT] Pre-pipeline DB done: ' + (Date.now() - t0) + 'ms for ' + orderId);
 
-  // ── FAST PATH: V7 enterprise verification ──
+  // ── FAST PATH: single verification facade ──
   try {
     log('[INLINE_VERIFY] order ' + orderId + ' starting (V7)');
-    const v = await verify(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null, null);
-    const finalStatus = v.status === 'verified' ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
+    const v = await verifySession(order, screenshotUrl, order.user_id || null, extra?.userEnteredUtr || order.utr || null, extra?.userEnteredUpi || null, null);
+    const finalStatus = v.status;
     await Promise.all([
       updateDoc(COL_ORDERS, orderId, {
         status: finalStatus, verification_status: v.status,
@@ -251,21 +216,34 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       }).catch(e => log('DB update order failed: ' + e.message)),
       (async () => {
         try {
-          const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
-          const searchValue = order.pending_reg_id || order.user_id;
-          if (searchValue) {
-            const ups = await runQuery(COL_UPI_PAYMENTS, [
-              { field: searchField, op: 'EQUAL', value: searchValue },
-            ], { limit: 5 });
-            for (const p of ups) {
-              await updateDoc(COL_UPI_PAYMENTS, p.id, {
-                status: finalStatus, verification_locked: false,
-                ocr_result: v.ocrData || null, final_score: v.confidence || 0,
-                fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
-                utr_hash: v.utrHash || null, screenshot_hash: v.screenshotHash || null,
-                rejection_reasons: v.reasons || [],
-                verified_at: now(), verification_completed_at: now(),
-              }).catch(() => {});
+          // Update the canonical upi_payments row for this order (paymentId link).
+          const upiId = order.paymentId || order.paymentid;
+          if (upiId) {
+            await updateDoc(COL_UPI_PAYMENTS, upiId, {
+              status: finalStatus, verification_locked: false,
+              ocr_result: v.ocrData || null, final_score: v.confidence || 0,
+              fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
+              utr_hash: v.utrHash || null, screenshot_hash: v.screenshotHash || null,
+              rejection_reasons: v.reasons || [],
+              verified_at: now(), verification_completed_at: now(),
+            }).catch(() => {});
+          } else {
+            const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
+            const searchValue = order.pending_reg_id || order.user_id;
+            if (searchValue) {
+              const ups = await runQuery(COL_UPI_PAYMENTS, [
+                { field: searchField, op: 'EQUAL', value: searchValue },
+              ], { limit: 5 });
+              for (const p of ups) {
+                await updateDoc(COL_UPI_PAYMENTS, p.id, {
+                  status: finalStatus, verification_locked: false,
+                  ocr_result: v.ocrData || null, final_score: v.confidence || 0,
+                  fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
+                  utr_hash: v.utrHash || null, screenshot_hash: v.screenshotHash || null,
+                  rejection_reasons: v.reasons || [],
+                  verified_at: now(), verification_completed_at: now(),
+                }).catch(() => {});
+              }
             }
           }
         } catch (_) {}
@@ -279,19 +257,27 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
       orderId, paymentId: order.paymentId || orderId,
       status: finalStatus, verificationStatus: v.status,
       verificationScore: v.confidence || 0, reasons: v.reasons || [],
-      matchedAmount: v.extractedFields && v.extractedFields.amount ? true : false,
-      matchedUtr: v.extractedFields && v.extractedFields.utr ? true : false,
+      matchedAmount: v.matchedAmount, matchedReceiver: v.matchedReceiver,
+      matchedUtr: v.matchedUtr, matchedDate: v.matchedDate,
+      userUtrMatched: v.userUtrMatched, userUpiMatched: v.userUpiMatched,
       userEnteredUtr: extra?.userEnteredUtr || null,
       userEnteredUpi: extra?.userEnteredUpi || null,
-      fraudScore: v.checks?.fraud?.score || 0, checks: v.checks || [],
+      fraudScore: v.fraudScore || 0, checks: v.checks || [],
       ocrData: v.ocrData || null,
     };
     if (finalStatus === 'verified') {
-      executeVerifiedOrder(order, v, {
-        userId: order.user_id, pendingRegId: order.pending_reg_id,
-        userEnteredUtr: extra?.userEnteredUtr || order.utr || null,
-        userEnteredUpi: extra?.userEnteredUpi || null,
-      }).catch(e => log('Post-approval err: ' + e.message));
+      // AWAIT the approval so serverless functions can't kill it after return.
+      try {
+        await executeVerifiedOrder(order, v, {
+          userId: order.user_id,
+          pendingRegId: order.pending_reg_id,
+          upiPaymentId: order.paymentId || null,
+          source: 'auto',
+        });
+      } catch (e) {
+        log('Post-approval err: ' + e.message);
+        await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['Post-approval failed: ' + e.message], updated_at: now() }).catch(() => {});
+      }
     }
     return response;
   } catch (ocrErr) {
@@ -319,308 +305,13 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   }
 }
 
-// ── Background Verification Worker ──
-// Picks up orders from the queue, runs verification, updates DB, broadcasts SSE.
-async function runVerificationWorker() {
-  const { verify } = require('./verification7.js');
-  verificationWorkerRunning = true;
-  log('Verification worker started');
+// ── Background verification is driven synchronously by the status poll ──
+// (see getPaymentOrderStatus). No in-process worker / queue is used — fire
+// and forget after a response is not reliable on serverless functions.
 
-  while (pendingVerificationQueue.size > 0) {
-    const orderId = pendingVerificationQueue.values().next().value;
-    pendingVerificationQueue.delete(orderId);
-
-    try {
-      const order = await getDoc(COL_ORDERS, orderId);
-      if (!order) { log('Worker: order not found ' + orderId); continue; }
-      if (order.status !== 'pending') {
-        log('Worker: order ' + orderId + ' status=' + order.status + ' not pending, skipping');
-        continue;
-      }
-      if (!order.screenshot_url) {
-        log('Worker: order ' + orderId + ' has no screenshot, manual_review');
-        await updateDoc(COL_ORDERS, orderId, { status: 'manual_review', verification_status: 'manual_review', rejection_reasons: ['No screenshot provided'], updated_at: now() }).catch(() => {});
-        continue;
-      }
-
-      log('Worker: processing order ' + orderId + ' type=' + order.type + ' amount=' + order.amount);
-      const v = await verify(order, order.screenshot_url, order.user_id || null, order.utr || null, null, null);
-      log('Worker: V7 result — status=' + v.status + ' score=' + (v.confidence || 0));
-      const isVerified = v.status === 'verified';
-      const finalStatus = isVerified ? 'verified' : (v.status === 'rejected' ? 'rejected' : 'manual_review');
-      log('[STATUS_CHANGED] payment_sessions -> ' + finalStatus + ' for order ' + orderId);
-      const dbResult = await updateDoc(COL_ORDERS, orderId, {
-        status: finalStatus, verification_status: v.status,
-        verification_score: v.confidence || 0, ocr_result: v.ocrData || null,
-        rejection_reasons: v.reasons || [], updated_at: now(),
-      });
-      if (!dbResult) log('[ERROR_OCCURRED] COL_ORDERS update returned falsy for ' + orderId);
-      log('[DATABASE_UPDATED] payment_sessions updated for ' + orderId);
-      if (isVerified) {
-        log('Worker: approved — executing post-approval for ' + orderId);
-        await executeVerifiedOrder(order, v, { userId: order.user_id, pendingRegId: order.pending_reg_id, userEnteredUtr: order.utr, userEnteredUpi: null })
-          .catch(e => log('Worker: post-approval exec err: ' + e.message));
-      }
-      // Update upi_payments status
-      try {
-        const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
-        const searchValue = order.pending_reg_id || order.user_id;
-        if (searchValue) {
-          const ups = await runQuery(COL_UPI_PAYMENTS, [
-            { field: searchField, op: 'EQUAL', value: searchValue },
-          ], { limit: 5 });
-          for (const p of ups) {
-            await updateDoc(COL_UPI_PAYMENTS, p.id, {
-              status: finalStatus, verification_locked: false,
-              ocr_result: v.ocrData || null, final_score: v.confidence || 0,
-              fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
-              utr_hash: v.utrHash || null, screenshot_hash: v.screenshotHash || null,
-              rejection_reasons: v.reasons || [],
-              verified_at: now(), verification_completed_at: now(),
-            }).catch(() => {});
-          }
-        }
-      } catch (upiErr) { log('Worker: upi_payments update failed: ' + (upiErr.message || upiErr)); }
-
-      // Broadcast SSE for real-time frontend update
-      try {
-        broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type || 'unknown' });
-        log('[NOTIFICATION_SENT] SSE paymentUpdated for ' + orderId + ' status=' + finalStatus);
-      } catch {}
-
-      log('[PROCESS_COMPLETED] Worker finished ' + orderId + ' status=' + finalStatus + ' score=' + (v.confidence || 0));
-    } catch (e) {
-      log('[ERROR_OCCURRED] Worker failed for ' + orderId + ': ' + e.message);
-      try {
-        await updateDoc(COL_ORDERS, orderId, { status: 'manual_review', verification_status: 'manual_review', rejection_reasons: ['Auto-verification failed: ' + e.message], updated_at: now() }).catch(() => {});
-        broadcast('paymentUpdated', { orderId, status: 'manual_review' }).catch(() => {});
-        log('[STATUS_CHANGED] payment_sessions -> manual_review for ' + orderId + ' (fallback)');
-        log('[NOTIFICATION_SENT] SSE paymentUpdated manual_review for ' + orderId);
-      } catch {}
-    }
-    verifyingOrders.delete(orderId);
-    await new Promise(r => setTimeout(r, 100));
-  }
-
-  verificationWorkerRunning = false;
-  log('Verification worker idle');
-}
-
-// Cleanup on process exit
-process.once('exit', () => { verifyingOrders.clear(); pendingVerificationQueue.clear(); });
-process.once('SIGINT', () => { verifyingOrders.clear(); pendingVerificationQueue.clear(); process.exit(); });
-process.once('SIGTERM', () => { verifyingOrders.clear(); pendingVerificationQueue.clear(); process.exit(); });
-
-async function executeVerifiedOrder(order, verificationResult, extra) {
-  const T = makeTimer();
-  const type = order.type;
-  const amount = Number(order.amount);
-  const orderId = order.id;
-  const completedAt = now();
-
-  if (type === 'registration') {
-    T.mark('executeVerifiedOrder:start');
-    const pendingRegId = extra?.pendingRegId || order.pending_reg_id;
-    if (!pendingRegId) {
-      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['No registration session linked'], updated_at: now() });
-      return;
-    }
-    const pendingReg = await getDoc(COL_PENDING_REGS, pendingRegId);
-    if (!pendingReg) {
-      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['Registration session expired'], updated_at: now() });
-      return;
-    }
-
-    const newUserId = crypto.randomUUID();
-    let referredByUserId = null;
-    let referredByCode = null;
-    const refCode = pendingReg.referral_code;
-    if (refCode) {
-      const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: refCode.toUpperCase() }], { limit: 1 });
-      if (refUsers.length) { referredByUserId = refUsers[0].id; referredByCode = refCode.toUpperCase(); }
-    }
-
-    const userName = pendingReg.name || '';
-    const userEmail = pendingReg.email || '';
-    const userPhone = pendingReg.phone || '';
-    if (!userName || !userEmail || !userPhone) {
-      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['Invalid registration data'], updated_at: now() });
-      return;
-    }
-
-    const userPkg = getReferrerPackage(pendingReg) || getPackageByReferral(pendingReg.referral_code) || String(amount);
-
-    await writeDoc(COL_USERS, newUserId, {
-      id: newUserId, email: userEmail, name: userName, phone: userPhone,
-      password_hash: pendingReg.password_hash, referral_code: randomString(8),
-      referred_by: referredByCode, account_status: 'active', payment_status: 'success',
-      approved: true, active: true, membership_paid: true,
-      membership_type: userPkg,
-      joined_date: completedAt, approved_date: completedAt,
-    });
-
-    await writeDoc(COL_WALLET_BALANCES, newUserId, { balance: 0, total_earned: amount });
-    await addDoc(COL_WALLET_TX, {
-      user_id: newUserId, type: 'deposit', amount,
-      description: 'Registration payment (verified)', reference_id: orderId, balance_after: amount,
-    });
-
-    if (referredByUserId) {
-      await atomicCreditWallet(referredByUserId, amount * 0.1, orderId, 'Referral bonus for ' + newUserId, 'referral_bonus');
-      const referrerDoc = await getDoc(COL_USERS, referredByUserId);
-      if (referrerDoc) {
-        const isSystemCode = isSystemReferralCode(referredByCode);
-        const currentCount = (referrerDoc.referrals_count || 0) + 1;
-        const limitReached = !isSystemCode && currentCount >= MAX_REFERRALS;
-        const updates = {
-          referrals_count: currentCount,
-          total_referral_count: (referrerDoc.total_referral_count || 0) + 1,
-          referral_limit_reached: limitReached,
-          referral_active: !limitReached,
-          is_qualified: limitReached,
-        };
-        await updateDoc(COL_USERS, referredByUserId, updates);
-        if (limitReached) {
-          try {
-            await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been deactivated.', type: 'referral_limit_reached', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' });
-          } catch {}
-          try {
-            await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: 'system', details: { referralCode: referredByCode, referralCount: currentCount }, created_at: completedAt });
-          } catch {}
-        }
-
-        // Cycle engine — track referral cycle progress
-        try { await cycleEngine.onReferralApproved(referredByUserId, newUserId, referredByCode, 'system'); } catch (e) { console.error('[paymentOrderManager] Cycle engine referral error:', e?.message); }
-      }
-    }
-
-    try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch {}
-
-    await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Welcome! Your registration payment of ₹' + amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(() => {});
-    try {
-      await addDoc('audit_logs', { action: 'auto_approve_registration', target_id: orderId, target_type: 'payment_order', admin_id: 'system', details: { userId: newUserId, amount, verificationScore: verificationResult.confidence || 0 }, created_at: completedAt });
-    } catch {}
-
-    const upiRecord = {
-      utr: verificationResult.ocrData?.fields?.utr || orderId,
-      upi_id: ADMIN_UPI_ID,
-      amount, amount_option: String(amount), payment_type: 'registration',
-      screenshot_url: order.screenshot_url,
-      status: 'verified',
-      ocr_result: verificationResult.ocrData || null,
-      final_score: verificationResult.confidence || 0,
-      fraud_score: verificationResult.fraudScore || 0,
-      risk_score: verificationResult.riskScore || 0,
-      utr_hash: verificationResult.utrHash || null,
-      screenshot_hash: verificationResult.screenshotHash || null,
-      user_id: newUserId,
-      pending_reg_id: pendingRegId,
-      payment_date: completedAt,
-      verified_at: completedAt,
-      verification_locked: false,
-      verification_completed_at: completedAt,
-      verification_duration: verificationResult.durationMs || VERIFY_TIMEOUT_MS,
-    };
-    if (extra?.upiPaymentId) {
-      try { await updateDoc(COL_UPI_PAYMENTS, extra.upiPaymentId, upiRecord); } catch (e) { log('UPI_PAYMENTS update failed (non-fatal): ' + e.message); }
-    } else {
-      await addDoc(COL_UPI_PAYMENTS, upiRecord).catch(() => {});
-    }
-    T.mark('executeVerifiedOrder:registration');
-  } else if (type === 'topup') {
-    const userId = order.user_id;
-    if (!userId) {
-      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['User not identified'], updated_at: now() });
-      return;
-    }
-    const userDoc = await lookupUser(userId);
-    if (!userDoc) {
-      await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['User account not found'], updated_at: now() });
-      return;
-    }
-
-    await atomicCreditWallet(userId, amount, orderId, 'Topup via verified payment');
-    const topupId = (await addDoc(COL_TOPUPS, {
-      user_id: userId, amount, utr: verificationResult.ocrData?.fields?.utr || orderId,
-      screenshot_url: order.screenshot_url, status: 'approved', verified_at: completedAt,
-    })).id;
-
-    const referredByCode = userDoc.referred_by || null;
-    if (referredByCode) {
-      try {
-        const refUsers = await runQuery(COL_USERS, [{ field: 'referral_code', op: 'EQUAL', value: referredByCode }], { limit: 1 });
-        const referrer = refUsers.length ? refUsers[0] : null;
-        if (referrer) {
-          const sponsorTopups = await runQuery(COL_TOPUPS, [
-            { field: 'user_id', op: 'EQUAL', value: referrer.id },
-            { field: 'status', op: 'EQUAL', value: 'approved' },
-          ], { limit: 1 });
-          const incomeStatus = sponsorTopups.length > 0 ? 'eligible' : 'locked';
-          await addDoc(COL_TOPUP_INCOME, {
-            user_id: referrer.id, from_user_id: userId, topup_id: topupId,
-            amount, level: 1, status: incomeStatus,
-          });
-          const currentCount = referrer.topup_referral_qualified_count || 0;
-          const newCount = currentCount + 1;
-          await updateDoc(COL_USERS, referrer.id, {
-            topup_referral_qualified_count: newCount,
-            topup_referral_qualified: (referrer.referrals_count || 0) + newCount >= MAX_REFERRALS,
-          });
-          if (userDoc.referred_by_status !== 'approved') {
-            await updateDoc(COL_USERS, userId, { referred_by_status: 'approved' });
-          }
-        }
-      } catch (e) { log('Topup referral failed: ' + e.message); }
-    }
-
-    if (userDoc.topup_referral_qualified && !userDoc.sponsor_topup_completed) {
-      try {
-        await updateDoc(COL_USERS, userId, { account_status: 'inactive', inactive_reason: 'Sponsor Claim Pending Admin Approval', sponsor_topup_completed: true, sponsor_awaiting_credit: true });
-        const lockedIncome = await runQuery(COL_TOPUP_INCOME, [
-          { field: 'user_id', op: 'EQUAL', value: userId },
-          { field: 'status', op: 'EQUAL', value: 'locked' },
-        ], { limit: 100 });
-        for (const inc of lockedIncome) await updateDoc(COL_TOPUP_INCOME, inc.id, { status: 'eligible' });
-      } catch (e) { log('Sponsor topup unlock failed: ' + e.message); }
-    }
-
-    // Cycle engine — track topup cycle (downline monitoring + sponsor deactivation)
-    try { await cycleEngine.onTopupApproved(userId, topupId, amount, 'system'); } catch (e) { console.error('[paymentOrderManager] Cycle engine topup error:', e?.message); }
-
-    await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Your topup of ₹' + amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(() => {});
-    try {
-      await addDoc('audit_logs', { action: 'auto_approve_topup', target_id: orderId, target_type: 'payment_order', admin_id: 'system', details: { userId, amount, topupId, verificationScore: verificationResult.confidence || 0 }, created_at: completedAt });
-    } catch {}
-
-    const upiRecord = {
-      utr: verificationResult.ocrData?.fields?.utr || orderId,
-      upi_id: ADMIN_UPI_ID,
-      amount, amount_option: String(amount), payment_type: 'topup',
-      screenshot_url: order.screenshot_url,
-      status: 'verified',
-      ocr_result: verificationResult.ocrData || null,
-      final_score: verificationResult.confidence || 0,
-      fraud_score: verificationResult.fraudScore || 0,
-      risk_score: verificationResult.riskScore || 0,
-      utr_hash: verificationResult.utrHash || null,
-      screenshot_hash: verificationResult.screenshotHash || null,
-      user_id: userId,
-      payment_date: completedAt,
-      verified_at: completedAt,
-      verification_locked: false,
-      verification_completed_at: completedAt,
-      verification_duration: verificationResult.durationMs || VERIFY_TIMEOUT_MS,
-    };
-    if (extra?.upiPaymentId) {
-      try { await updateDoc(COL_UPI_PAYMENTS, extra.upiPaymentId, upiRecord); } catch (e) { log('UPI_PAYMENTS update failed (non-fatal): ' + e.message); }
-    } else {
-      await addDoc(COL_UPI_PAYMENTS, upiRecord).catch(() => {});
-    }
-    T.mark('executeVerifiedOrder:topup');
-  }
-  T.mark('executeVerifiedOrder:end');
-  T.summary();
-}
+// Approval side-effects (user creation / wallet credit / referrals /
+// notifications / audit) live in a single shared module.
+// executeVerifiedOrder is imported from ./_approvalPipeline.js.
 
 async function retryPaymentOrder(orderId) {
   const order = await getDoc(COL_ORDERS, orderId);

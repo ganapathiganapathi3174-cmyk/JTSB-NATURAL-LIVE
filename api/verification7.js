@@ -1,7 +1,9 @@
-const engine = require('./_newEngine/index.js');
+// Compatibility shim → single verification facade.
+// All verification now flows through api/_verificationEngine.js.
+const { verifySession } = require('./_verificationEngine.js');
 
 async function verify(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf) {
-  return engine.run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf);
+  return verifySession(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf);
 }
 
-module.exports = { verify };
+module.exports = { verify, verifySession };

@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { COL_UPI_PAYMENTS } = require('../_shared.js');
-const { runQuery } = require('../_supabase.js');
+const supabaseMod = require('../_supabase.js');
 const { normalizeUTR } = require('./fieldNormalizer.js');
 
 function hashBuffer(buf) {
@@ -20,7 +20,7 @@ async function checkDuplicate(extractedUtr, screenshotBuf) {
   if (utr && utr.length >= 12) {
     const utrHash = hashText(utr);
     try {
-      const existing = await runQuery(COL_UPI_PAYMENTS, [
+      const existing = await supabaseMod.runQuery(COL_UPI_PAYMENTS, [
         { field: 'utr_hash', op: 'EQUAL', value: utrHash },
         { field: 'status', op: 'NOT_EQUAL', value: 'rejected' },
       ], { limit: 1 });
@@ -35,7 +35,7 @@ async function checkDuplicate(extractedUtr, screenshotBuf) {
       // duplicate detection never silently disables.
       console.warn('[DUPLICATE] utr_hash lookup failed, falling back to utr scan: ' + e.message);
       try {
-        const dup = await runQuery(COL_UPI_PAYMENTS, [], { limit: 2000 });
+        const dup = await supabaseMod.runQuery(COL_UPI_PAYMENTS, [], { limit: 2000 });
         const hit = (dup || []).find(p =>
           p.utr && p.utr.toUpperCase().trim() === utr.toUpperCase().trim() &&
           p.status !== 'rejected' && p.status !== 'failed'
@@ -56,7 +56,7 @@ async function checkDuplicate(extractedUtr, screenshotBuf) {
     const imgHash = hashBuffer(screenshotBuf);
     if (imgHash) {
       try {
-        const existing = await runQuery(COL_UPI_PAYMENTS, [
+        const existing = await supabaseMod.runQuery(COL_UPI_PAYMENTS, [
           { field: 'screenshot_hash', op: 'EQUAL', value: imgHash },
           { field: 'status', op: 'NOT_EQUAL', value: 'rejected' },
         ], { limit: 1 });
