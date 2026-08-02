@@ -82,7 +82,7 @@ module.exports = async (req, res) => {
           status: 'unread',
           is_read: false,
         });
-      } catch (_) {}
+      } catch (e) { console.error('[createUpgradeRequest] Notification failed: ' + e.message); }
     }
 
     broadcast('upgradeRequestCreated', {

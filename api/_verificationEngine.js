@@ -27,10 +27,11 @@ const FIELD_LABELS = {
   upi_id: 'Receiver UPI matches',
   status: 'Transaction status SUCCESS',
   date: 'Transaction date is today',
+  time: 'Payment time within window',
 };
 
 // Rule-check values that represent a PASS (from rulesValidator).
-const PASS_VALUES = new Set(['matched', 'close_match', 'partial_match', 'today_or_near', 'success']);
+const PASS_VALUES = new Set(['matched', 'close_match', 'partial_match', 'today_ist', 'within_window', 'success']);
 
 function statusOf(value) {
   return value || 'unknown';

@@ -80,7 +80,7 @@ async function initSystemUsers() {
       // Try to fix password column (may not exist in older schemas)
       try {
         await supabase.from('users').update({ password: hashPassword(userDef.password) }).eq('id', existingId);
-      } catch (_) {}
+      } catch (e) { console.log('[SYSTEM-INIT] password column unavailable: ' + e.message); }
       // Backfill email_hash/phone_hash once the migration adds the columns —
       // findUserByEmail/Phone use them as their indexed lookup key.
       try {
@@ -88,7 +88,7 @@ async function initSystemUsers() {
           email_hash: crypto.createHash('sha256').update(userDef.email.toLowerCase().trim()).digest('hex'),
           phone_hash: crypto.createHash('sha256').update(userDef.phone.trim()).digest('hex'),
         }).eq('id', existingId);
-      } catch (_) {}
+      } catch (e) { console.log('[SYSTEM-INIT] hash column unavailable: ' + e.message); }
       console.log('[SYSTEM-INIT] User ' + userDef.referral_code + ' already exists (id=' + existingId + '), skipping');
       continue;
     }
@@ -101,7 +101,7 @@ async function initSystemUsers() {
         .eq('email_hash', crypto.createHash('sha256').update(userDef.email.toLowerCase().trim()).digest('hex'))
         .limit(1)
         .maybeSingle();
-    } catch (_) { /* email_hash column may not exist */ }
+    } catch (e) { console.log('[SYSTEM-INIT] email_hash column unavailable: ' + e.message); }
 
     if (existingByEmailHash?.data) {
       console.log('[SYSTEM-INIT] User ' + userDef.email + ' already exists by email hash (id=' + existingByEmailHash.data.id + '), skipping');
@@ -150,7 +150,7 @@ async function initSystemUsers() {
         email_hash: crypto.createHash('sha256').update(userDef.email.toLowerCase().trim()).digest('hex'),
         phone_hash: crypto.createHash('sha256').update(userDef.phone.trim()).digest('hex'),
       }).eq('id', userId);
-    } catch (_) {}
+    } catch (e) { console.log('[SYSTEM-INIT] hash column unavailable for new user: ' + e.message); }
 
     await supabase.from('wallet_balances').insert({
       id: userId,

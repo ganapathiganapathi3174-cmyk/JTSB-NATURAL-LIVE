@@ -18,7 +18,7 @@ async function uploadBase64Image(base64DataUrl) {
   try {
     const r2Result = await r2.uploadFile(key, buffer, mimeType);
     if (r2Result && r2Result.url) return r2Result.url;
-  } catch (_) {}
+  } catch (e) { log('R2 upload failed: ' + e.message + ' (falling back)'); }
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
@@ -30,8 +30,10 @@ async function uploadBase64Image(base64DataUrl) {
       if (!error) {
         const { data: urlData } = supabase.storage.from('payments').getPublicUrl(key);
         return urlData.publicUrl;
+      } else {
+        log('Supabase storage upload error: ' + error.message);
       }
-    } catch (_) {}
+    } catch (e) { log('Supabase storage upload failed: ' + e.message); }
   }
   return base64DataUrl;
 }

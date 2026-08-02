@@ -47,7 +47,7 @@ async function checkAndExpirePendingPayments() {
               type: payment.payment_type,
               status: 'expired',
             });
-          } catch {}
+          } catch (e) { log('BROADCAST', 'paymentExpired failed: ' + e.message); }
 
           try {
             await addDoc('audit_logs', {
@@ -65,7 +65,7 @@ async function checkAndExpirePendingPayments() {
               },
               created_at: new Date().toISOString(),
             });
-          } catch {}
+          } catch (e) { log('AUDIT', 'payment_expired audit failed: ' + e.message); }
         } catch (e) {
           log('EXPIRE-ERR', `Failed to expire payment ${payment.id}: ${e.message}`);
         }

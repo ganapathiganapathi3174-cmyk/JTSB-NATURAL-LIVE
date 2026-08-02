@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
         details: { newStatus: status, reason: reason || '' },
         created_at: new Date().toISOString(),
       });
-    } catch {}
+    } catch (e) { console.error('[updateUserStatus] Audit log failed: ' + e.message); }
     res.writeHead(200); res.end(JSON.stringify({ success: true, userId, status }));
   } catch (err) {
     console.error('[updateUserStatus] Error:', err.message);

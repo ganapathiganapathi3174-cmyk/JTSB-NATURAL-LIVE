@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
       res.end(JSON.stringify({ error: err.status && err.status < 500 ? 'Request error: ' + err.message : 'Internal server error' }));
     } catch (sendErr) {
       console.error('[CPO] Failed to send error response:', sendErr.message, sendErr.stack);
-      try { res.end(String(err.message || 'error')); } catch (_) {}
+      try { res.end(String(err.message || 'error')); } catch (e2) { console.error('[CPO] Final response write failed: ' + e2.message); }
     }
   }
 };

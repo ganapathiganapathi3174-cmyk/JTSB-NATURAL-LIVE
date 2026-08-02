@@ -53,6 +53,11 @@ async function claim(orderId) {
   }
 }
 
+// Atomic bookkeeping writes. The retry columns (verification_attempts /
+// next_retry_at / last_error) come from migration 0003 and may not exist in
+// the live DB yet — updateDocFiltered strips them so the record never aborts.
+const HARDENING_COLS = ['screenshot_phash', 'verification_attempts', 'next_retry_at', 'last_error'];
+
 // Persist a failed verification attempt and compute the next retry slot.
 // Returns the persisted bookkeeping so callers can log it.
 async function recordFailure(orderId, error, attemptsSoFar) {
@@ -66,7 +71,7 @@ async function recordFailure(orderId, error, attemptsSoFar) {
     verification_status: policy.permanent || policy.exhausted ? 'failed' : 'pending',
     updated_at: now(),
   };
-  await supabaseMod.updateDoc(COL_ORDERS, orderId, payload).catch(() => {});
+  await supabaseMod.updateDocFiltered(COL_ORDERS, orderId, payload, HARDENING_COLS).catch(e => log('recordFailure persist failed: ' + e.message));
   if (policy.permanent || policy.exhausted) metrics.trackRetryExhausted();
   else metrics.trackRetry();
   log('recordFailure order=' + orderId + ' attempts=' + attempts + ' retryable=' + policy.retryable + ' exhausted=' + policy.exhausted + ' next=' + payload.next_retry_at);
@@ -75,12 +80,12 @@ async function recordFailure(orderId, error, attemptsSoFar) {
 
 // Clear retry bookkeeping after a successful verification.
 async function recordSuccess(orderId) {
-  await supabaseMod.updateDoc(COL_ORDERS, orderId, {
+  await supabaseMod.updateDocFiltered(COL_ORDERS, orderId, {
     verification_attempts: 0,
     last_error: null,
     next_retry_at: null,
     updated_at: now(),
-  }).catch(() => {});
+  }, HARDENING_COLS).catch(e => log('recordSuccess persist failed: ' + e.message));
 }
 
 // Orders that are due for a verification attempt right now:
@@ -124,10 +129,10 @@ async function drainOnce() {
         order.screenshot_url,
         { userEnteredUtr: order.utr || null, userEnteredUpi: order.upi_id || null },
       ).then(() => metrics.trackQueueCompleted()).catch(e => {
-        recordFailure(order.id, e, order.verification_attempts || 0).catch(() => {});
+        recordFailure(order.id, e, order.verification_attempts || 0).catch(e2 => log('recordFailure failed: ' + e2.message));
         metrics.trackQueueCompleted();
       });
-      try { broadcast('queueProcessed', { orderId: order.id }); } catch {}
+      try { broadcast('queueProcessed', { orderId: order.id }); } catch (e) { log('Broadcast queueProcessed failed: ' + e.message); }
     }
     if (claimed) log('drained ' + claimed + ' order(s)');
   } catch (e) {

@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
     const payment = await runQuery(COL_UPI_PAYMENTS, [{ field: 'id', op: 'EQUAL', value: paymentId }]).then(r => r.length ? r[0] : null);
 
     // Audit log
-    try { await addDoc('audit_logs', { action: 'reject_payment', target_id: paymentId, target_type: 'upi_payment', admin_id: req.admin?.email || 'unknown', details: { reason, user_id: payment?.user_id }, created_at: new Date().toISOString() }); } catch {}
+    try { await addDoc('audit_logs', { action: 'reject_payment', target_id: paymentId, target_type: 'upi_payment', admin_id: req.admin?.email || 'unknown', details: { reason, user_id: payment?.user_id }, created_at: new Date().toISOString() }); } catch (e) { console.error('[rejectUPIPayment] Audit log failed: ' + e.message); }
 
     try {
       if (payment?.user_id) {
@@ -43,9 +43,9 @@ module.exports = async (req, res) => {
           senderId: 'system', senderName: 'System',
         });
       }
-    } catch (_) {}
+    } catch (e) { console.error('[rejectUPIPayment] Notification failed: ' + e.message); }
 
-    try { broadcast('paymentUpdated', { id: paymentId, status: 'rejected', reason }); } catch {}
+    try { broadcast('paymentUpdated', { id: paymentId, status: 'rejected', reason }); } catch (e) { console.error('[rejectUPIPayment] Broadcast failed: ' + e.message); }
     res.writeHead(200); res.end(JSON.stringify({ status: 'rejected' }));
   } catch (err) {
     console.error('[rejectUPIPayment] Error:', err.message);

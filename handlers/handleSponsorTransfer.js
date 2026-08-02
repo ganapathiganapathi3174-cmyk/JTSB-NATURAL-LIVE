@@ -13,9 +13,7 @@ module.exports = async (req, res) => {
       res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return;
     }
 
-    const body = [];
-    for await (const chunk of req) body.push(chunk);
-    const { requestId, action, rejectionReason } = JSON.parse(Buffer.concat(body).toString());
+    const { requestId, action, rejectionReason } = req.body || {};
 
     if (!requestId || !action) {
       res.writeHead(400); res.end(JSON.stringify({ error: 'requestId and action (accept/reject) are required' })); return;

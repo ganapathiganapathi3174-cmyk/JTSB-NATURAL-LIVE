@@ -122,16 +122,16 @@ async function processPaymentApproval(sessionId) {
             referral_limit_reached: limitReached, referral_active: !limitReached, is_qualified: limitReached,
           });
           if (limitReached) {
-            try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations.', type: 'referral_limit_reached', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }); } catch {}
-            try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: 'system', details: { referralCode: referredByCode, referralCount: currentCount }, created_at: completedAt }); } catch {}
+            try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations.', type: 'referral_limit_reached', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }); } catch (e) { log('Referral-limit notification failed: ' + e.message); }
+            try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: 'system', details: { referralCode: referredByCode, referralCount: currentCount }, created_at: completedAt }); } catch (e) { log('Referral-limit audit failed: ' + e.message); }
           }
           try { await cycleEngine.onReferralApproved(referredByUserId, newUserId, referredByCode, 'system'); } catch (e) { console.error('[otpManager] Cycle engine error:', e?.message); }
         }
       }
 
-      try { await deleteDoc(COL_PENDING_REGS, reg.id); } catch {}
+      try { await deleteDoc(COL_PENDING_REGS, reg.id); } catch (e) { log('Delete pending registration failed: ' + e.message); }
 
-      await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Welcome! Your registration payment of ₹' + session.amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(() => {});
+      await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Welcome! Your registration payment of ₹' + session.amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(e => log('Registration notification failed: ' + e.message));
       session.result = { userId: newUserId, status: 'active', plan: String(session.amount) };
       log(`Registration completed: ${newUserId}`);
 
@@ -139,7 +139,7 @@ async function processPaymentApproval(sessionId) {
       const walletResult = await atomicCreditWallet(session.userId, session.amount, session.sessionId, 'Topup via verified payment');
       if (!walletResult || walletResult.error) throw new Error(walletResult?.error || 'Wallet credit failed');
 
-      await addDoc('notifications', { receiverId: session.userId, title: 'Topup Approved', message: 'Your topup of ₹' + session.amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(() => {});
+      await addDoc('notifications', { receiverId: session.userId, title: 'Topup Approved', message: 'Your topup of ₹' + session.amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' }).catch(e => log('Topup notification failed: ' + e.message));
 
       if (session.referredByCode) {
         try {
@@ -160,7 +160,7 @@ async function processPaymentApproval(sessionId) {
       log(`Topup completed: ${session.userId}, +₹${session.amount}`);
     }
 
-    try { broadcast('pipelinePaymentApproved', { sessionId, type: session.paymentType, amount: session.amount }); } catch {}
+    try { broadcast('pipelinePaymentApproved', { sessionId, type: session.paymentType, amount: session.amount }); } catch (e) { log('Broadcast pipelinePaymentApproved failed: ' + e.message); }
     return session.result || { success: true };
   } catch (e) {
     log(`Post-approval error: ${e.message}`);

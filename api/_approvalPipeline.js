@@ -79,7 +79,7 @@ async function upsertUpiRecord(order, verificationResult, cfg) {
   if (cfg.upiPaymentId) {
     try { await updateDoc(COL_UPI_PAYMENTS, cfg.upiPaymentId, record); } catch (e) { log('UPI_PAYMENTS update failed (non-fatal): ' + e.message); }
   } else {
-    await addDoc(COL_UPI_PAYMENTS, record).catch(() => {});
+    await addDoc(COL_UPI_PAYMENTS, record).catch(e => log('UPI_PAYMENTS insert fallback failed: ' + e.message));
   }
 }
 
@@ -149,31 +149,31 @@ async function executeVerifiedOrder(order, verificationResult, extra = {}) {
         if (limitReached) {
           try {
             await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been deactivated.', type: 'referral_limit_reached', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' });
-          } catch {}
+          } catch (e) { log('Referral-limit notification failed: ' + e.message); }
           try {
             await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: adminEmail, details: { referralCode: referredByCode, referralCount: currentCount }, created_at: completedAt });
-          } catch {}
+          } catch (e) { log('Referral-limit audit failed: ' + e.message); }
         }
         try { await cycleEngine.onReferralApproved(referredByUserId, newUserId, referredByCode, adminEmail); } catch (e) { console.error('[approvalPipeline] Cycle engine referral error:', e?.message); }
       }
     }
 
-    try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch {}
+    try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch (e) { log('Delete pending registration failed: ' + e.message); }
 
     try {
       await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Welcome! Your registration payment of ₹' + amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' });
-    } catch {}
+    } catch (e) { log('Registration notification failed: ' + e.message); }
 
     try {
       await addDoc('audit_logs', { action: source === 'admin' ? 'approve_registration_payment' : 'auto_approve_registration', target_id: orderId, target_type: 'payment_order', admin_id: adminEmail, details: { userId: newUserId, amount, referredBy: referredByCode, verificationScore, source }, created_at: completedAt });
-    } catch {}
+    } catch (e) { log('Registration audit failed: ' + e.message); }
 
     await upsertUpiRecord(order, verificationResult, {
       upiPaymentId: extra.upiPaymentId, orderId, amount, status: 'verified',
       user_id: newUserId, pendingRegId, completedAt,
     });
 
-    try { broadcast('paymentUpdated', { id: orderId, paymentId: extra.upiPaymentId || orderId, status: 'approved', type, userId: newUserId }); } catch {}
+    try { broadcast('paymentUpdated', { id: orderId, paymentId: extra.upiPaymentId || orderId, status: 'approved', type, userId: newUserId }); } catch (e) { log('Broadcast paymentUpdated failed: ' + e.message); }
 
     log('registration approved order=' + orderId + ' user=' + newUserId);
     return { status: 'approved', type, userId: newUserId };
@@ -238,18 +238,18 @@ async function executeVerifiedOrder(order, verificationResult, extra = {}) {
 
     try {
       await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Your topup of ₹' + amount + ' has been verified.', type: 'payment_approved', status: 'unread', createdAt: completedAt, senderId: 'system', senderName: 'System' });
-    } catch {}
+    } catch (e) { log('Topup notification failed: ' + e.message); }
 
     try {
       await addDoc('audit_logs', { action: source === 'admin' ? 'approve_topup_payment' : 'auto_approve_topup', target_id: orderId, target_type: 'payment_order', admin_id: adminEmail, details: { userId, amount, topupId, referredBy: referredByCode, verificationScore, source }, created_at: completedAt });
-    } catch {}
+    } catch (e) { log('Topup audit failed: ' + e.message); }
 
     await upsertUpiRecord(order, verificationResult, {
       upiPaymentId: extra.upiPaymentId, orderId, amount, status: 'verified',
       user_id: userId, pendingRegId: null, completedAt,
     });
 
-    try { broadcast('paymentUpdated', { id: orderId, paymentId: extra.upiPaymentId || orderId, status: 'approved', type, userId }); } catch {}
+    try { broadcast('paymentUpdated', { id: orderId, paymentId: extra.upiPaymentId || orderId, status: 'approved', type, userId }); } catch (e) { log('Broadcast paymentUpdated failed: ' + e.message); }
 
     log('topup approved order=' + orderId + ' user=' + userId + ' topup=' + topupId);
     return { status: 'approved', type, userId, topupId };

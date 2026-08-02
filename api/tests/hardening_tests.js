@@ -68,21 +68,30 @@ async function pngBuf(opts) {
 
 const originalRunQuery = supabase.runQuery;
 const originalUpdateDoc = supabase.updateDoc;
+const originalUpdateDocFiltered = supabase.updateDocFiltered;
 const originalConditionalUpdateDoc = supabase.conditionalUpdateDoc;
 const originalAddDoc = supabase.addDoc;
+const originalAddDocFiltered = supabase.addDocFiltered;
+const originalGetSupabaseClient = supabase.getSupabaseClient;
 
-function patchSupabase({ runQuery, updateDoc, conditionalUpdateDoc, addDoc } = {}) {
+function patchSupabase({ runQuery, updateDoc, updateDocFiltered, conditionalUpdateDoc, addDoc, addDocFiltered, getSupabaseClient } = {}) {
   if (runQuery !== undefined) supabase.runQuery = runQuery;
   if (updateDoc !== undefined) supabase.updateDoc = updateDoc;
+  if (updateDocFiltered !== undefined) supabase.updateDocFiltered = updateDocFiltered;
   if (conditionalUpdateDoc !== undefined) supabase.conditionalUpdateDoc = conditionalUpdateDoc;
   if (addDoc !== undefined) supabase.addDoc = addDoc;
+  if (addDocFiltered !== undefined) supabase.addDocFiltered = addDocFiltered;
+  if (getSupabaseClient !== undefined) supabase.getSupabaseClient = getSupabaseClient;
 }
 
 function restoreSupabase() {
   supabase.runQuery = originalRunQuery;
   supabase.updateDoc = originalUpdateDoc;
+  supabase.updateDocFiltered = originalUpdateDocFiltered;
   supabase.conditionalUpdateDoc = originalConditionalUpdateDoc;
   supabase.addDoc = originalAddDoc;
+  supabase.addDocFiltered = originalAddDocFiltered;
+  supabase.getSupabaseClient = originalGetSupabaseClient;
 }
 
 async function main() {
@@ -175,32 +184,32 @@ async function main() {
   });
 
   // ── 3. Perceptual hash (dHash) ──
-  await test('pHash: 64-bit hex format + null guard', async () => {
+  await test('pHash: 1024-bit hex format + null guard', async () => {
     const buf = await pngBuf({ utr: '1111111111111' });
     const h = await phash.computePhash(buf);
-    assert.ok(h && /^[0-9a-f]{16}$/.test(h), 'computePhash must return 16-char hex, got ' + h);
-    assert.ok(phash.BITS === 64);
+    assert.ok(h && /^[0-9a-f]{256}$/.test(h), 'computePhash must return 256-char hex, got ' + (h || '').substring(0, 40));
+    assert.ok(phash.BITS === 1024);
     assert.strictEqual(await phash.computePhash(null), null);
     assert.strictEqual(await phash.computePhash('nope'), null);
   });
 
-  await test('pHash: identical buffers distance 0, hex round-trip 64 bits', async () => {
+  await test('pHash: identical buffers distance 0, hex round-trip 1024 bits', async () => {
     const buf = await pngBuf({ utr: '1111111111111' });
     const h1 = await phash.computePhash(buf);
     const h2 = await phash.computePhash(buf);
     assert.strictEqual(h1, h2);
     assert.strictEqual(phash.hammingDistance(h1, h2), 0);
     assert.ok(phash.isSimilar(h1, h2));
-    assert.strictEqual(phash.hexToBin(h1).length, 64);
+    assert.strictEqual(phash.hexToBin(h1).length, 1024);
   });
 
-  await test('pHash: different images are not similar', async () => {
+  await test('pHash: distinct UTR/amount screenshots are NOT similar (reuse-safe)', async () => {
     const bufA = await pngBuf({ utr: '1111111111111' });
-    const bufB = await invertedPng(bufA);
+    const bufB = await pngBuf({ utr: '9999888877777', amount: '500.00' });
     const hA = await phash.computePhash(bufA);
     const hB = await phash.computePhash(bufB);
     const dist = phash.hammingDistance(hA, hB);
-    assert.ok(dist > C.PHASH_THRESHOLD, 'different screenshots should differ by > threshold, distance=' + dist);
+    assert.ok(dist > C.PHASH_THRESHOLD, 'distinct payments should differ by > threshold, distance=' + dist);
     assert.ok(!phash.isSimilar(hA, hB, C.PHASH_THRESHOLD));
   });
 
@@ -277,7 +286,7 @@ async function main() {
       assert.strictEqual(r.duplicate, false);
       assert.ok(r.utrHash && /^[0-9a-f]{64}$/.test(r.utrHash));
       assert.ok(r.screenshotHash && /^[0-9a-f]{64}$/.test(r.screenshotHash));
-      assert.ok(r.phash && /^[0-9a-f]{16}$/.test(r.phash));
+      assert.ok(r.phash && /^[0-9a-f]{256}$/.test(r.phash));
     } finally {
       restoreSupabase();
     }
@@ -374,9 +383,99 @@ async function main() {
     }
   });
 
+  // ── 7b. updateDocFiltered / addDocFiltered — strip missing optional columns ──
+  await test('updateDocFiltered: strips columns the live table lacks (42703)', async () => {
+    supabase.resetOptionalColumnCache();
+    let updateCalls = [];
+    // The probe (getSupabaseClient.select) reports every optional column as
+    // missing; updateDoc captures the final payload so we can assert stripping.
+    patchSupabase({
+      getSupabaseClient: () => ({
+        from: (table) => ({
+          select: (col) => ({ limit: async () => ({ error: { message: 'PGRST204: column "' + col + '" of relation "' + table + '" does not exist' } }) }),
+        }),
+      }),
+      updateDoc: async (table, id, data) => { updateCalls.push({ table, id, data }); return true; },
+    });
+    try {
+      await supabase.updateDocFiltered('payment_sessions', 'ORD-F1', {
+        status: 'verified',
+        screenshot_phash: 'abc',
+        verification_attempts: 3,
+        next_retry_at: '2026-01-01T00:00:00Z',
+        last_error: 'x',
+        updated_at: '2026-01-01T00:00:00Z',
+      }, ['screenshot_phash', 'verification_attempts', 'next_retry_at', 'last_error']);
+      assert.strictEqual(updateCalls.length, 1, 'exactly one updateDoc write');
+      const payload = updateCalls[0].data;
+      assert.strictEqual(payload.status, 'verified', 'core columns must survive');
+      assert.ok(!('screenshot_phash' in payload), 'missing screenshot_phash must be stripped');
+      assert.ok(!('verification_attempts' in payload), 'missing verification_attempts must be stripped');
+      assert.ok(!('next_retry_at' in payload), 'missing next_retry_at must be stripped');
+      assert.ok(!('last_error' in payload), 'missing last_error must be stripped');
+      assert.ok('updated_at' in payload, 'updated_at must survive');
+    } finally { restoreSupabase(); }
+  });
+
+  await test('updateDocFiltered: keeps columns when probe says they exist', async () => {
+    supabase.resetOptionalColumnCache();
+    let updateCalls = [];
+    patchSupabase({
+      getSupabaseClient: () => ({
+        from: () => ({
+          select: () => ({ limit: async () => ({ error: null, data: [] }) }),
+        }),
+      }),
+      updateDoc: async (table, id, data) => { updateCalls.push({ data }); return true; },
+    });
+    try {
+      await supabase.updateDocFiltered('payment_sessions', 'ORD-F2', {
+        screenshot_phash: 'abc',
+        verification_attempts: 0,
+        status: 'verified',
+      }, ['screenshot_phash', 'verification_attempts']);
+      const payload = updateCalls[0].data;
+      assert.strictEqual(payload.screenshot_phash, 'abc', 'existing columns are kept');
+      assert.strictEqual(payload.verification_attempts, 0);
+    } finally { restoreSupabase(); }
+  });
+
+  await test('addDocFiltered: strips missing verification_logs columns (migration pending)', async () => {
+    supabase.resetOptionalColumnCache();
+    let addCalls = [];
+    patchSupabase({
+      getSupabaseClient: () => ({
+        from: (table) => ({
+          select: (col) => ({ limit: async () => ({ error: { message: 'column "' + col + '" of relation "' + table + '" does not exist' } }) }),
+        }),
+      }),
+      addDoc: async (table, data) => { addCalls.push({ table, data }); return { id: 'VL-1' }; },
+    });
+    try {
+      await supabase.addDocFiltered('verification_logs', {
+        payment_id: 'ORD-F3',
+        status: 'verified',
+        confidence: 92,
+        reasons: ['ok'],
+        checks: {},
+        fraud_score: 0,
+        stages: {},
+        duration_ms: 100,
+        created_at: '2026-01-01T00:00:00Z',
+      }, ['confidence', 'reasons', 'checks', 'fraud_score', 'stages', 'duration_ms']);
+      assert.strictEqual(addCalls.length, 1, 'exactly one addDoc insert');
+      const payload = addCalls[0].data;
+      assert.strictEqual(payload.payment_id, 'ORD-F3');
+      assert.strictEqual(payload.status, 'verified');
+      assert.ok(!('confidence' in payload), 'missing confidence must be stripped');
+      assert.ok(!('reasons' in payload), 'missing reasons must be stripped');
+      assert.ok(!('checks' in payload), 'missing checks must be stripped');
+      assert.ok('created_at' in payload, 'created_at must survive');
+    } finally { restoreSupabase(); }
+  });
+
   // ── 8. Verification queue bookkeeping ──
-  await test('verifyQueue: claim returns race winner', async () => {
-    patchSupabase({ conditionalUpdateDoc: async () => 1 });
+  await test('verifyQueue: claim returns race winner', async () => {    patchSupabase({ conditionalUpdateDoc: async () => 1 });
     try {
       assert.strictEqual(await verifyQueue.claim('ORD-C1'), true);
     } finally { restoreSupabase(); }
@@ -389,7 +488,7 @@ async function main() {
   await test('verifyQueue: recordFailure persists retry schedule', async () => {
     metrics.resetMetrics();
     let captured = null;
-    patchSupabase({ updateDoc: async (table, id, data) => { captured = data; return true; } });
+    patchSupabase({ updateDocFiltered: async (table, id, data) => { captured = data; return true; } });
     try {
       const p = await verifyQueue.recordFailure('ORD-R1', new Error('transient'), 1);
       assert.strictEqual(captured.verification_attempts, 2);

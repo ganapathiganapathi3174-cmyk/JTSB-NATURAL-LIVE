@@ -28,7 +28,7 @@ module.exports = async (req, res) => {
     }
 
     // Audit log
-    try { await addDoc('audit_logs', { action: 'restore_payment', target_id: paymentId, target_type: 'upi_payment', admin_id: req.admin?.email || 'unknown', details: {}, created_at: new Date().toISOString() }); } catch {}
+    try { await addDoc('audit_logs', { action: 'restore_payment', target_id: paymentId, target_type: 'upi_payment', admin_id: req.admin?.email || 'unknown', details: {}, created_at: new Date().toISOString() }); } catch (e) { console.error('[restoreUPIPayment] Audit log failed: ' + e.message); }
 
     res.writeHead(200); res.end(JSON.stringify({ status: 'restored' }));
   } catch (err) {

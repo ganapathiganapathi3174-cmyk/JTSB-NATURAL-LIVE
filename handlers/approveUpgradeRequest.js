@@ -69,7 +69,7 @@ module.exports = async (req, res) => {
           status: 'unread',
           is_read: false,
         });
-      } catch (_) {}
+      } catch (e) { console.error('[approveUpgradeRequest] Notification failed: ' + e.message); }
     }
 
     try {
@@ -86,7 +86,7 @@ module.exports = async (req, res) => {
           amount: request.amount,
         },
       });
-    } catch (_) {}
+    } catch (e) { console.error('[approveUpgradeRequest] Audit log failed: ' + e.message); }
 
     broadcast('upgradeRequestUpdated', {
       id: upgradeId,

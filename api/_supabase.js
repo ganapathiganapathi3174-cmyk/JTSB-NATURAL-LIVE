@@ -22,7 +22,7 @@ function isSensitiveTable(table) {
   return SENSITIVE_TABLES.includes(table);
 }
 
-const REQUEST_TIMEOUT_MS = parseInt(process.env.SUPABASE_TIMEOUT || '8000', 10);
+const REQUEST_TIMEOUT_MS = parseInt(process.env.SUPABASE_TIMEOUT || '20000', 10);
 
 let _supabaseClient = null;
 
@@ -161,7 +161,8 @@ async function writeDoc(table, id, data) {
   if (!data.created_at) record.created_at = now;
 
   try {
-    await supabase.from(table).upsert(record, { onConflict: 'id' });
+    const safe = await filterMissingColumns(table, record);
+    await supabase.from(table).upsert(safe, { onConflict: 'id' });
 
     if (isCriticalTable(table)) {
       turso.syncBackup(table, id, record).catch(() => {});
@@ -182,7 +183,8 @@ async function updateDoc(table, id, data) {
   const encrypted = encryptSensitive(data, table);
 
   try {
-    const result = await supabase.from(table).update({ ...encrypted, updated_at: new Date().toISOString() }).eq('id', id).select('id');
+    const safe = await filterMissingColumns(table, { ...encrypted, updated_at: new Date().toISOString() });
+    const result = await supabase.from(table).update(safe).eq('id', id).select('id');
     if (result && result.error) throw new Error(`UPDATE error ${JSON.stringify(result.error)}`);
 
     if (isCriticalTable(table)) {
@@ -205,7 +207,8 @@ async function addDoc(table, data) {
   const record = { ...encrypted, created_at: now };
 
   try {
-    const { data: result, error } = await supabase.from(table).insert(record).select('id').single();
+    const safe = await filterMissingColumns(table, record);
+    const { data: result, error } = await supabase.from(table).insert(safe).select('id').single();
     if (error) throw new Error(`ADD error ${JSON.stringify(error)}`);
 
     if (isCriticalTable(table) && result && result.id) {
@@ -263,8 +266,17 @@ async function conditionalUpdateDoc(table, id, conditions, data) {
   const now = new Date().toISOString();
   const encrypted = encryptSensitive(data, table);
   try {
-    let query = supabase.from(table).update({ ...encrypted, updated_at: now }).eq('id', id);
+    // Filter the SET payload: a missing column must not abort the whole update.
+    const safe = await filterMissingColumns(table, { ...encrypted, updated_at: now });
+    let query = supabase.from(table).update(safe).eq('id', id);
     for (const cond of conditions) {
+      // A condition field that doesn't exist would raise 42703 and silently
+      // zero-out the update (approval treated as idempotent no-op). Skip it so
+      // the remaining conditions still apply atomically.
+      if (!(await optionalColumnExists(table, cond.field))) {
+        console.warn(`[CONDITIONAL_UPDATE] ${table}.${cond.field} condition skipped (missing column) — continuing with remaining conditions`);
+        continue;
+      }
       if (cond.op === 'EQUAL') query = query.eq(cond.field, cond.value);
       else if (cond.op === 'NOT_EQUAL') query = query.neq(cond.field, cond.value);
       else if (cond.op === 'IN') query = query.in(cond.field, cond.value);
@@ -403,6 +415,107 @@ async function atomicCreditWallet(userId, amount, paymentId, description, txType
   throw new Error(lastError || 'Failed to credit wallet after retries');
 }
 
+// ── Resilient updates: drop optional columns that don't exist yet ──
+// Some tables (payment_sessions, upi_payments) only gain hardening columns
+// (screenshot_phash / verification_attempts / next_retry_at / last_error)
+// after migration 0003 is applied to the live DB. Writing a column that does
+// not exist fails the ENTIRE update (42703), which would silently discard the
+// verification result. updateDocFiltered() detects missing columns once per
+// process (re-checked every 5 min so a later migration is picked up) and
+// strips them before writing, so the pipeline degrades gracefully until the
+// migration is applied.
+const OPTIONAL_COLUMN_RECHECK_MS = 5 * 60 * 1000;
+let _optionalColumnCache = new Map();
+let _optionalColumnCheckedAt = 0;
+
+async function optionalColumnExists(table, column) {
+  const key = table + '.' + column;
+  if (_optionalColumnCache.has(key) && Date.now() - _optionalColumnCheckedAt < OPTIONAL_COLUMN_RECHECK_MS) {
+    return _optionalColumnCache.get(key);
+  }
+  // Default to "exists" whenever we can't confirm otherwise (no DB reachable,
+  // probe threw, etc.) — only strip a column on a DEFINITIVE column-not-found
+  // error, so a mocked/offline environment never silently drops fields.
+  let exists = true;
+  try {
+    const supabase = module.exports.getSupabaseClient();
+    const { error } = await supabase.from(table).select(column).limit(1);
+    if (error) {
+      const msg = String((error && error.message) || error);
+      const code = String((error && error.code) || '');
+      const missing = /does not exist|PGRST204|42703|Could not find the/i.test(msg + ' ' + code);
+      exists = !missing;
+    }
+  } catch (e) {
+    exists = true;
+  }
+  _optionalColumnCache.set(key, exists);
+  _optionalColumnCheckedAt = Date.now();
+  return exists;
+}
+
+// Test helper: forget every cached optional-column probe so a test can
+// re-run detection with a fresh mock.
+function resetOptionalColumnCache() {
+  _optionalColumnCache.clear();
+  _optionalColumnCheckedAt = 0;
+}
+
+// Strip every column the live table does not have from a write payload.
+// Used as a safety net inside the CORE write primitives (writeDoc, updateDoc,
+// addDoc, conditionalUpdateDoc) so a pending migration column can NEVER abort
+// the entire write with 42703 — notifications, audit, approval, wallet and
+// referral writes included. Columns are probed once per 5 min (cached), so
+// steady-state writes add no round trips.
+async function filterMissingColumns(table, data) {
+  const payload = { ...data };
+  const keys = Object.keys(payload);
+  if (!keys.length) return payload;
+  const results = await Promise.all(keys.map(k => optionalColumnExists(table, k)));
+  let dropped = 0;
+  for (let i = 0; i < keys.length; i++) {
+    if (!results[i]) {
+      console.warn(`[SCHEMA-FILTER] ${table}.${keys[i]} missing (migration pending?) — skipping column`);
+      delete payload[keys[i]];
+      dropped++;
+    }
+  }
+  if (dropped) console.warn(`[SCHEMA-FILTER] ${table}: dropped ${dropped} missing column(s) before write`);
+  return payload;
+}
+
+// Write data, first stripping any listed optional columns that the table
+// doesn't actually have. Only 'optionalColumns' are probed — core columns are
+// always written (they are guaranteed by earlier migrations).
+async function updateDocFiltered(table, id, data, optionalColumns) {
+  const payload = { ...data };
+  if (Array.isArray(optionalColumns) && optionalColumns.length) {
+    for (const col of optionalColumns) {
+      if (col in payload && !(await optionalColumnExists(table, col))) {
+        console.warn(`[UPDATE-FILTERED] ${table}.${col} missing (migration pending?) — skipping column`);
+        delete payload[col];
+      }
+    }
+  }
+  return module.exports.updateDoc(table, id, payload);
+}
+
+// Insert a record, first stripping any listed optional columns the table lacks.
+// Mirrors updateDocFiltered so audit/trail inserts survive a pending migration
+// instead of aborting the entire INSERT (42703) and losing the record.
+async function addDocFiltered(table, data, optionalColumns) {
+  const payload = { ...data };
+  if (Array.isArray(optionalColumns) && optionalColumns.length) {
+    for (const col of optionalColumns) {
+      if (col in payload && !(await optionalColumnExists(table, col))) {
+        console.warn(`[ADD-FILTERED] ${table}.${col} missing (migration pending?) — skipping column`);
+        delete payload[col];
+      }
+    }
+  }
+  return module.exports.addDoc(table, payload);
+}
+
 // ── Targeted lookup helpers (indexed queries, decrypt only matching row) ──
 
 // Cache whether the hash columns exist in the users table.
@@ -445,7 +558,7 @@ function ensureHashColumnDetection() {
       markHashColumnState(true);
     }
   })();
-  _hashColumnPromise.catch(() => {});
+  _hashColumnPromise.catch(e => console.error('[SUPABASE] hash-column probe failed: ' + e.message));
   return _hashColumnPromise;
 }
 
@@ -517,4 +630,4 @@ async function findUserBySponsorCode(code) {
   return results.length > 0 ? results[0] : null;
 }
 
-module.exports = { getDoc, deleteDoc, runQuery, runQueryDecrypted, writeDoc, updateDoc, addDoc, countQuery, resilientQuery, isCriticalTable, conditionalUpdateDoc, getSupabaseClient, atomicCreditWallet, findUserByEmail, findUserByPhone, findUserBySponsorCode };
+module.exports = { getDoc, deleteDoc, runQuery, runQueryDecrypted, writeDoc, updateDoc, updateDocFiltered, addDoc, addDocFiltered, countQuery, resilientQuery, isCriticalTable, conditionalUpdateDoc, getSupabaseClient, atomicCreditWallet, findUserByEmail, findUserByPhone, findUserBySponsorCode, resetOptionalColumnCache };

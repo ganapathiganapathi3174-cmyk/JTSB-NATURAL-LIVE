@@ -181,35 +181,39 @@ async function run() {
   const reg3 = await httpRequest('POST', '/api/preRegister', { ...USER3, password: 'Test@123', referralCode: sponsorReferralCode });
   assert(reg3.status === 400, `User 3 registration rejected with ${reg3.status}`);
   const errMsg = (reg3.body?.error || '').toLowerCase();
-  assert(errMsg.includes('expired') || errMsg.includes('limit'), `Error message mentions expired/link: "${reg3.body?.error}"`);
+  assert(errMsg.includes('expired') || errMsg.includes('limit') || errMsg.includes('inactive'), `Error message mentions expired/link: "${reg3.body?.error}"`);
   console.log(`  Response: ${reg3.status} — ${reg3.body?.error}`);
 
-  // ── Step 12: Admin Approve Sponsor ──
-  console.log('\n\uD83D\uDCCC Step 12: Admin approves sponsor reactivation');
-  const approveSponsorAct = await httpRequest('POST', '/api/approveSponsor', { userId: createdIds.sponsorId }, adminToken);
-  assert(approveSponsorAct.status === 200, 'Sponsor reactivation success');
-  assert(approveSponsorAct.body?.status === 'approved', `Status: ${approveSponsorAct.body?.status}`);
-  console.log(`  Response: ${JSON.stringify(approveSponsorAct.body)}`);
+  // ── Step 12: Admin Reactivates Sponsor (new referral cycle) ──
+  console.log('\n\uD83D\uDCCC Step 12: Admin reactivates sponsor via /api/reactivateUser');
+  const reactivateAct = await httpRequest('POST', '/api/reactivateUser', { userId: createdIds.sponsorId, reason: 'E2E reactivation' }, adminToken);
+  assert(reactivateAct.status === 200, 'Sponsor reactivation success');
+  assert(reactivateAct.body?.reactivated === true, `Reactivated flag: ${reactivateAct.body?.reactivated}`);
+  assert(reactivateAct.body?.cycleType === 'referral', `Cycle type: ${reactivateAct.body?.cycleType}`);
+  console.log(`  Response: ${JSON.stringify(reactivateAct.body)}`);
 
-  // ── Step 13: Verify Sponsor ACTIVE again ──
-  console.log('\n\uD83D\uDCCC Step 13: Verify Sponsor is ACTIVE again');
+  // ── Step 13: Verify Sponsor ACTIVE again + new cycle ──
+  console.log('\n\uD83D\uDCCC Step 13: Verify Sponsor is ACTIVE again with new cycle');
   await new Promise(r => setTimeout(r, 500));
   const dashAfterApprove = await httpRequest('POST', '/api/getAdminDashboardData', {}, adminToken);
   assert(dashAfterApprove.status === 200, 'Dashboard loaded');
   const sponsorFinal = (dashAfterApprove.body?.users || []).find(u => u.id === createdIds.sponsorId);
   assert(!!sponsorFinal, 'Sponsor found');
   assert(sponsorFinal.account_status === 'active', `Sponsor ACTIVE (got ${sponsorFinal.account_status})`);
-  console.log(`  Account status: ${sponsorFinal.account_status}`);
+  assert(sponsorFinal.referral_limit_reached === false, 'referral_limit_reached reset to false');
+  assert(sponsorFinal.referral_cycle_number === 2, `referral_cycle_number incremented (got ${sponsorFinal.referral_cycle_number})`);
+  console.log(`  Account status: ${sponsorFinal.account_status}, cycle: ${sponsorFinal.referral_cycle_number}`);
 
-  // ── Step 14: Verify old referral link still expired ──
-  console.log('\n\uD83D\uDCCC Step 14: Verify old referral link still EXPIRED after approval');
+  // ── Step 14: Verify new referral cycle accepts registrations again ──
+  console.log('\n\uD83D\uDCCC Step 14: Verify referral link is ACTIVE again in new cycle');
   const reg3again = await httpRequest('POST', '/api/preRegister', {
     name: 'Demo User Three Retry', email: `demo.user3.retry.${ts}@test.local`,
     phone: `900004${String(ts).slice(-6)}`, password: 'Test@123',
     referralCode: sponsorReferralCode,
   });
-  assert(reg3again.status === 400, '3rd registration still rejected after sponsor reactivation');
-  console.log(`  Response: ${reg3again.status} — ${reg3again.body?.error}`);
+  assert(reg3again.status === 200, '3rd registration accepted in new cycle');
+  assert(!!reg3again.body?.pendingRegId, '3rd registration pendingRegId received');
+  console.log(`  Response: ${reg3again.status} — new pending registration created`);
 
   // ── Summary ──
   const total = passed + failed;

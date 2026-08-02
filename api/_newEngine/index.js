@@ -142,7 +142,7 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
     result.extractedFields = extracted;
     result.normalizedFields = normalized;
 
-    log(`FIELDS: amount=${extracted.amount} utr=${extracted.utr} upi=${extracted.upi_id} date=${extracted.date} status=${extracted.status}`);
+    log(`FIELDS: amount=${extracted.amount} utr=${extracted.utr} upi=${extracted.upi_id} date=${extracted.date} time=${extracted.time} status=${extracted.status}`);
 
     const expected = {
       amount: Number(order?.amount) || null,
@@ -200,7 +200,7 @@ async function run(order, screenshotUrl, userId, userUtr, userUpi, screenshotBuf
     result.screenshotHash = buf && Buffer.isBuffer(buf) ? crypto.createHash('sha256').update(buf).digest('hex') : null;
     result.screenshotPhash = null;
     if (buf && Buffer.isBuffer(buf)) {
-      try { result.screenshotPhash = await getPhash().computePhash(buf); } catch (_) {}
+      try { result.screenshotPhash = await getPhash().computePhash(buf); } catch (e) { log('PHASH FAILED: ' + e.message); }
     }
 
     const ocrData = {

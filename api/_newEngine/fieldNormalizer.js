@@ -23,19 +23,15 @@ function normalizeDate(dateStr) {
 }
 
 function todayString() {
-  return new Date().toISOString().split('T')[0];
+  return istDateString();
 }
 
 function yesterdayString() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().split('T')[0];
+  return istDateString(new Date(Date.now() - 86400000));
 }
 
 function tomorrowString() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
+  return istDateString(new Date(Date.now() + 86400000));
 }
 
 function parseDateString(str) {
@@ -80,9 +76,73 @@ function isTodayOrNear(dateStr, toleranceDays) {
   const parsed = parseDateString(dateStr) || dateStr;
   const d = new Date(parsed);
   if (isNaN(d.getTime())) return false;
-  const today = new Date();
-  const diffDays = Math.abs((d - today) / 86400000);
-  return diffDays <= (toleranceDays || 1);
+  const today = new Date(istDateString() + 'T00:00:00Z');
+  const diffDays = Math.round((d - today) / 86400000);
+  return Math.abs(diffDays) <= (toleranceDays || 1);
+}
+
+// ─────────────────────────────────────────────────────────────
+// IST (Asia/Kolkata) TIMEZONE HELPERS
+//
+// India has no DST, so IST = UTC + 05:30 exactly. All payment
+// timestamp comparisons (date must be today, time within ±window)
+// are resolved against the Asia/Kolkata wall clock — NOT the UTC
+// date that `toISOString()` would produce.
+// ─────────────────────────────────────────────────────────────
+
+const IST_OFFSET_MIN = 330; // UTC+05:30
+
+function istClock(now) {
+  const d = new Date((now instanceof Date ? now : new Date()).getTime() + IST_OFFSET_MIN * 60000);
+  const iso = d.toISOString();
+  return {
+    isoDate: iso.slice(0, 10),                 // YYYY-MM-DD in IST
+    hours: d.getUTCHours(),
+    minutes: d.getUTCMinutes(),
+    dayMinutes: d.getUTCHours() * 60 + d.getUTCMinutes(), // minutes since IST midnight
+  };
+}
+
+function istDateString(now) {
+  return istClock(now).isoDate;
+}
+
+// True when the extracted date string equals TODAY's date in IST.
+function isDateTodayIST(dateStr, now) {
+  if (!dateStr) return false;
+  const parsed = parseDateString(dateStr);
+  if (!parsed) return false;
+  return parsed === istDateString(now);
+}
+
+// Parse a time-of-day string into minutes since midnight (0-1439).
+// Supports 12h ("10:45 AM", "10:45PM", "10.45 AM", "10 45 am") and
+// 24h ("22:45", "10:45") forms. Returns null when unparseable.
+function parseTimeString(str) {
+  if (!str) return null;
+  const m = String(str).trim().match(/^(\d{1,2})(?:[:. ])(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const meridiem = (m[3] || '').toUpperCase();
+  if (h > 24 || min > 59) return null;
+  if (meridiem && h > 12) return null; // "15:00 PM" is invalid
+  if (meridiem === 'PM' && h < 12) h += 12;
+  if (meridiem === 'AM' && h === 12) h = 0;
+  if (!meridiem && h === 24) h = 0;
+  return h * 60 + min;
+}
+
+// True when the screenshot payment time is within ±windowMin minutes of the
+// server's current time in IST. Uses the circular time-of-day distance so the
+// comparison wraps correctly across midnight (23:50 IST vs 00:10 IST is 20 min).
+function isTimeWithinWindow(timeStr, windowMin, now) {
+  const payMin = parseTimeString(timeStr);
+  if (payMin === null) return false;
+  const nowMin = istClock(now).dayMinutes;
+  const diff = Math.abs(nowMin - payMin);
+  const circular = Math.min(diff, 1440 - diff);
+  return circular <= (windowMin == null ? 30 : windowMin);
 }
 
 function normalizeFields(raw) {
@@ -98,4 +158,4 @@ function normalizeFields(raw) {
   };
 }
 
-module.exports = { normalizeUTR, normalizeUPI, normalizeAmount, normalizeDate, todayString, yesterdayString, tomorrowString, parseDateString, isTodayOrNear, normalizeFields };
+module.exports = { normalizeUTR, normalizeUPI, normalizeAmount, normalizeDate, todayString, yesterdayString, tomorrowString, parseDateString, isTodayOrNear, normalizeFields, istClock, istDateString, isDateTodayIST, parseTimeString, isTimeWithinWindow };

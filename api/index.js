@@ -11,7 +11,7 @@ try {
       if (m && !process.env[m[1].trim()]) process.env[m[1].trim()] = m[2].trim();
     });
   }
-} catch (_) {}
+} catch (e) { console.error('[ENV] .env.local read failed (ignored): ' + e.message); }
 
 const { requireAdmin } = require('./_auth.js');
 const metrics = require('./_metrics.js');

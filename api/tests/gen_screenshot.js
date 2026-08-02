@@ -13,14 +13,30 @@ async function font(size, style) {
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
+// Current date/time in Asia/Kolkata, used as the default screenshot
+// timestamp so generated screenshots pass the ±30-min time-window check.
+function istNow() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const get = (t) => parts.find(p => p.type === t)?.value || '';
+  return {
+    date: `${get('year')}-${get('month')}-${get('day')}`,
+    time: `${pad((Number(get('hour')) % 24) || 0)}:${get('minute')}`,
+  };
+}
+
 async function genPhonePeScreenshot(opts) {
+  const nowIst = istNow();
   const o = Object.assign({
     amount: '120.00',
     utr: '1234567892222',
     upi: 'jayarajj126-3@okicici',
     name: 'JEYARAJ ALAGAR',
     date: null,
-    time: '10:45 AM',
+    time: nowIst.time,
     status: 'SUCCESS',
     width: 720,
     height: 1280,
@@ -29,8 +45,14 @@ async function genPhonePeScreenshot(opts) {
   const W = o.width, H = o.height;
   const img = new JimpClass({ width: W, height: H, color: 0xffffffff });
 
-  const today = o.date || new Date();
-  const dateStr = typeof today === 'string' ? today : (pad(today.getDate()) + '/' + pad(today.getMonth() + 1) + '/' + today.getFullYear());
+  let dateStr;
+  if (o.date) {
+    const today = typeof o.date === 'string' ? o.date : o.date;
+    dateStr = typeof today === 'string' ? today : (pad(today.getDate()) + '/' + pad(today.getMonth() + 1) + '/' + today.getFullYear());
+  } else {
+    const [y, mo, d] = nowIst.date.split('-');
+    dateStr = d + '/' + mo + '/' + y; // DD/MM/YYYY — matches extractor regex
+  }
 
   const fTitle = await font(64, 'black');
   const fBody = await font(32, 'black');

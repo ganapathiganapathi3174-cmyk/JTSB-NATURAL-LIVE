@@ -50,7 +50,7 @@ async function onReferralApproved(sponsorUserId, referralUserId, referralCode, a
         message: 'Your referral cycle #' + cycleNumber + ' is complete (' + currentCount + '/' + MAX_REFERRALS + ' referrals). Your account is now inactive pending admin reactivation.',
         type: 'referral_cycle_completed', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System',
       });
-    } catch {}
+    } catch (e) { console.error('[cycleEngine] Referral-cycle notification failed: ' + e.message); }
 
     try {
       await addDoc(COL_NOTIFICATIONS, {
@@ -58,14 +58,14 @@ async function onReferralApproved(sponsorUserId, referralUserId, referralCode, a
         message: 'User ' + (sponsor.name || sponsorUserId) + ' has completed referral cycle #' + cycleNumber + ' with ' + currentCount + ' referrals. Awaiting reactivation.',
         type: 'referral_cycle_completed_admin', status: 'unread', createdAt: now, senderId: sponsorUserId, senderName: sponsor.name || 'User',
       });
-    } catch {}
+    } catch (e) { console.error('[cycleEngine] Referral-cycle admin notification failed: ' + e.message); }
 
     try {
       await addDoc(COL_AUDIT_LOGS, {
         action: 'referral_cycle_completed', target_id: sponsorUserId, target_type: 'user',
         admin_id: adminEmail || 'system', details: { cycleNumber, referralCount: currentCount, totalReferrals, deactivatedBy: 'automatic' }, created_at: now,
       });
-    } catch {}
+    } catch (e) { console.error('[cycleEngine] Referral-cycle audit failed: ' + e.message); }
 
     try {
       await addDoc(COL_CYCLE_HISTORY, {
@@ -73,9 +73,9 @@ async function onReferralApproved(sponsorUserId, referralUserId, referralCode, a
         action: 'completed', details: { referralCount: currentCount, totalReferrals, referredUserId: referralUserId },
         admin_id: adminEmail || 'system', created_at: now,
       });
-    } catch {}
+    } catch (e) { console.error('[cycleEngine] Referral-cycle history failed: ' + e.message); }
 
-    try { broadcast('userUpdated', { userId: sponsorUserId, event: 'referral_cycle_completed', cycleNumber }); } catch {}
+    try { broadcast('userUpdated', { userId: sponsorUserId, event: 'referral_cycle_completed', cycleNumber }); } catch (e) { console.error('[cycleEngine] Broadcast referral_cycle failed: ' + e.message); }
   }
 
   await updateDoc(COL_USERS, sponsorUserId, updates);
@@ -128,7 +128,7 @@ async function onTopupApproved(userId, topupId, amount, adminEmail) {
         message: 'Your topup cycle #' + cycleNumber + ' is complete. All downlines topped up and your topup is approved. Account inactive pending admin reactivation.',
         type: 'topup_cycle_completed', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System',
       });
-    } catch {}
+    } catch (e) { console.error('[cycleEngine] Topup-cycle notification failed: ' + e.message); }
 
     try {
       await addDoc(COL_NOTIFICATIONS, {
@@ -136,14 +136,14 @@ async function onTopupApproved(userId, topupId, amount, adminEmail) {
         message: 'User ' + (user.name || userId) + ' completed topup cycle #' + cycleNumber + '. All ' + downlines.length + ' downlines topped up. Awaiting reactivation.',
         type: 'topup_cycle_completed_admin', status: 'unread', createdAt: now, senderId: userId, senderName: user.name || 'User',
       });
-    } catch {}
+    } catch (e) { console.error('[cycleEngine] Topup-cycle admin notification failed: ' + e.message); }
 
     try {
       await addDoc(COL_AUDIT_LOGS, {
         action: 'topup_cycle_completed', target_id: userId, target_type: 'user',
         admin_id: adminEmail || 'system', details: { cycleNumber, downlineCount: downlines.length, downlinesWithTopup, topupId, amount }, created_at: now,
       });
-    } catch {}
+    } catch (e) { console.error('[cycleEngine] Topup-cycle audit failed: ' + e.message); }
 
     try {
       await addDoc(COL_CYCLE_HISTORY, {
@@ -151,15 +151,15 @@ async function onTopupApproved(userId, topupId, amount, adminEmail) {
         action: 'completed', details: { downlineCount: downlines.length, downlinesWithTopup, topupId, amount },
         admin_id: adminEmail || 'system', created_at: now,
       });
-    } catch {}
+    } catch (e) { console.error('[cycleEngine] Topup-cycle history failed: ' + e.message); }
 
-    try { broadcast('userUpdated', { userId, event: 'topup_cycle_completed', cycleNumber }); } catch {}
+    try { broadcast('userUpdated', { userId, event: 'topup_cycle_completed', cycleNumber }); } catch (e) { console.error('[cycleEngine] Broadcast topup_cycle failed: ' + e.message); }
 
     for (const inc of await runQuery('topup_referral_income', [
       { field: 'user_id', op: 'EQUAL', value: userId },
       { field: 'status', op: 'EQUAL', value: 'locked' },
     ], { limit: 100 })) {
-      await updateDoc('topup_referral_income', inc.id, { status: 'eligible' }).catch(() => {});
+      await updateDoc('topup_referral_income', inc.id, { status: 'eligible' }).catch(e => console.error('[cycleEngine] Unlock topup_referral_income failed: ' + e.message));
     }
 
     return { deactivated: true, cycleNumber, downlinesWithTopup, downlineTotal: downlines.length };
@@ -174,9 +174,9 @@ async function onTopupApproved(userId, topupId, amount, adminEmail) {
         message: (user.name || userId) + ': ' + downlinesWithTopup + '/' + downlines.length + ' downlines have topped up. Sponsor topup is pending.',
         type: 'sponsor_topup_pending', status: 'unread', createdAt: now, senderId: userId, senderName: user.name || 'User',
       });
-    } catch {}
+    } catch (e) { console.error('[cycleEngine] Sponsor-topup-pending notification failed: ' + e.message); }
 
-    try { broadcast('userUpdated', { userId, event: 'sponsor_topup_pending', downlinesWithTopup, downlineTotal: downlines.length }); } catch {}
+    try { broadcast('userUpdated', { userId, event: 'sponsor_topup_pending', downlinesWithTopup, downlineTotal: downlines.length }); } catch (e) { console.error('[cycleEngine] Broadcast sponsor_topup_pending failed: ' + e.message); }
   }
 
   return { deactivated: false, downlinesWithTopup, downlineTotal: downlines.length };
@@ -233,14 +233,14 @@ async function reactivateUser(userId, adminEmail, reason) {
       message: 'Your account has been reactivated by an administrator. ' + (reason || ''),
       type: 'account_reactivated', status: 'unread', createdAt: now, senderId: adminEmail || 'admin', senderName: adminEmail || 'Admin',
     });
-  } catch {}
+  } catch (e) { console.error('[cycleEngine] Reactivate notification failed: ' + e.message); }
 
   try {
     await addDoc(COL_AUDIT_LOGS, {
       action: 'user_reactivated', target_id: userId, target_type: 'user',
       admin_id: adminEmail || 'unknown', details: { previousReason: prevReason, cycleType: prevCycleType, reason: reason || 'Admin reactivation' }, created_at: now,
     });
-  } catch {}
+  } catch (e) { console.error('[cycleEngine] Reactivate audit failed: ' + e.message); }
 
   try {
     await addDoc(COL_CYCLE_HISTORY, {
@@ -248,9 +248,9 @@ async function reactivateUser(userId, adminEmail, reason) {
       action: 'reactivated', details: { previousReason: prevReason, reason: reason || 'Admin reactivation' },
       admin_id: adminEmail || 'unknown', created_at: now,
     });
-  } catch {}
+  } catch (e) { console.error('[cycleEngine] Reactivate history failed: ' + e.message); }
 
-  try { broadcast('userUpdated', { userId, event: 'user_reactivated' }); } catch {}
+  try { broadcast('userUpdated', { userId, event: 'user_reactivated' }); } catch (e) { console.error('[cycleEngine] Broadcast user_reactivated failed: ' + e.message); }
 
   return { userId, reactivated: true, prevReason, cycleType: prevCycleType };
 }

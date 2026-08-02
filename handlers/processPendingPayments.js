@@ -47,7 +47,7 @@ async function processNextPayment() {
       } else {
         result.manualReview++;
       }
-      try { broadcast('paymentUpdated', { paymentId: payment.id, status: fs, type: payment.payment_type }); } catch {}
+      try { broadcast('paymentUpdated', { paymentId: payment.id, status: fs, type: payment.payment_type }); } catch (e) { console.error('[processPendingPayments] Broadcast failed for ' + payment.id + ': ' + e.message); }
     } catch (e) {
       result.errors.push({ paymentId: payment.id, error: e.message });
       result.manualReview++;

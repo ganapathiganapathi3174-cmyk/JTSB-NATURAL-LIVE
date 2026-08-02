@@ -8,7 +8,7 @@
 const http = require('http');
 const https = require('https');
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://jsree-apex.vercel.app';
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3001';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'jayaraj@gmail.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'jayaraj7523';
 
@@ -611,7 +611,6 @@ async function runAllTests() {
   await testAdminLoginFail();
   await testAdminLogin();
   await testAuthProtected();
-  await testRateLimiting();
 
   // Admin logout test - this invalidates the token, so login again
   await testAdminLogout();
@@ -635,6 +634,10 @@ async function runAllTests() {
   await testRejectPayment();
   await testRestorePayment();
   await testDeletePayment();
+
+  // Rate limiting last - its 65 sequential requests trip the global
+  // 60/min limiter, which would 429 every subsequent test otherwise
+  await testRateLimiting();
 
   // Summary
   const total = results.passed + results.failed;

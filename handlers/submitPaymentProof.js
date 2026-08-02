@@ -1,6 +1,13 @@
-const { updateDoc } = require('../api/_supabase.js');
+const { updateDocFiltered } = require('../api/_supabase.js');
 const { COL_ORDERS } = require('../api/_shared.js');
 const r2 = require('../api/_r2.js');
+
+// Columns that exist only after migration 0002 (utr/expected_upi_id/expected_amount)
+// or 0003 (screenshot_phash/verification_attempts/next_retry_at/last_error) are
+// applied. updateDocFiltered probes them once and strips any that the live table
+// lacks, so the screenshot_url + verification_status write (which the status poll
+// depends on) can NEVER be aborted by a 42703 column-not-found error.
+const ORDER_OPTIONAL_COLS = ['utr', 'expected_upi_id', 'expected_amount', 'screenshot_phash', 'verification_attempts', 'next_retry_at', 'last_error'];
 
 function now() { return new Date().toISOString(); }
 
@@ -61,14 +68,15 @@ module.exports = async (req, res) => {
     }
 
     // Persist the screenshot URL on the order so the poll (getPaymentOrderStatus)
-    // can find and verify it.
-    await updateDoc(COL_ORDERS, orderId, {
+    // can find and verify it. updateDocFiltered strips any migration-pending
+    // columns so a missing utr/expected_upi_id can't abort the whole write.
+    await updateDocFiltered(COL_ORDERS, orderId, {
       screenshot_url: screenshotUrl,
       verification_status: 'pending',
       utr: utr || null,
       expected_upi_id: upiId || null,
       updated_at: now(),
-    }).catch(e => log('Persist order fields failed: ' + e.message));
+    }, ORDER_OPTIONAL_COLS).catch(e => log('Persist order fields failed: ' + e.message));
 
     // ── Phase 2: Respond immediately. Verification is driven synchronously by the
     // frontend's status poll, because fire-and-forget background work after the

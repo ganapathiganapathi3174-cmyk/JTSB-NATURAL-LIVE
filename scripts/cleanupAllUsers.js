@@ -59,7 +59,8 @@ async function main() {
       { table: 'deletion_audit_logs', field: 'deleted_record_id' },
       { table: 'sponsor_claims', field: 'sponsor_id' },
       { table: 'sponsor_transfers', field: 'user_id' },
-      { table: 'sponsor_transfers', field: 'sponsor_id' },
+      { table: 'sponsor_transfers', field: 'new_sponsor_id' },
+      { table: 'sponsor_transfers', field: 'old_sponsor_id' },
     ];
 
     for (const { table, field } of tables) {

@@ -2,16 +2,29 @@ const { COL_USERS, COL_UPI_PAYMENTS, COL_PENDING_REGS, COL_TOPUPS, COL_SPONSOR_C
 const { runQuery, getSupabaseClient } = require('../api/_supabase.js');
 const { getCompanionStatus } = require('../api/_companionAuth.js');
 
+async function runWithRetry(fn, retries = 1) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const transient = /Abort|aborted|timeout|timed out|ECONNRESET|socket hang up/i.test((err && (err.message || err)) || '');
+      if (attempt >= retries || !transient) throw err;
+      console.warn(`[DASHBOARD] query aborted, retrying (${attempt + 1}/${retries}): ${(err && err.message) || err}`);
+      await new Promise(r => setTimeout(r, 250));
+    }
+  }
+}
+
 module.exports = async (req, res) => {
   try {
     const supabase = getSupabaseClient();
 
     const results = await Promise.allSettled([
-      runQuery(COL_USERS, [], { orderBy: 'created_at', ascending: false, limit: 500 }),
-      supabase.from(COL_TOPUPS).select('*').order('created_at', { ascending: false }).limit(500),
-      supabase.from(COL_PENDING_REGS).select('*').order('created_at', { ascending: false }).limit(500),
-      runQuery(COL_UPI_PAYMENTS, [], { orderBy: 'created_at', ascending: false, limit: 500 }),
-      runQuery(COL_SPONSOR_CLAIMS, [], { orderBy: 'created_at', ascending: false, limit: 200 }),
+      runWithRetry(() => runQuery(COL_USERS, [], { orderBy: 'created_at', ascending: false, limit: 500 })),
+      runWithRetry(() => supabase.from(COL_TOPUPS).select('*').order('created_at', { ascending: false }).limit(500)),
+      runWithRetry(() => supabase.from(COL_PENDING_REGS).select('*').order('created_at', { ascending: false }).limit(500)),
+      runWithRetry(() => runQuery(COL_UPI_PAYMENTS, [], { orderBy: 'created_at', ascending: false, limit: 500 })),
+      runWithRetry(() => runQuery(COL_SPONSOR_CLAIMS, [], { orderBy: 'created_at', ascending: false, limit: 200 })),
     ]);
 
     const diagnostics = {

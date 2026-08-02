@@ -78,12 +78,26 @@ async function checkR2() {
   if (history.r2.length > 100) history.r2.shift();
 }
 
+async function withTimeout(promise, ms, fallback) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Health check timed out after ' + ms + 'ms')), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } catch (err) {
+    return fallback(err);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function runAllChecks() {
   await Promise.all([
-    checkSupabase().catch(() => {}),
-    checkTurso().catch(() => {}),
-    checkNeon().catch(() => {}),
-    checkR2().catch(() => {}),
+    withTimeout(checkSupabase(), 15000, err => status.supabase = { status: 'unhealthy', lastCheck: new Date().toISOString(), latency: 0, error: err.message }),
+    withTimeout(checkTurso(), 15000, err => status.turso = { status: 'unhealthy', lastCheck: new Date().toISOString(), latency: 0, error: err.message }),
+    withTimeout(checkNeon(), 15000, err => status.neon = { status: 'unhealthy', lastCheck: new Date().toISOString(), latency: 0, error: err.message }),
+    withTimeout(checkR2(), 15000, err => status.r2 = { status: 'unhealthy', lastCheck: new Date().toISOString(), latency: 0, error: err.message }),
   ]);
 }
 

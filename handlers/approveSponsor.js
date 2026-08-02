@@ -79,7 +79,7 @@ module.exports = async (req, res) => {
         },
         created_at: now,
       });
-    } catch {}
+    } catch (e) { console.error('[approveSponsor] Audit log failed: ' + e.message); }
 
     // Notification to sponsor
     try {
@@ -95,9 +95,9 @@ module.exports = async (req, res) => {
         senderId: 'system',
         senderName: 'System',
       });
-    } catch {}
+    } catch (e) { console.error('[approveSponsor] Notification failed: ' + e.message); }
 
-    try { broadcast('sponsorClaimApproved', { sponsorId: claim.sponsor_id, claimId: claim.id, amount: claimAmount }); } catch {}
+    try { broadcast('sponsorClaimApproved', { sponsorId: claim.sponsor_id, claimId: claim.id, amount: claimAmount }); } catch (e) { console.error('[approveSponsor] Broadcast failed: ' + e.message); }
 
     res.writeHead(200);
     res.end(JSON.stringify({

@@ -1,11 +1,17 @@
 // ─────────────────────────────────────────────────────────────
 // PERCEPTUAL HASH (dHash)  (api/_newEngine/phash.js)
 //
-// Difference-hash: resize to 9x8, greyscale, then compare each
-// pixel against its right neighbour → 64 bits → 16-char hex.
+// Difference-hash: resize to 33x32, greyscale, then compare each
+// pixel against its right neighbour → 1024 bits → 256-char hex.
 // Robust to re-compression, minor crops and brightness shifts.
 // Used alongside SHA-256 so duplicate screenshots are caught even
 // when the bytes differ (different encode, same content).
+//
+// Resolution matters: at 9x8 (64-bit) the downscale erases the
+// text, so ANY two UPI-app screenshots measure distance 1-2 and
+// are falsely flagged as duplicates. At 33x32 (1024-bit) distinct
+// payments measure 7+ while re-encoded copies of the SAME image
+// stay at ~0-1, so threshold 4 separates them cleanly.
 //
 // Pure image code — lazy-required by the duplicate checker so the
 // engine stays cold-start cheap.
@@ -13,9 +19,9 @@
 
 const { Jimp } = require('jimp');
 
-const WIDTH = 9;
-const HEIGHT = 8;
-const BITS = (WIDTH - 1) * HEIGHT; // 64
+const WIDTH = 33;
+const HEIGHT = 32;
+const BITS = (WIDTH - 1) * HEIGHT; // 1024
 
 const HEX = '0123456789abcdef';
 

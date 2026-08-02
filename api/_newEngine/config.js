@@ -32,12 +32,19 @@ module.exports = {
   CONFIDENCE_APPROVE: parseInt(process.env.AUTO_APPROVE_CONFIDENCE || '98', 10),
   CONFIDENCE_REJECT: 40,
 
+  // Screenshot payment-time must fall within ±PAYMENT_TIME_WINDOW_MIN minutes of
+  // the server's current time (Asia/Kolkata) to be eligible for auto-approval.
+  TIME_WINDOW_MIN: parseInt(process.env.PAYMENT_TIME_WINDOW_MIN || '30', 10),
+
   FRAUD_RAPID_WINDOW_MS: 60000,
   FRAUD_MAX_PER_WINDOW: 3,
 
-  // Perceptual-hash duplicate detection (dHash, 64-bit).
+  // Perceptual-hash duplicate detection (dHash, 1024-bit).
   // Two screenshots are "same image" when hamming distance <= threshold.
-  PHASH_THRESHOLD: parseInt(process.env.PHASH_THRESHOLD || '10', 10),
+  // At 1024-bit: re-encoded copies of the SAME screenshot measure ~0-1,
+  // while genuinely different payments measure 7+ (verified empirically).
+  // A threshold of 4 cleanly separates reuse from distinct transactions.
+  PHASH_THRESHOLD: parseInt(process.env.PHASH_THRESHOLD || '4', 10),
   PHASH_SCAN_LIMIT: parseInt(process.env.PHASH_SCAN_LIMIT || '300', 10),
 
   DECISION: {

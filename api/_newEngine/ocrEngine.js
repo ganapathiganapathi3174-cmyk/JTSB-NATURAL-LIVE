@@ -86,7 +86,7 @@ async function runAllEngines(screenshotUrl, screenshotBuf) {
 
   await Promise.allSettled(promises);
 
-  try { fs.unlinkSync(tempPath); } catch {}
+  try { fs.unlinkSync(tempPath); } catch (e) { /* best-effort temp cleanup */ try { require('console').error('[OCR] temp cleanup failed: ' + e.message); } catch (_) {} }
 
   const allTexts = [];
   let totalConf = 0;

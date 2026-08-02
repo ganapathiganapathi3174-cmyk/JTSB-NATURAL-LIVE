@@ -4,13 +4,18 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
+let _cachedKey = undefined;
+
 function getKey() {
+  if (_cachedKey !== undefined) return _cachedKey;
   const key = process.env.ENCRYPTION_KEY;
   if (!key || key.length < 32) {
     console.warn('[CRYPTO] ENCRYPTION_KEY not set or too short — encryption disabled');
+    _cachedKey = null;
     return null;
   }
-  return crypto.scryptSync(key, 'jsree-apex-salt', 32);
+  _cachedKey = crypto.scryptSync(key, 'jsree-apex-salt', 32);
+  return _cachedKey;
 }
 
 function encrypt(text) {

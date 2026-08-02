@@ -6,7 +6,8 @@ const C = require('./config.js');
 //   - amount matches (extracted == expected)
 //   - receiver UPI matches
 //   - transaction status = SUCCESS
-//   - transaction date = today (tolerance 1 day)
+//   - transaction date = today in Asia/Kolkata
+//   - screenshot payment time within ±TIME_WINDOW_MIN of server time (IST)
 //   - UTR is unique (no prior non-rejected payment with same UTR)
 //   - screenshot is unique (no prior non-rejected payment with same hash)
 //   - image is authentic (valid format/size, not blurry, not dark, no tamper flag)
@@ -33,7 +34,8 @@ function decide(rules, duplicate, fraud, extracted, options) {
     amount: checks.amount === 'matched',
     utr: checks.utr === 'matched',
     upi_id: checks.upi_id === 'matched' || checks.upi_id === 'partial_match',
-    date: checks.date === 'today_or_near',
+    date: checks.date === 'today_ist',
+    time: checks.time === 'within_window',
     status: checks.status === 'success',
   };
 
@@ -41,12 +43,17 @@ function decide(rules, duplicate, fraud, extracted, options) {
   const fraudFlags = (fraud?.flags || []);
   const ocrConfidence = options?.ocrConfidence || 0;
 
-  // ── HARD REJECTS ──
-  if (duplicate?.duplicate) {
+  // ── HARD REJECTS (STRONG duplicates only) ──
+  // duplicate_utr (same UTR hash) and duplicate_screenshot (byte-identical
+  // SHA-256) are unambiguous. duplicate_phash is a PERCEPTUAL similarity and
+  // is intentionally NOT a hard reject — legitimate screenshots from the same
+  // UPI app are perceptually near-identical (verified: distinct payments have
+  // dHash distance 1-2 at 64-bit), so phash routes to manual_review below.
+  if (duplicate?.duplicate && (duplicate.type === 'duplicate_utr' || duplicate.type === 'duplicate_screenshot')) {
     result.status = C.DECISION.REJECT;
     result.reasons = duplicate.reasons || ['Duplicate transaction detected'];
     result.confidence = 100;
-    result.decisionFactors = { reject: 'duplicate', matchedCount };
+    result.decisionFactors = { reject: 'duplicate', type: duplicate.type, matchedCount };
     return result;
   }
 
@@ -71,13 +78,14 @@ function decide(rules, duplicate, fraud, extracted, options) {
   const amountOk = checks.amount === 'matched';
   const upiOk = checks.upi_id === 'matched' || checks.upi_id === 'partial_match';
   const statusOk = checks.status === 'success';
-  const dateOk = checks.date === 'today_or_near';
+  const dateOk = checks.date === 'today_ist';
+  const timeOk = checks.time === 'within_window';
   const utrOk = checks.utr === 'matched';
   const confidenceOk = ocrConfidence >= C.CONFIDENCE_APPROVE;
   const imageOk = !fraudFlags.includes('blurred') && !fraudFlags.includes('dark') &&
                   !fraudFlags.includes('low_resolution') && !fraudFlags.includes('tampered');
 
-  const allStrictConditions = amountOk && upiOk && statusOk && dateOk && utrOk && confidenceOk && imageOk;
+  const allStrictConditions = amountOk && upiOk && statusOk && dateOk && timeOk && utrOk && confidenceOk && imageOk;
 
   if (allStrictConditions) {
     result.status = C.DECISION.APPROVE;
@@ -85,7 +93,8 @@ function decide(rules, duplicate, fraud, extracted, options) {
       'Amount matches',
       'Receiver UPI matches',
       'Transaction status SUCCESS',
-      'Transaction date is today',
+      'Transaction date is today (IST)',
+      'Payment time within ±' + C.TIME_WINDOW_MIN + 'min window (IST)',
       'UTR matched',
       'UTR unique',
       'Screenshot unique',
@@ -99,10 +108,14 @@ function decide(rules, duplicate, fraud, extracted, options) {
 
   // ── MANUAL REVIEW (default) ──
   const missing = [];
+  if (duplicate?.duplicate && duplicate.type === 'duplicate_phash') {
+    result.reasons.push((duplicate.reasons && duplicate.reasons[0]) || 'Screenshot perceptually similar to an existing payment');
+  }
   if (!amountOk) missing.push('amount');
   if (!upiOk) missing.push('receiver UPI');
   if (!statusOk) missing.push('status SUCCESS');
-  if (!dateOk) missing.push('today date');
+  if (!dateOk) missing.push('today date (IST)');
+  if (!timeOk) missing.push('payment time within ±' + C.TIME_WINDOW_MIN + 'min window');
   if (!utrOk) missing.push('UTR');
   if (!confidenceOk) missing.push('OCR confidence >= ' + C.CONFIDENCE_APPROVE);
   if (!imageOk) missing.push('image authenticity');

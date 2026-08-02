@@ -3,7 +3,7 @@ const {
   randomString, ADMIN_UPI_ID,
   getReferrerPackage, getPackageByReferral, validatePackageAmount,
 } = require('./_shared.js');
-const { runQuery, addDoc, updateDoc, getDoc, getSupabaseClient } = require('./_supabase.js');
+const { runQuery, addDoc, updateDoc, updateDocFiltered, getDoc, getSupabaseClient } = require('./_supabase.js');
 const { broadcast } = require('./_sse.js');
 const { verifySession } = require('./_verificationEngine.js');
 const { executeVerifiedOrder } = require('./_approvalPipeline.js');
@@ -16,6 +16,11 @@ const ORDER_TTL_MS = 30 * 60 * 1000;
 const VERIFY_TIMEOUT_MS = 180 * 1000;
 const VERIFY_LOCK_TIMEOUT_MS = 180000;
 
+// Hardening columns added by scripts/0003-verification-hardening.sql. They may
+// not exist in the live DB until the migration is applied — updateDocFiltered()
+// strips them before writing so a missing column can't abort the whole update.
+const HARDENING_COLS = ['screenshot_phash', 'verification_attempts', 'next_retry_at', 'last_error'];
+
 // In-flight verification tracker (in-process only; the 409 lock + the
 // atomic status claim are the real serverless-safe concurrency guards)
 const verifyingOrders = new Set();
@@ -26,7 +31,7 @@ function log(msg) {
 function now() { return new Date().toISOString(); }
 
 async function lookupUser(userId) {
-  try { const u = await getDoc(COL_USERS, userId); if (u) return u; } catch {}
+  try { const u = await getDoc(COL_USERS, userId); if (u) return u; } catch (e) { log('lookupUser getDoc failed: ' + e.message); }
   const found = await runQuery(COL_USERS, [{ field: 'email', op: 'EQUAL', value: userId }], { limit: 1 });
   if (found.length) return found[0];
   return null;
@@ -132,7 +137,7 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
 
   log(`CREATE order=${finalOrderId} type=${type} amount=${amount} expectedUpi=${ADMIN_UPI_ID} upiPaymentId=${upiPaymentId || 'none'}`);
 
-  try { broadcast('paymentCreated', { orderId: finalOrderId, type, amount, status: 'pending' }); } catch {}
+  try { broadcast('paymentCreated', { orderId: finalOrderId, type, amount, status: 'pending' }); } catch (e) { log('Broadcast paymentCreated failed: ' + e.message); }
   try {
     await audit.logOrderEvent({
       action: 'session_created',
@@ -143,7 +148,7 @@ async function createPaymentOrder(type, amount, userId, pendingRegId) {
       from: 'none',
       to: 'pending',
     });
-  } catch {}
+  } catch (e) { log('Session-created audit failed: ' + e.message); }
 
   return {
     orderId: finalOrderId,
@@ -167,12 +172,12 @@ async function getPaymentOrder(orderId) {
     const diff = Date.now() - expiresAt;
     log('[EXPIRED] order=' + orderId + ' status=pending→expired created_at=' + createdAt + ' expires_at=' + order.expires_at + ' now=' + Date.now() + ' overdue=' + diff + 'ms');
     order.status = 'expired';
-    await updateDoc(COL_ORDERS, orderId, { status: 'expired', updated_at: now() }).catch(() => {});
-    try { broadcast('paymentUpdated', { orderId, status: 'expired' }); } catch {}
+    await updateDoc(COL_ORDERS, orderId, { status: 'expired', updated_at: now() }).catch(e => log('[EXPIRED] order=' + orderId + ' status update failed: ' + e.message));
+    try { broadcast('paymentUpdated', { orderId, status: 'expired' }); } catch (e) { log('Broadcast expired failed: ' + e.message); }
     try {
       await audit.logTransition(order, 'expired', { trigger: 'ttl', orderId });
       await notify.notifySessionExpired(order);
-    } catch {}
+    } catch (e) { log('Expired audit/notify failed: ' + e.message); }
   }
   return order;
 }
@@ -204,17 +209,17 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
   if (order.status === 'expired') {
     log('[EXPIRED] order=' + orderId + ' re-activating');
     const newExpiresAt = new Date(Date.now() + ORDER_TTL_MS).toISOString();
-    await updateDoc(COL_ORDERS, orderId, {
+    await updateDocFiltered(COL_ORDERS, orderId, {
       status: 'pending', verification_status: null, verification_score: null,
       ocr_result: null, rejection_reasons: [], screenshot_url: null,
       verification_attempts: 0, next_retry_at: null, last_error: null,
       expires_at: newExpiresAt, updated_at: now(),
-    }).catch(() => {});
+    }, HARDENING_COLS).catch(e => log('[EXPIRED] order=' + orderId + ' reactivation reset failed: ' + e.message));
     order.status = 'pending';
     order.expires_at = newExpiresAt;
     try {
       await audit.logTransition(order, 'pending', { trigger: 'reactivate', orderId });
-    } catch {}
+    } catch (e) { log('Reactivation audit failed: ' + e.message); }
   }
 
   if (order.status === 'verified') throw Object.assign(new Error('Order already verified'), { status: 400 });
@@ -252,22 +257,23 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     if (createdMs != null && createdMs >= 0) metrics.trackLifecycle('submit_to_verify_ms', createdMs);
     try {
       await audit.logTransition(order, finalStatus, { trigger: 'auto', orderId });
-    } catch {}
-    if (finalStatus === 'manual_review') { try { await notify.notifyManualReview(order); } catch {} }
-    await Promise.all([
-      updateDoc(COL_ORDERS, orderId, {
+    } catch (e) { log('Auto-verify audit failed: ' + e.message); }
+    if (finalStatus === 'manual_review') { try { await notify.notifyManualReview(order); } catch (e) { log('Manual-review notify failed: ' + e.message); } }
+    log('[SAVE] order=' + orderId + ' finalStatus=' + finalStatus + ' score=' + (v.confidence || 0) + ' writing order + upi_payments (hardeningCols=' + JSON.stringify(HARDENING_COLS) + ')');
+    const [orderSaveResult, upiSaveResult] = await Promise.all([
+      updateDocFiltered(COL_ORDERS, orderId, {
         status: finalStatus, verification_status: v.status,
         verification_score: v.confidence || 0, ocr_result: verificationData,
         rejection_reasons: v.reasons || [], screenshot_phash: v.screenshotPhash || null,
         verification_attempts: 0, next_retry_at: null, last_error: null,
         updated_at: now(),
-      }).catch(e => log('DB update order failed: ' + e.message)),
+      }, HARDENING_COLS).then(r => ({ ok: true, r })).catch(e => ({ ok: false, e })),
       (async () => {
         try {
           // Update the canonical upi_payments row for this order (paymentId link).
           const upiId = order.paymentId || order.paymentid;
           if (upiId) {
-            await updateDoc(COL_UPI_PAYMENTS, upiId, {
+            return await updateDocFiltered(COL_UPI_PAYMENTS, upiId, {
               status: finalStatus, verification_locked: false,
               ocr_result: verificationData, final_score: v.confidence || 0,
               fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
@@ -275,7 +281,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
               screenshot_phash: v.screenshotPhash || null,
               rejection_reasons: v.reasons || [],
               verified_at: now(), verification_completed_at: now(),
-            }).catch(() => {});
+            }, HARDENING_COLS).then(r => ({ ok: true, r, path: 'paymentId:' + upiId })).catch(e => ({ ok: false, e, path: 'paymentId:' + upiId }));
           } else {
             const searchField = order.pending_reg_id ? 'pending_reg_id' : 'user_id';
             const searchValue = order.pending_reg_id || order.user_id;
@@ -283,8 +289,9 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
               const ups = await runQuery(COL_UPI_PAYMENTS, [
                 { field: searchField, op: 'EQUAL', value: searchValue },
               ], { limit: 5 });
+              const results = [];
               for (const p of ups) {
-                await updateDoc(COL_UPI_PAYMENTS, p.id, {
+                results.push(await updateDocFiltered(COL_UPI_PAYMENTS, p.id, {
                   status: finalStatus, verification_locked: false,
                   ocr_result: verificationData, final_score: v.confidence || 0,
                   fraud_score: v.fraudScore || 0, risk_score: v.riskScore || 0,
@@ -292,16 +299,21 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
                   screenshot_phash: v.screenshotPhash || null,
                   rejection_reasons: v.reasons || [],
                   verified_at: now(), verification_completed_at: now(),
-                }).catch(() => {});
+                }, HARDENING_COLS).then(r => ({ ok: true, r, path: 'search:' + p.id })).catch(e => ({ ok: false, e, path: 'search:' + p.id })));
               }
+              return { ok: results.length > 0, matched: results.length, results };
             }
+            return { ok: false, reason: 'no upi_payments link found' };
           }
-        } catch (_) {}
+        } catch (_) {
+          return { ok: false, e: _ };
+        }
       })(),
     ]);
+    log('[SAVE] order=' + orderId + ' orderWrite=' + JSON.stringify(orderSaveResult) + ' upiWrite=' + (upiSaveResult && upiSaveResult.results ? JSON.stringify(upiSaveResult.results) : JSON.stringify(upiSaveResult)));
     log('[POST_DB] ' + orderId + ' done');
-    try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch {}
-    log('[INLINE_VERIFY] order ' + orderId + ' done: status=' + finalStatus + ' score=' + (v.confidence || 0) + ' total=' + (Date.now() - t0) + 'ms');
+    try { broadcast('paymentUpdated', { orderId, status: finalStatus, type: order.type }); } catch (e) { log('Broadcast final status failed: ' + e.message); }
+    log('[INLINE_VERIFY] order ' + orderId + ' done: status=' + finalStatus + ' score=' + (v.confidence || 0) + ' checks=' + (v.checks ? v.checks.length : 0) + ' total=' + (Date.now() - t0) + 'ms');
     verifyingOrders.delete(orderId);
     const response = {
       orderId, paymentId: order.paymentId || orderId,
@@ -326,7 +338,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
         });
       } catch (e) {
         log('Post-approval err: ' + e.message);
-        await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['Post-approval failed: ' + e.message], updated_at: now() }).catch(() => {});
+        await updateDoc(COL_ORDERS, orderId, { status: 'failed', rejection_reasons: ['Post-approval failed: ' + e.message], updated_at: now() }).catch(e2 => log('Post-approval failed-order write failed: ' + e2.message));
       }
       const approveMs = order.created_at ? Date.now() - new Date(order.created_at).getTime() : null;
       if (approveMs != null && approveMs >= 0) metrics.trackLifecycle('submit_to_approve_ms', approveMs);
@@ -337,8 +349,8 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
     updateDoc(COL_ORDERS, orderId, {
       status: 'manual_review', verification_status: 'manual_review',
       rejection_reasons: ['Verification error: ' + ocrErr.message], updated_at: now(),
-    }).catch(() => {});
-    try { broadcast('paymentUpdated', { orderId, status: 'manual_review', type: order.type }); } catch {}
+    }).catch(e => log('[INLINE_VERIFY] order ' + orderId + ' fallback manual_review write failed: ' + e.message));
+    try { broadcast('paymentUpdated', { orderId, status: 'manual_review', type: order.type }); } catch (e) { log('Broadcast manual_review failed: ' + e.message); }
     metrics.trackVerificationResult('failed', Date.now() - t0);
     try {
       await audit.logOrderEvent({
@@ -347,7 +359,7 @@ async function submitPaymentProof(orderId, screenshotUrl, extra) {
         reason: ocrErr.message,
       });
       await notify.notifyVerificationFailed(order, ocrErr.message);
-    } catch {}
+    } catch (e) { log('Verify-failed audit/notify failed: ' + e.message); }
 
     verifyingOrders.delete(orderId);
     return {

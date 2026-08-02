@@ -11,9 +11,7 @@ module.exports = async (req, res) => {
       res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return;
     }
 
-    const body = [];
-    for await (const chunk of req) body.push(chunk);
-    const { userId, newSponsorId } = JSON.parse(Buffer.concat(body).toString());
+    const { userId, newSponsorId } = req.body || {};
 
     if (!userId || !newSponsorId) {
       res.writeHead(400); res.end(JSON.stringify({ error: 'userId and newSponsorId are required' })); return;

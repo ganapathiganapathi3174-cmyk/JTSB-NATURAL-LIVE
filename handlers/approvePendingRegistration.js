@@ -69,8 +69,8 @@ module.exports = async (req, res) => {
           await updateDoc(COL_USERS, referredByUserId, updates);
 
           if (limitReached) {
-            try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been deactivated.', type: 'referral_limit_reached', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
-            try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: req.admin?.email || 'system', details: { referralCode: referredByCode, referralCount: currentCount, reason: 'Auto-deactivated after ' + MAX_REFERRALS + ' referrals', registrationPlan: 'Direct Admin', paymentMethod: 'Admin' }, created_at: now }); } catch {}
+            try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been deactivated.', type: 'referral_limit_reached', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch (e) { console.error('[approvePendingRegistration] Referral-limit notification failed: ' + e.message); }
+            try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: req.admin?.email || 'system', details: { referralCode: referredByCode, referralCount: currentCount, reason: 'Auto-deactivated after ' + MAX_REFERRALS + ' referrals', registrationPlan: 'Direct Admin', paymentMethod: 'Admin' }, created_at: now }); } catch (e) { console.error('[approvePendingRegistration] Referral-limit audit failed: ' + e.message); }
           }
 
           // Cycle engine — track referral cycle progress
@@ -80,11 +80,11 @@ module.exports = async (req, res) => {
     }
 
     // Audit log
-    try { await addDoc('audit_logs', { action: 'direct_approve_registration', target_id: pendingRegId, target_type: 'pending_registration', admin_id: req.admin?.email || 'unknown', details: { userId: newUserId, referredBy: referredByCode }, created_at: now }); } catch {}
+    try { await addDoc('audit_logs', { action: 'direct_approve_registration', target_id: pendingRegId, target_type: 'pending_registration', admin_id: req.admin?.email || 'unknown', details: { userId: newUserId, referredBy: referredByCode }, created_at: now }); } catch (e) { console.error('[approvePendingRegistration] Audit log failed: ' + e.message); }
 
     await deleteDoc(COL_PENDING_REGS, pendingRegId);
 
-    try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Your registration has been approved and your account is now active.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
+    try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Your registration has been approved and your account is now active.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch (e) { console.error('[approvePendingRegistration] Notification failed: ' + e.message); }
 
     res.writeHead(200); res.end(JSON.stringify({ status: 'approved', userId: newUserId }));
   } catch (err) {

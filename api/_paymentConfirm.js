@@ -160,7 +160,7 @@ async function matchAndApprove(data) {
         amount,
         status: 'approved',
       });
-    } catch (_) {}
+    } catch (e) { log(`Broadcast paymentConfirmed failed: ${e.message}`); }
 
     return {
       matched: true,
@@ -248,12 +248,12 @@ async function approveRegistration(session, transactionReference) {
 
   try {
     await updateDoc(COL_USERS, newUserId, { referred_by_status: 'approved' });
-  } catch (_) {}
+  } catch (e) { log(`Update referred_by_status failed: ${e.message}`); }
 
   try {
     const { deleteDoc } = require('./_supabase.js');
     await deleteDoc(COL_PENDING_REGS, pendingRegId);
-  } catch (_) {}
+  } catch (e) { log(`Delete pending registration failed: ${e.message}`); }
 
   try {
     await addDoc('notifications', {
@@ -262,7 +262,7 @@ async function approveRegistration(session, transactionReference) {
       type: 'payment_approved', status: 'unread', createdAt: now(),
       senderId: 'system', senderName: 'System',
     });
-  } catch (_) {}
+  } catch (e) { log(`Registration notification failed: ${e.message}`); }
 
   try {
     await addDoc('audit_logs', {
@@ -271,7 +271,7 @@ async function approveRegistration(session, transactionReference) {
       details: { userId: newUserId, sessionId: session.id, amount: session.amount },
       created_at: now(),
     });
-  } catch (_) {}
+  } catch (e) { log(`Registration audit log failed: ${e.message}`); }
 
   log(`Registration approved: userId=${newUserId}, amount=${session.amount}`);
 
@@ -333,7 +333,7 @@ async function approveTopup(session, transactionReference) {
       type: 'payment_approved', status: 'unread', createdAt: now(),
       senderId: 'system', senderName: 'System',
     });
-  } catch (_) {}
+  } catch (e) { log(`Topup notification failed: ${e.message}`); }
 
   try {
     await addDoc('audit_logs', {
@@ -342,7 +342,7 @@ async function approveTopup(session, transactionReference) {
       details: { userId, sessionId: session.id, amount },
       created_at: now(),
     });
-  } catch (_) {}
+  } catch (e) { log(`Topup audit log failed: ${e.message}`); }
 
   log(`Topup approved: userId=${userId}, amount=${amount}`);
 

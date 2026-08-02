@@ -204,16 +204,16 @@ module.exports = async (req, res) => {
             };
             await updateDoc(COL_USERS, referredByUserId, updates);
             if (limitReached) {
-              try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been deactivated.', type: 'referral_limit_reached', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
-              try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: 'companion', details: { referralCode: referredByCode, referralCount: currentCount, reason: 'Auto-deactivated after ' + MAX_REFERRALS + ' referrals' }, created_at: now }); } catch {}
+              try { await addDoc('notifications', { receiverId: referredByUserId, title: 'Referral Limit Reached', message: 'Your referral link has reached the maximum of ' + MAX_REFERRALS + ' successful registrations and has been deactivated.', type: 'referral_limit_reached', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch (e) { log('NOTIFY', 'Referral-limit notification failed: ' + (e && e.message)); }
+              try { await addDoc('audit_logs', { action: 'referral_limit_reached', target_id: referredByUserId, target_type: 'user', admin_id: 'companion', details: { referralCode: referredByCode, referralCount: currentCount, reason: 'Auto-deactivated after ' + MAX_REFERRALS + ' referrals' }, created_at: now }); } catch (e) { log('AUDIT', 'Referral-limit audit failed: ' + (e && e.message)); }
             }
           }
         }
 
-        try { await addDoc('audit_logs', { action: 'companion_approve_registration', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { userId: newUserId, amount: amountNum, referredBy: referredByCode, utr: utrStr }, created_at: now }); } catch {}
-        try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch {}
-        try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved (Auto)', message: 'Your registration payment of \u20B9' + amountNum + ' has been auto-approved via AI verification.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
-        try { broadcast('paymentUpdated', { id: payment.id, status: 'approved', type: payType, userId: newUserId, source: 'companion' }); } catch {}
+        try { await addDoc('audit_logs', { action: 'companion_approve_registration', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { userId: newUserId, amount: amountNum, referredBy: referredByCode, utr: utrStr }, created_at: now }); } catch (e) { log('AUDIT', 'Registration audit failed: ' + (e && e.message)); }
+        try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch (e) { log('CLEANUP', 'Delete pending registration failed: ' + (e && e.message)); }
+        try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved (Auto)', message: 'Your registration payment of \u20B9' + amountNum + ' has been auto-approved via AI verification.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch (e) { log('NOTIFY', 'Registration notification failed: ' + (e && e.message)); }
+        try { broadcast('paymentUpdated', { id: payment.id, status: 'approved', type: payType, userId: newUserId, source: 'companion' }); } catch (e) { log('BROADCAST', 'paymentUpdated failed: ' + (e && e.message)); }
 
         log('SUCCESS', 'Registration approved: userId=' + newUserId + ', amount=' + amountNum + ', utr=' + utrStr);
         res.writeHead(200); res.end(JSON.stringify({ status: 'approved', userId: newUserId, utr: utrStr }));
@@ -274,9 +274,9 @@ module.exports = async (req, res) => {
           }
         } catch (e) { log('SPONSOR', 'Sponsor topup completion error: ' + (e && e.message)); }
 
-        try { await addDoc('audit_logs', { action: 'companion_approve_topup', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { userId, amount: amountNum, topupId, utr: utrStr }, created_at: now }); } catch {}
-        try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved (Auto)', message: 'Your topup of \u20B9' + amountNum + ' has been auto-approved via AI verification.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch {}
-        try { broadcast('paymentUpdated', { id: payment.id, status: 'approved', type: payType, userId, source: 'companion' }); } catch {}
+        try { await addDoc('audit_logs', { action: 'companion_approve_topup', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { userId, amount: amountNum, topupId, utr: utrStr }, created_at: now }); } catch (e) { log('AUDIT', 'Topup audit failed: ' + (e && e.message)); }
+        try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved (Auto)', message: 'Your topup of \u20B9' + amountNum + ' has been auto-approved via AI verification.', type: 'payment_approved', status: 'unread', createdAt: now, senderId: 'system', senderName: 'System' }); } catch (e) { log('NOTIFY', 'Topup notification failed: ' + (e && e.message)); }
+        try { broadcast('paymentUpdated', { id: payment.id, status: 'approved', type: payType, userId, source: 'companion' }); } catch (e) { log('BROADCAST', 'paymentUpdated failed: ' + (e && e.message)); }
 
         log('SUCCESS', 'Topup approved: userId=' + userId + ', amount=' + amountNum + ', utr=' + utrStr);
         res.writeHead(200); res.end(JSON.stringify({ status: 'approved', userId, utr: utrStr }));
@@ -289,7 +289,7 @@ module.exports = async (req, res) => {
       await conditionalUpdateDoc(COL_UPI_PAYMENTS, payment.id, [
         { field: 'status', op: 'EQUAL', value: 'verified' },
       ], { status: 'failed', rejection_reasons: ['Companion approval failed'] });
-      try { await addDoc('audit_logs', { action: 'companion_approve_failed', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { payType, utr: utrStr }, created_at: now }); } catch {}
+      try { await addDoc('audit_logs', { action: 'companion_approve_failed', target_id: payment.id, target_type: 'upi_payment', admin_id: 'companion', details: { payType, utr: utrStr }, created_at: now }); } catch (e) { log('AUDIT', 'Failure audit log failed: ' + (e && e.message)); }
       log('ERROR', 'Approval failed for payment ' + payment.id + ': ' + innerErr.message);
       recordError('Approval failed');
       res.writeHead(200); res.end(JSON.stringify({ status: 'failed', error: 'Approval failed' }));

@@ -1,5 +1,5 @@
 const C = require('./config.js');
-const { normalizeUTR, normalizeUPI, isTodayOrNear } = require('./fieldNormalizer.js');
+const { normalizeUTR, normalizeUPI, isDateTodayIST, isTimeWithinWindow } = require('./fieldNormalizer.js');
 
 function validateRules(extracted, expected) {
   const result = {
@@ -79,16 +79,35 @@ function validateRules(extracted, expected) {
     result.checks.status = 'unreadable';
   }
 
+  // ── Date: must be TODAY in Asia/Kolkata (never UTC) ──────────────
   const date = extracted.date || null;
   if (date) {
-    const near = isTodayOrNear(date, 1);
-    result.checks.date = near ? 'today_or_near' : 'distant';
-    if (!near) {
-      result.reasons.push('Date mismatch: extracted=' + date + ' not near today');
+    const todayIst = isDateTodayIST(date);
+    result.checks.date = todayIst ? 'today_ist' : 'distant';
+    if (!todayIst) {
+      result.reasons.push('Date mismatch: extracted=' + date + ' is not today (IST)');
       result.softFail = true;
     }
   } else {
     result.checks.date = 'unreadable';
+  }
+
+  // ── Time: screenshot payment time must be within ±TIME_WINDOW_MIN
+  //    minutes of the server's current time in Asia/Kolkata. Screenshots
+  //    showing an old payment (e.g. submitted hours later) fall to
+  //    manual review — they are never auto-approved.
+  const time = extracted.time || null;
+  if (time) {
+    const inWindow = isTimeWithinWindow(time, C.TIME_WINDOW_MIN);
+    result.checks.time = inWindow ? 'within_window' : 'out_of_window';
+    if (!inWindow) {
+      result.reasons.push('Time mismatch: extracted=' + time + ' is outside ±' + C.TIME_WINDOW_MIN + 'min window (IST)');
+      result.softFail = true;
+    }
+  } else {
+    result.checks.time = 'unreadable';
+    result.reasons.push('Payment time not readable');
+    result.softFail = true;
   }
 
   result.passed = !result.hardFail;

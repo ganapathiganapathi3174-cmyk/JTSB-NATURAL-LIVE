@@ -59,7 +59,7 @@ module.exports = async (req, res) => {
         details: { previousStatus: user.referral_active ? 'active' : 'inactive', newStatus: updates.referral_active ? 'active' : 'inactive', action },
         created_at: now,
       });
-    } catch {}
+    } catch (e) { console.error('[updateReferralStatus] Audit log failed: ' + e.message); }
 
     res.writeHead(200).end(JSON.stringify({
       success: true,

@@ -268,7 +268,7 @@ async function processSmsAndApprove(data) {
     else await updateDoc(COL_SMS_SESSIONS, matchedSession.id, { status: 'approved', approvedAt: now() });
 
     log(`Session ${matchedSession.id} approved`);
-    try { broadcast('smsPaymentApproved', { sessionId: matchedSession.id, paymentType: matchedSession.paymentType, amount: matchAmount, status: 'approved' }); } catch (_) {}
+    try { broadcast('smsPaymentApproved', { sessionId: matchedSession.id, paymentType: matchedSession.paymentType, amount: matchAmount, status: 'approved' }); } catch (e) { log(`Broadcast smsPaymentApproved failed: ${e.message}`); }
     return { matched: true, sessionId: matchedSession.id, paymentType: matchedSession.paymentType, amount: matchAmount, status: 'approved', ...approveResult };
   } catch (err) {
     log(`Approval failed: ${err.message}`);
@@ -327,9 +327,9 @@ async function approveRegistration(session, transactionReference) {
     } catch (e) { log(`Referral count increment error: ${e.message}`); }
   }
 
-  try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch (_) {}
-  try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Payment of ₹' + session.amount + ' confirmed via SMS!', type: 'payment_approved', status: 'unread', createdAt: now(), senderId: 'system', senderName: 'System' }); } catch (_) {}
-  try { await addDoc('audit_logs', { action: 'sms_auto_approve_registration', target_id: transactionReference, target_type: 'sms_payment', admin_id: 'system', details: { userId: newUserId, sessionId: session.id, amount: session.amount, plan: session.plan }, created_at: now() }); } catch (_) {}
+  try { await deleteDoc(COL_PENDING_REGS, pendingRegId); } catch (e) { log(`Delete pending registration failed: ${e.message}`); }
+  try { await addDoc('notifications', { receiverId: newUserId, title: 'Registration Approved', message: 'Payment of ₹' + session.amount + ' confirmed via SMS!', type: 'payment_approved', status: 'unread', createdAt: now(), senderId: 'system', senderName: 'System' }); } catch (e) { log(`Registration notification failed: ${e.message}`); }
+  try { await addDoc('audit_logs', { action: 'sms_auto_approve_registration', target_id: transactionReference, target_type: 'sms_payment', admin_id: 'system', details: { userId: newUserId, sessionId: session.id, amount: session.amount, plan: session.plan }, created_at: now() }); } catch (e) { log(`Registration audit log failed: ${e.message}`); }
 
   log(`Registration approved: userId=${newUserId}, amount=${session.amount}, plan=${session.plan}`);
   return { userId: newUserId, paymentType: 'registration', plan: session.plan };
@@ -360,8 +360,8 @@ async function approveTopup(session, transactionReference) {
     } catch (e) { log(`Topup referral error: ${e.message}`); }
   }
 
-  try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Topup of ₹' + amount + ' confirmed via SMS.', type: 'payment_approved', status: 'unread', createdAt: now(), senderId: 'system', senderName: 'System' }); } catch (_) {}
-  try { await addDoc('audit_logs', { action: 'sms_auto_approve_topup', target_id: transactionReference, target_type: 'sms_payment', admin_id: 'system', details: { userId, sessionId: session.id, amount }, created_at: now() }); } catch (_) {}
+  try { await addDoc('notifications', { receiverId: userId, title: 'Topup Approved', message: 'Topup of ₹' + amount + ' confirmed via SMS.', type: 'payment_approved', status: 'unread', createdAt: now(), senderId: 'system', senderName: 'System' }); } catch (e) { log(`Topup notification failed: ${e.message}`); }
+  try { await addDoc('audit_logs', { action: 'sms_auto_approve_topup', target_id: transactionReference, target_type: 'sms_payment', admin_id: 'system', details: { userId, sessionId: session.id, amount }, created_at: now() }); } catch (e) { log(`Topup audit log failed: ${e.message}`); }
 
   log(`Topup approved: userId=${userId}, amount=${amount}`);
   return { userId, paymentType: 'topup' };

@@ -1,6 +1,6 @@
 const fs = require('fs');
 const p = require('path');
-try { fs.readFileSync(p.join(__dirname, '..', '.env.local'), 'utf8').split('\n').forEach(l => { let m = l.match(/^\s*([^#=]+)=(.*)/); if (m) process.env[m[1].trim()] = m[2].trim(); }); } catch (_) {}
+  try { fs.readFileSync(p.join(__dirname, '..', '.env.local'), 'utf8').split('\n').forEach(l => { let m = l.match(/^\s*([^#=]+)=(.*)/); if (m) process.env[m[1].trim()] = m[2].trim(); }); } catch (e) { console.error('[ENV] .env.local read failed (ignored): ' + e.message); }
 const http = require('http');
 
 const DIST = p.join(__dirname, '..', 'frontend', 'dist');

@@ -104,11 +104,11 @@ module.exports = async (req, res) => {
               return;
             }
           }
-        } catch {}
+        } catch (e) { LOG(`Owner fetch failed for pending_reg ${pend.id}: ${e.message}`); }
         try {
           await deleteDoc(COL_PENDING_REGS, pend.id);
           LOG(`Cleaned up stale pending_registration ${pend.id} for email ${email}`);
-        } catch {}
+        } catch (e) { LOG(`Stale pending_reg cleanup failed for email ${email}: ${e.message}`); }
       } else {
         const realUser = await findUserByEmail(email).catch(() => null);
         if (realUser) {
@@ -119,7 +119,7 @@ module.exports = async (req, res) => {
         try {
           await deleteDoc(COL_PENDING_REGS, pend.id);
           LOG(`Cleaned up orphaned pending_registration ${pend.id} (no user_id, user deleted) for email ${email}`);
-        } catch {}
+        } catch (e) { LOG(`Orphaned pending_reg cleanup failed for email ${email}: ${e.message}`); }
       }
     }
 
@@ -145,11 +145,11 @@ module.exports = async (req, res) => {
               return;
             }
           }
-        } catch {}
+        } catch (e) { LOG(`Owner fetch failed for pending_reg ${pend.id}: ${e.message}`); }
         try {
           await deleteDoc(COL_PENDING_REGS, pend.id);
           LOG(`Cleaned up stale pending_registration ${pend.id} for phone ${phone}`);
-        } catch {}
+        } catch (e) { LOG(`Stale pending_reg cleanup failed for phone ${phone}: ${e.message}`); }
       } else {
         const realUser = await findUserByPhone(phone).catch(() => null);
         if (realUser) {
@@ -160,7 +160,7 @@ module.exports = async (req, res) => {
         try {
           await deleteDoc(COL_PENDING_REGS, pend.id);
           LOG(`Cleaned up orphaned pending_registration ${pend.id} (no user_id, user deleted) for phone ${phone}`);
-        } catch {}
+        } catch (e) { LOG(`Orphaned pending_reg cleanup failed for phone ${phone}: ${e.message}`); }
       }
     }
 
