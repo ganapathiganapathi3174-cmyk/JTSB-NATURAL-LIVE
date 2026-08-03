@@ -16,6 +16,16 @@ module.exports = {
   OCR_TIMEOUT_MS: 60000,
   AI_VISION_TIMEOUT_MS: 30000,
   VERIFY_TIMEOUT_MS: 180000,
+  // Hard ceiling for a single verifySession() call (ms). MUST stay well below
+  // Vercel's maxDuration (60s) and the route-level 120s payment timeout so the
+  // status poll can never be severed mid-verification. On expiry the facade
+  // returns manual_review and the order is retried (bounded by VERIFY_MAX_ATTEMPTS).
+  VERIFY_BUDGET_MS: parseInt(process.env.VERIFY_BUDGET_MS || '45000', 10),
+  // Budget for the AI-vision stage when OCR fields are incomplete (ms).
+  AI_VISION_BUDGET_MS: parseInt(process.env.AI_VISION_BUDGET_MS || '15000', 10),
+  // Timeouts for Tesseract.js (worker cold-start download + recognition).
+  TESSERACT_WORKER_INIT_TIMEOUT_MS: parseInt(process.env.TESSERACT_WORKER_INIT_TIMEOUT_MS || '30000', 10),
+  TESSERACT_TIMEOUT_MS: parseInt(process.env.TESSERACT_TIMEOUT_MS || '30000', 10),
 
   MIN_IMAGE_SIZE: 1024,
   MAX_IMAGE_SIZE: 20 * 1024 * 1024,
@@ -29,7 +39,9 @@ module.exports = {
   DARK_THRESHOLD: 50,
   MIN_OCR_CONFIDENCE: 30,
   // STRICT auto-approval confidence floor (enterprise rule). Tunable via env for ops flexibility.
-  CONFIDENCE_APPROVE: parseInt(process.env.AUTO_APPROVE_CONFIDENCE || '98', 10),
+  // Minimum OCR confidence to consider fields extracted (NOT an approval gate).
+  // Auto-approve depends on business fields, not OCR confidence.
+  CONFIDENCE_APPROVE: parseInt(process.env.AUTO_APPROVE_CONFIDENCE || '60', 10),
   CONFIDENCE_REJECT: 40,
 
   // Screenshot payment-time must fall within ±PAYMENT_TIME_WINDOW_MIN minutes of

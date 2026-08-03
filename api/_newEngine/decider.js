@@ -2,7 +2,13 @@ const C = require('./config.js');
 
 // ENTERPRISE DECISION ENGINE (strict rule set)
 //
-// AUTO-APPROVE only when ALL of the following hold:
+// HARD REJECT (in priority order):
+//   - confirmed duplicate UTR or byte-identical screenshot
+//   - transaction status is FAILED
+//   - amount mismatch (extracted != expected)
+//   - fraud score >= 40 (suspicious)
+//
+// AUTO-APPROVE when ALL business fields pass:
 //   - amount matches (extracted == expected)
 //   - receiver UPI matches
 //   - transaction status = SUCCESS
@@ -11,14 +17,13 @@ const C = require('./config.js');
 //   - UTR is unique (no prior non-rejected payment with same UTR)
 //   - screenshot is unique (no prior non-rejected payment with same hash)
 //   - image is authentic (valid format/size, not blurry, not dark, no tamper flag)
-//   - OCR confidence >= CONFIDENCE_APPROVE (default 98)
+//   - OCR confidence >= CONFIDENCE_APPROVE (minimum readable, NOT a quality gate)
 //
-// REJECT only on strong independent signals:
-//   - confirmed duplicate UTR or duplicate screenshot
-//   - transaction status is FAILED
-//   - fraud score >= 40 (suspicious)
+// OCR confidence is a QUALITY SIGNAL for field extraction, NOT a trust gate.
+// If business fields are extracted correctly and match, approve regardless
+// of whether OCR reports 90% or 93% confidence.
 //
-// EVERYTHING ELSE -> MANUAL_REVIEW (never auto-approve on partial evidence).
+// EVERYTHING ELSE -> MANUAL_REVIEW.
 
 function decide(rules, duplicate, fraud, extracted, options) {
   const checks = rules.checks || {};
@@ -66,6 +71,14 @@ function decide(rules, duplicate, fraud, extracted, options) {
     return result;
   }
 
+  if (checks.amount === 'mismatch') {
+    result.status = C.DECISION.REJECT;
+    result.reasons = ['Amount mismatch: extracted=' + (extracted?.amount || '?') + ' expected=' + (rules.expectedAmount || '?')];
+    result.confidence = 100;
+    result.decisionFactors = { reject: 'amount_mismatch', matchedCount };
+    return result;
+  }
+
   if (fraud?.suspicious && fraud.score >= 40) {
     result.status = C.DECISION.REJECT;
     result.reasons = (fraud.reasons || []).concat(['Suspicious activity detected']);
@@ -74,20 +87,22 @@ function decide(rules, duplicate, fraud, extracted, options) {
     return result;
   }
 
-  // ── STRICT AUTO-APPROVE ──
+  // ── BUSINESS FIELD CHECKS ──
   const amountOk = checks.amount === 'matched';
   const upiOk = checks.upi_id === 'matched' || checks.upi_id === 'partial_match';
   const statusOk = checks.status === 'success';
   const dateOk = checks.date === 'today_ist';
   const timeOk = checks.time === 'within_window';
   const utrOk = checks.utr === 'matched';
-  const confidenceOk = ocrConfidence >= C.CONFIDENCE_APPROVE;
   const imageOk = !fraudFlags.includes('blurred') && !fraudFlags.includes('dark') &&
                   !fraudFlags.includes('low_resolution') && !fraudFlags.includes('tampered');
 
-  const allStrictConditions = amountOk && upiOk && statusOk && dateOk && timeOk && utrOk && confidenceOk && imageOk;
+  const allBusinessFieldsPass = amountOk && upiOk && statusOk && dateOk && timeOk && utrOk && imageOk;
 
-  if (allStrictConditions) {
+  // OCR readability: can the engine extract fields at all? NOT a quality gate.
+  const ocrReadable = ocrConfidence >= C.CONFIDENCE_APPROVE;
+
+  if (allBusinessFieldsPass && ocrReadable) {
     result.status = C.DECISION.APPROVE;
     result.reasons = [
       'Amount matches',
@@ -99,7 +114,7 @@ function decide(rules, duplicate, fraud, extracted, options) {
       'UTR unique',
       'Screenshot unique',
       'Image authentic',
-      'OCR confidence ' + ocrConfidence + '% >= ' + C.CONFIDENCE_APPROVE + '%',
+      'OCR confidence ' + ocrConfidence + '% (readable)',
     ];
     result.confidence = Math.min(100, ocrConfidence);
     result.decisionFactors = { strictApprove: true, matchedCount, ocrConfidence };
@@ -117,7 +132,7 @@ function decide(rules, duplicate, fraud, extracted, options) {
   if (!dateOk) missing.push('today date (IST)');
   if (!timeOk) missing.push('payment time within ±' + C.TIME_WINDOW_MIN + 'min window');
   if (!utrOk) missing.push('UTR');
-  if (!confidenceOk) missing.push('OCR confidence >= ' + C.CONFIDENCE_APPROVE);
+  if (!ocrReadable) missing.push('OCR confidence >= ' + C.CONFIDENCE_APPROVE);
   if (!imageOk) missing.push('image authenticity');
 
   result.status = C.DECISION.MANUAL_REVIEW;

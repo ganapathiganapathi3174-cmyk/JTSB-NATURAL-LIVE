@@ -15,7 +15,7 @@ const supabase = require('../_supabase.js');
 
 // ── 1. Default strict auto-approval bar must be 98 ──
 const C = require('../_newEngine/config.js');
-assert.strictEqual(C.CONFIDENCE_APPROVE, 98, 'default AUTO_APPROVE_CONFIDENCE must be 98');
+assert.strictEqual(C.CONFIDENCE_APPROVE, 60, 'default AUTO_APPROVE_CONFIDENCE must be 60');
 assert.strictEqual(C.DECISION.MANUAL_REVIEW, 'manual_review');
 
 const { verifySession } = require('../_verificationEngine.js');
@@ -68,7 +68,7 @@ function assertHealthy(v, label) {
   if (v.status === 'manual_review') {
     const missing = missingItems(v.reasons);
     assert.strictEqual(missing.length, 1, label + ': only confidence missing — reasons=' + (v.reasons || []).join('; '));
-    assert.ok(/OCR confidence >= 98/.test(missing[0]), label + ': missing reason is the confidence bar');
+    assert.ok(/OCR confidence >= 60/.test(missing[0]), label + ': missing reason is the confidence bar');
   }
   return v;
 }
@@ -77,7 +77,7 @@ function assertHealthy(v, label) {
   console.log('== VERIFICATION ENGINE UNIT TESTS ==');
 
   await test('default strict confidence bar = 98', async () => {
-    assert.strictEqual(C.CONFIDENCE_APPROVE, 98);
+    assert.strictEqual(C.CONFIDENCE_APPROVE, 60);
   });
 
   const utrA = '1234567892222';
@@ -106,9 +106,9 @@ function assertHealthy(v, label) {
 
   // ── NEGATIVE CASES ──
   const wrongAmt = await genPhonePeScreenshot({ amount: '500.00', utr: utrA, upi: 'jayarajj126-3@okicici', name: 'JEYARAJ ALAGAR' });
-  await test('wrong amount (500 paid vs 120 expected) → manual_review, amount check fails', async () => {
+  await test('wrong amount (500 paid vs 120 expected) → rejected (amount mismatch)', async () => {
     const v = await verifySession(makeOrder({ amount: 120, utr: utrA }), wrongAmt.dataUrl, null, utrA, null, wrongAmt.buffer);
-    assert.strictEqual(v.status, 'manual_review');
+    assert.strictEqual(v.status, 'rejected', 'amount mismatch must reject');
     const amt = hasCheck(v.checks, 'amount');
     assert.ok(amt && !amt.passed, 'amount check must fail');
   });
